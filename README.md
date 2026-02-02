@@ -175,7 +175,37 @@ interface DiditSdkConfiguration {
    * @default false
    */
   closeModalOnComplete?: boolean;
+
+  /**
+   * Render verification inline instead of modal overlay
+   * @default false
+   */
+  embedded?: boolean;
+
+  /**
+   * Container element ID for embedded mode
+   * Required when embedded is true
+   */
+  embeddedContainerId?: string;
 }
+```
+
+## Embedded Mode
+
+Render verification inline instead of a modal overlay:
+
+```html
+<div id="verification-container" style="width: 500px; height: 700px;"></div>
+```
+
+```typescript
+DiditSdk.shared.startVerification({
+  url: 'https://verify.didit.me/u/...',
+  configuration: {
+    embedded: true,
+    embeddedContainerId: 'verification-container'
+  }
+});
 ```
 
 ## Verification Results

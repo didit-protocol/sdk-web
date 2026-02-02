@@ -254,20 +254,6 @@ export class DiditSdk {
 
   private handleVerificationError(event: VerificationEvent): void {
     SDKLogger.log("Verification error:", event.data);
-
-    const sessionData = this.buildSessionData(event.data);
-    const error = createVerificationError("unknown", event.data?.error);
-
-    this._modal?.close();
-    this.reset();
-
-    const result: VerificationResult = {
-      type: "failed",
-      session: sessionData,
-      error
-    };
-
-    this.onComplete?.(result);
   }
 
   private handleError(error: unknown): void {

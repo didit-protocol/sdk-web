@@ -14,7 +14,8 @@ export const CSS_CLASSES = {
   closeButton: "didit-close-button",
   loading: "didit-loading",
   confirmOverlay: "didit-confirm-overlay",
-  confirmBox: "didit-confirm-box"
+  confirmBox: "didit-confirm-box",
+  embedded: "didit-embedded"
 } as const;
 
-export const SDK_VERSION = "0.1.0";
+export const SDK_VERSION = "0.1.3";

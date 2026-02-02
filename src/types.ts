@@ -31,6 +31,8 @@ export interface DiditSdkConfiguration {
   showCloseButton?: boolean;
   showExitConfirmation?: boolean;
   closeModalOnComplete?: boolean;
+  embedded?: boolean;
+  embeddedContainerId?: string;
 }
 
 export interface StartVerificationOptions {

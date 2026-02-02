@@ -35,6 +35,9 @@ export class VerificationModal {
   private boundHandleMessage: ((event: MessageEvent) => void) | null = null;
   private boundHandleKeydown: ((event: KeyboardEvent) => void) | null = null;
 
+  private embedded: boolean = false;
+  private embeddedContainer: HTMLElement | null = null;
+
   constructor(configuration: DiditSdkConfiguration | undefined, callbacks: ModalCallbacks) {
     this.modalId = generateModalId();
     this.config = {
@@ -44,6 +47,10 @@ export class VerificationModal {
     };
     this.callbacks = callbacks;
     this.containerElement = configuration?.containerElement ?? document.body;
+    this.embedded = configuration?.embedded ?? false;
+    if (this.embedded && configuration?.embeddedContainerId) {
+      this.embeddedContainer = document.getElementById(configuration.embeddedContainerId);
+    }
   }
 
   private injectStyles(): void {
@@ -255,6 +262,21 @@ export class VerificationModal {
           height: 100vh;
         }
       }
+
+      .${CSS_CLASSES.embedded} {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .${CSS_CLASSES.embedded} .${CSS_CLASSES.iframe} {
+        width: 100%;
+        height: 100%;
+      }
+
+      .${CSS_CLASSES.embedded} .${CSS_CLASSES.loading} {
+        border-radius: 0;
+      }
     `;
 
     document.head.appendChild(styles);
@@ -262,6 +284,11 @@ export class VerificationModal {
 
   private createDOM(): void {
     this.injectStyles();
+
+    if (this.embedded && this.embeddedContainer) {
+      this.createEmbeddedDOM();
+      return;
+    }
 
     this.overlay = document.createElement("div");
     this.overlay.id = this.modalId;
@@ -334,6 +361,33 @@ export class VerificationModal {
     });
 
     this.containerElement.appendChild(this.overlay);
+  }
+
+  private createEmbeddedDOM(): void {
+    if (!this.embeddedContainer) return;
+
+    this.container = document.createElement("div");
+    this.container.id = this.modalId;
+    this.container.className = CSS_CLASSES.embedded;
+
+    this.loadingEl = document.createElement("div");
+    this.loadingEl.className = CSS_CLASSES.loading;
+    this.loadingEl.innerHTML = `
+      <svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 2a10 10 0 0 1 10 10" />
+      </svg>
+    `;
+
+    this.iframe = document.createElement("iframe");
+    this.iframe.className = CSS_CLASSES.iframe;
+    this.iframe.setAttribute("allow", "camera; microphone; fullscreen; autoplay; encrypted-media; geolocation");
+    this.iframe.setAttribute("title", "Didit Verification");
+    this.iframe.addEventListener("load", () => this.handleIframeLoad());
+
+    this.container.appendChild(this.loadingEl);
+    this.container.appendChild(this.iframe);
+    this.embeddedContainer.appendChild(this.container);
   }
 
   private setupEventListeners(): void {
@@ -428,12 +482,12 @@ export class VerificationModal {
   }
 
   open(verificationUrl: string): void {
-    if (!this.overlay) {
+    if (!this.overlay && !this.container) {
       this.createDOM();
       this.setupEventListeners();
     }
 
-    SDKLogger.log("Opening modal with URL:", verificationUrl);
+    SDKLogger.log("Opening with URL:", verificationUrl);
 
     this.state.isLoading = true;
     this.state.showConfirmation = false;
@@ -445,34 +499,43 @@ export class VerificationModal {
     }
 
     this.state.isOpen = true;
-    this.overlay?.classList.add("active");
 
+    if (this.embedded) {
+      return;
+    }
+
+    this.overlay?.classList.add("active");
     document.body.style.overflow = "hidden";
   }
 
   close(): void {
-    SDKLogger.log("Closing modal");
+    SDKLogger.log("Closing");
 
     this.state.isOpen = false;
     this.state.isLoading = true;
     this.state.showConfirmation = false;
 
-    this.overlay?.classList.remove("active");
-
     if (this.iframe) {
       this.iframe.src = "about:blank";
     }
 
+    if (this.embedded) {
+      return;
+    }
+
+    this.overlay?.classList.remove("active");
     document.body.style.overflow = "";
   }
 
   destroy(): void {
-    SDKLogger.log("Destroying modal");
+    SDKLogger.log("Destroying");
 
     this.close();
     this.removeEventListeners();
 
-    if (this.overlay && this.overlay.parentNode) {
+    if (this.embedded && this.container && this.container.parentNode) {
+      this.container.parentNode.removeChild(this.container);
+    } else if (this.overlay && this.overlay.parentNode) {
       this.overlay.parentNode.removeChild(this.overlay);
     }
 
