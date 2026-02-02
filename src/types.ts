@@ -30,7 +30,7 @@ export interface DiditSdkConfiguration {
   zIndex?: number;
   showCloseButton?: boolean;
   showExitConfirmation?: boolean;
-  callbackUrl?: string;
+  closeModalOnComplete?: boolean;
 }
 
 export interface StartVerificationOptions {

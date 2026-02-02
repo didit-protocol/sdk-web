@@ -70,7 +70,10 @@ export class DiditSdk {
     SDKLogger.isEnabled = config?.loggingEnabled ?? DEFAULT_CONFIG.loggingEnabled;
 
     SDKLogger.log("Starting verification with options:", options);
-
+    if (this._modal) {
+      this._modal.destroy();
+      this._modal = null;
+    }
     this._modal = new VerificationModal(config, {
       onClose: () => this.handleModalClose(),
       onCloseConfirmed: () => this.handleModalCloseConfirmed(),
@@ -220,8 +223,10 @@ export class DiditSdk {
 
     const sessionData = this.buildSessionData(event.data);
 
-    this._modal?.close();
-    this.reset();
+    if (this._configuration?.closeModalOnComplete) {
+      this._modal?.close();
+      this.reset();
+    }
 
     const result: VerificationResult = {
       type: "completed",

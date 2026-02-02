@@ -169,7 +169,12 @@ interface DiditSdkConfiguration {
    * Show exit confirmation dialog when closing
    * @default true
    */
-  showExitConfirmation?: boolean;
+  showExitConfirmation?: boolean;  
+  /**
+   * Automatically close modal when verification completes
+   * @default false
+   */
+  closeModalOnComplete?: boolean;
 }
 ```
 

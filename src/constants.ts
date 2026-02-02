@@ -3,6 +3,7 @@ export const DEFAULT_CONFIG = {
   showCloseButton: true,
   showExitConfirmation: true,
   loggingEnabled: false,
+  closeModalOnComplete: false
 } as const;
 
 export const CSS_CLASSES = {
