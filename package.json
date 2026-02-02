@@ -1,0 +1,60 @@
+{
+  "name": "@didit-protocol/sdk-web",
+  "version": "0.1.0",
+  "description": "Didit Identity Verification SDK for Web Applications",
+  "main": "dist/didit-sdk.cjs.js",
+  "module": "dist/didit-sdk.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/didit-sdk.esm.js",
+      "require": "./dist/didit-sdk.cjs.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rollup -c",
+    "build:watch": "rollup -c -w",
+    "dev": "node examples/server.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "didit",
+    "kyc",
+    "identity-verification",
+    "verification",
+    "iframe",
+    "sdk"
+  ],
+  "author": "Didit",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/didit-protocol/didit-sdk-web.git"
+  },
+  "homepage": "https://docs.didit.me",
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "rollup": "^4.9.6",
+    "rollup-plugin-dts": "^6.1.0",
+    "@rollup/plugin-terser": "^0.4.4",
+    "ts-jest": "^29.1.2",
+    "tslib": "^2.6.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
