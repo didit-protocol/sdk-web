@@ -131,10 +131,6 @@ export class DiditSdk {
 
   private handleIframeLoad(): void {
     SDKLogger.log("Iframe loaded");
-
-    this.emitInternalEvent("didit:ready", {
-      sessionId: this._sessionId
-    });
   }
 
   private emitInternalEvent(type: VerificationEvent["type"], data?: VerificationEvent["data"]): void {
