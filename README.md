@@ -98,9 +98,14 @@ DiditSdk.shared.startVerification({
 
 Get your UniLink URL from the [Didit Console](https://business.didit.me) → Your Workflow → Copy Link.
 
+**The session_id generated will be sent to you by an event.**
+**[Check event reference here](#event-reference)**
+
 ### Method 2: Backend Session (Recommended for production)
 
 Your backend creates a session via the Didit API and returns the verification URL. This gives you more control over session creation, user tracking, and security.
+Read more about how the create session API works here:
+https://docs.didit.me/reference/create-session-verification-sessions
 
 ```typescript
 // Get the verification URL from your backend
@@ -114,28 +119,6 @@ DiditSdk.shared.startVerification({
 });
 ```
 
-#### Session Creation Options
-
-When creating sessions via your backend, you can include additional parameters:
-
-```typescript
-// Example backend request body to Didit API
-{
-  "vendor_data": "user-123",              // Your user identifier
-  "metadata": "{\"source\": \"web\"}",    // Custom JSON metadata
-  "contact_details": {                     // Prefill contact info
-    "email": "user@example.com",
-    "phone": "+14155552671",
-    "send_notification_emails": true
-  },
-  "expected_details": {                    // Cross-validation data
-    "first_name": "John",
-    "last_name": "Doe",
-    "date_of_birth": "1990-05-15",
-    "country": "USA"
-  }
-}
-```
 
 ## Configuration
 
@@ -221,9 +204,7 @@ Verification flow finished (approved, pending, or declined).
   type: 'completed',
   session: {
     sessionId: 'session-uuid',
-    status: 'Approved' | 'Pending' | 'Declined',
-    country: 'USA',        // ISO 3166-1 alpha-3
-    documentType: 'passport'
+    status: 'Approved' | 'Pending' | 'Declined'
   }
 }
 ```
@@ -237,8 +218,7 @@ User closed the verification modal.
   type: 'cancelled',
   session: {
     sessionId: 'session-uuid',
-    status: 'Pending',
-    // ...
+    status: 'Pending'
   }
 }
 ```
@@ -253,47 +233,7 @@ An error occurred during verification.
   error: {
     type: 'sessionExpired' | 'networkError' | 'cameraAccessDenied' | 'unknown',
     message: 'Your verification session has expired.'
-  },
-  session: { /* if available */ }
-}
-```
-
-## Contact Details
-
-When creating sessions via your backend, you can provide contact details to prefill verification forms and enable notifications:
-
-```typescript
-interface ContactDetails {
-  /** Email address for verification and notifications */
-  email?: string;
-  
-  /** Send status update emails to user */
-  sendNotificationEmails?: boolean;
-  
-  /** Language code (ISO 639-1) for emails */
-  emailLang?: string;
-  
-  /** Phone number in E.164 format (e.g., "+14155552671") */
-  phone?: string;
-}
-```
-
-## Expected Details
-
-When creating sessions via your backend, you can provide expected user details for cross-validation with extracted document data:
-
-```typescript
-interface ExpectedDetails {
-  firstName?: string;        // Fuzzy comparison
-  lastName?: string;         // Fuzzy comparison
-  dateOfBirth?: string;      // YYYY-MM-DD format
-  gender?: string;           // "M" or "F"
-  nationality?: string;      // ISO 3166-1 alpha-3
-  country?: string;          // ISO 3166-1 alpha-3
-  address?: string;          // Full address
-  identificationNumber?: string;
-  ipAddress?: string;        // Expected IP
-  portraitImage?: string;    // Base64 encoded (max 1MB)
+  }
 }
 ```
 
@@ -374,7 +314,7 @@ DiditSdk.shared.onEvent = (event) => {
 
 | Event | Description | Data Payload |
 |-------|-------------|--------------|
-| `didit:ready` | Verification iframe loaded | `{ sessionId? }` |
+| `didit:ready` | The page is ready and the sessionId is available | `{ sessionId }` |
 | `didit:started` | User started verification | `{ sessionId? }` |
 | `didit:step_started` | A verification step began | `{ step, sessionId? }` |
 | `didit:step_completed` | A step finished successfully | `{ step, nextStep?, sessionId? }` |

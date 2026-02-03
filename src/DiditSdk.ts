@@ -94,7 +94,6 @@ export class DiditSdk {
       this.emitInternalEvent("didit:started", {});
 
       this._modal?.open(this._url);
-      this.setState("ready");
     } catch (error) {
       this.handleError(error);
     }
@@ -308,9 +307,7 @@ export class DiditSdk {
 
     return {
       sessionId,
-      status: (eventData?.status || "Pending") as VerificationStatus,
-      country: eventData?.country,
-      documentType: eventData?.documentType
+      status: (eventData?.status || "Pending") as VerificationStatus
     };
   }
 }

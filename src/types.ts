@@ -5,8 +5,6 @@ export type VerificationStatus = "Approved" | "Pending" | "Declined";
 export interface SessionData {
   sessionId: string;
   status: VerificationStatus;
-  country?: string;
-  documentType?: string;
 }
 
 export type VerificationErrorType = "sessionExpired" | "networkError" | "cameraAccessDenied" | "unknown";
