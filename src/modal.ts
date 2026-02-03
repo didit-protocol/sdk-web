@@ -103,8 +103,8 @@ export class VerificationModal {
 
       .${CSS_CLASSES.closeButton} {
         position: absolute;
-        top: 12px;
-        right: 12px;
+        top: 4px;
+        right: 4px;
         width: 24px;
         height: 24px;
         background: transparent;
