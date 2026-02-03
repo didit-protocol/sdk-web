@@ -362,24 +362,6 @@ The `codeSize` field in `code_sent` indicates the OTP code length (e.g., 4 or 6 
 - Edge 79+
 
 
-Open http://localhost:3000 in your browser.
-
-## Building
-
-```bash
-# Install dependencies
-npm install
-
-# Build for production
-npm run build
-
-# Watch mode for development
-npm run build:watch
-
-# Type check
-npm run typecheck
-```
-
 ## License
 
 Copyright © 2026 Didit. All rights reserved.
