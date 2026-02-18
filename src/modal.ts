@@ -84,7 +84,7 @@ export class VerificationModal {
         position: relative;
         width: 100%;
         max-width: 500px;
-        max-height: 90vh;
+        max-height: 90dvh;
         border-radius: 16px;
         overflow: hidden;
         background: transparent;
@@ -254,12 +254,12 @@ export class VerificationModal {
 
         .${CSS_CLASSES.container} {
           max-width: 100%;
-          max-height: 100vh;
+          max-height: 100dvh;
           border-radius: 0;
         }
 
         .${CSS_CLASSES.iframe} {
-          height: 100vh;
+          height: 100dvh;
         }
       }
 
