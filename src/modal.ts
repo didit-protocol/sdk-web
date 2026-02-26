@@ -142,20 +142,20 @@ export class VerificationModal {
       }
 
       .${CSS_CLASSES.loading} svg {
-        width: 48px;
-        height: 48px;
+        width: 4rem;
+        height: 4rem;
         animation: didit-spin 1s linear infinite;
       }
 
       .${CSS_CLASSES.loading} circle {
         stroke: #e5e5e5;
-        stroke-width: 3;
+        stroke-width: 2.5;
         fill: none;
       }
 
       .${CSS_CLASSES.loading} path {
         stroke: #525252;
-        stroke-width: 3;
+        stroke-width: 2.5;
         stroke-linecap: round;
         fill: none;
       }
