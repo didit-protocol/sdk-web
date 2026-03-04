@@ -1,3 +1,5 @@
+import { languages } from "./constants";
+
 class SDKLogger {
   private static _enabled = false;
 
@@ -37,7 +39,7 @@ export function generateModalId(): string {
 export function isAllowedOrigin(origin: string): boolean {
   try {
     const url = new URL(origin);
-    return url.hostname.endsWith('.didit.me');
+    return url.hostname.endsWith(".didit.me");
   } catch {
     return false;
   }
@@ -58,4 +60,23 @@ export function createVerificationError(
     type,
     message: customMessage || messages[type]
   };
+}
+
+export function detectLanguageFromUrl(url: string): string {
+  try {
+    const { pathname } = new URL(url);
+    const firstSegment = pathname.split("/").filter(Boolean)[0];
+    if (firstSegment && languages.includes(firstSegment)) {
+      return firstSegment;
+    }
+  } catch {
+    // we get it from the browser
+  }
+
+  const browserLang = navigator.language;
+  if (languages.includes(browserLang)) return browserLang;
+  const baseLang = browserLang.split("-")[0];
+  if (languages.includes(baseLang)) return baseLang;
+
+  return "en";
 }

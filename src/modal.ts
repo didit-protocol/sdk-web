@@ -1,6 +1,7 @@
 import type { DiditSdkConfiguration, VerificationEvent } from "./types";
 import { DEFAULT_CONFIG, CSS_CLASSES } from "./constants";
-import { SDKLogger, generateModalId, isAllowedOrigin } from "./utils";
+import { SDKLogger, generateModalId, isAllowedOrigin, detectLanguageFromUrl } from "./utils";
+import { getTranslations } from "./translations";
 
 export interface ModalState {
   isOpen: boolean;
@@ -37,6 +38,7 @@ export class VerificationModal {
 
   private embedded: boolean = false;
   private embeddedContainer: HTMLElement | null = null;
+  private language: string = "en";
 
   constructor(configuration: DiditSdkConfiguration | undefined, callbacks: ModalCallbacks) {
     this.modalId = generateModalId();
@@ -289,13 +291,14 @@ export class VerificationModal {
       this.createEmbeddedDOM();
       return;
     }
+    const t = getTranslations(this.language);
 
     this.overlay = document.createElement("div");
     this.overlay.id = this.modalId;
     this.overlay.className = CSS_CLASSES.overlay;
     this.overlay.setAttribute("role", "dialog");
     this.overlay.setAttribute("aria-modal", "true");
-    this.overlay.setAttribute("aria-label", "Didit Verification");
+    this.overlay.setAttribute("aria-label", t.ariaLabelModal);
 
     this.container = document.createElement("div");
     this.container.className = CSS_CLASSES.container;
@@ -312,7 +315,7 @@ export class VerificationModal {
     if (this.config.showCloseButton) {
       const closeBtn = document.createElement("button");
       closeBtn.className = CSS_CLASSES.closeButton;
-      closeBtn.setAttribute("aria-label", "Close verification");
+      closeBtn.setAttribute("aria-label", t.ariaLabelClose);
       closeBtn.innerHTML = `
         <svg width="14" height="14" viewBox="0 0 14 14">
           <line x1="1" y1="1" x2="13" y2="13" />
@@ -326,18 +329,18 @@ export class VerificationModal {
     this.iframe = document.createElement("iframe");
     this.iframe.className = CSS_CLASSES.iframe;
     this.iframe.setAttribute("allow", "camera; microphone; fullscreen; autoplay; encrypted-media; geolocation");
-    this.iframe.setAttribute("title", "Didit Verification");
+    this.iframe.setAttribute("title", t.ariaLabelModal);
     this.iframe.addEventListener("load", () => this.handleIframeLoad());
 
     this.confirmOverlay = document.createElement("div");
     this.confirmOverlay.className = CSS_CLASSES.confirmOverlay;
     this.confirmOverlay.innerHTML = `
       <div class="${CSS_CLASSES.confirmBox}">
-        <h3>Exit verification?</h3>
-        <p>Exiting will end your verification process. Are you sure?</p>
+        <h3>${t.exitTitle}</h3>
+        <p>${t.exitMessage}</p>
         <div class="didit-confirm-actions">
-          <button type="button" data-action="continue">Continue</button>
-          <span data-action="exit">Exit</span>
+          <button type="button" data-action="continue">${t.continueButton}</button>
+          <span data-action="exit">${t.exitButton}</span>
         </div>
       </div>
     `;
@@ -382,7 +385,7 @@ export class VerificationModal {
     this.iframe = document.createElement("iframe");
     this.iframe.className = CSS_CLASSES.iframe;
     this.iframe.setAttribute("allow", "camera; microphone; fullscreen; autoplay; encrypted-media; geolocation");
-    this.iframe.setAttribute("title", "Didit Verification");
+    this.iframe.setAttribute("title", getTranslations(this.language).ariaLabelModal);
     this.iframe.addEventListener("load", () => this.handleIframeLoad());
 
     this.container.appendChild(this.loadingEl);
@@ -482,6 +485,8 @@ export class VerificationModal {
   }
 
   open(verificationUrl: string): void {
+    this.language = detectLanguageFromUrl(verificationUrl);
+
     if (!this.overlay && !this.container) {
       this.createDOM();
       this.setupEventListeners();
