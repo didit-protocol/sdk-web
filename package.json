@@ -1,6 +1,6 @@
 {
   "name": "@didit-protocol/sdk-web",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Didit Identity Verification SDK for Web Applications",
   "main": "dist/didit-sdk.cjs.js",
   "module": "dist/didit-sdk.esm.js",
