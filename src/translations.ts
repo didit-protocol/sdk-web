@@ -58,9 +58,9 @@ const translationsMap: Record<string, ModalTranslations> = {
     ariaLabelClose: "Zatvori verifikaciju"
   },
   cs: {
-    exitTitle: "Opustit ověření?",
-    exitMessage: "Odchodem ukončíte proces ověření. Jste si jisti?",
-    continueButton: "Pokračovat",
+    exitTitle: "Opravdu chcete odejít?",
+    exitMessage: "Když odejdete, proces ověření se přeruší. Opravdu chcete skončit?",
+    continueButton: "Zůstat",
     exitButton: "Odejít",
     ariaLabelModal: "Ověření Didit",
     ariaLabelClose: "Zavřít ověření"
