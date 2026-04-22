@@ -18,7 +18,7 @@ export const CSS_CLASSES = {
   embedded: "didit-embedded"
 } as const;
 
-export const SDK_VERSION = "0.1.8";
+export const SDK_VERSION = "0.1.9";
 
 export const languages  = [
     "ar",
