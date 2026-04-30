@@ -36,10 +36,11 @@ export function generateModalId(): string {
   return `didit-modal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-export function isAllowedOrigin(origin: string): boolean {
+export function isAllowedOrigin(origin: string, url: string): boolean {
   try {
-    const url = new URL(origin);
-    return url.hostname.endsWith(".didit.me");
+    const originURL = new URL(origin);
+    const urlURL = new URL(url);
+    return originURL.hostname.endsWith(".didit.me") || originURL.hostname === urlURL.hostname;
   } catch {
     return false;
   }

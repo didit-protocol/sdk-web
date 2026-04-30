@@ -413,8 +413,9 @@ export class VerificationModal {
   }
 
   private handleMessage(event: MessageEvent): void {
-    if (!isAllowedOrigin(event.origin)) {
-      return;
+    if (!this.iframe?.src) return;
+    if (!isAllowedOrigin(event.origin, this.iframe.src )) {
+      return SDKLogger.warn("Received postMessage from unallowed origin:", event.origin);
     }
 
     SDKLogger.log("Received postMessage:", event.data);
