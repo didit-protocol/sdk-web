@@ -2,6 +2,11 @@
 
 All notable changes to `@didit-protocol/sdk-web` will be documented in this file.
 
+## [0.2.0] - 2026-04-30
+
+### Added
+- Allow origin when it matches the instantation url
+
 ## [0.1.9] - 2026-03-04
 
 ### Fixed
