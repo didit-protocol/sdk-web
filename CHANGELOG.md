@@ -2,7 +2,7 @@
 
 All notable changes to `@didit-protocol/sdk-web` will be documented in this file.
 
-## [0.3.1] - Unreleased
+## [0.3.1] - 2026-09-07
 
 ### Fixed
 - Keep the verification iframe within its modal on short desktop and landscape viewports so the hosted flow remains scrollable to the end.
