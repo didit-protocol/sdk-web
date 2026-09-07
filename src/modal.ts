@@ -291,6 +291,7 @@ export class VerificationModal {
       .${CSS_CLASSES.embedded} .${CSS_CLASSES.iframe} {
         width: 100%;
         height: 100%;
+        max-height: none;
       }
 
       .${CSS_CLASSES.embedded} .${CSS_CLASSES.loading} {
