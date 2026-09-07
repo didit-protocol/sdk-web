@@ -177,6 +177,12 @@ describe("VerificationModal iframe sizing", () => {
     return match[1];
   }
 
+  function descendantRuleBody(styles: string, ancestor: string, className: string): string {
+    const match = new RegExp(`\\.${ancestor}\\s+\\.${className}\\s*\\{([^}]*)\\}`).exec(styles);
+    if (!match) throw new Error(`No rule found for .${ancestor} .${className}`);
+    return match[1];
+  }
+
   it("bounds the base iframe height by the container's viewport cap, so a short viewport cannot clip the flow", () => {
     const styles = injectedStyles();
     const container = baseRuleBody(styles, CSS_CLASSES.container);
@@ -186,5 +192,13 @@ describe("VerificationModal iframe sizing", () => {
     expect(container).toContain("max-height: 90dvh");
     expect(container).toContain("overflow: hidden");
     expect(iframe).toMatch(/height: 90vh;\s+height: 90dvh;\s+max-height: 700px/);
+  });
+
+  it("clears the modal height cap in embedded mode, so a tall host is not truncated", () => {
+    const styles = injectedStyles();
+    const embeddedIframe = descendantRuleBody(styles, CSS_CLASSES.embedded, CSS_CLASSES.iframe);
+
+    expect(embeddedIframe).toContain("height: 100%");
+    expect(embeddedIframe).toContain("max-height: none");
   });
 });
