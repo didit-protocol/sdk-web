@@ -1,6 +1,6 @@
 {
   "name": "@didit-protocol/sdk-web",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Didit Identity Verification SDK for Web Applications",
   "main": "dist/didit-sdk.cjs.js",
   "module": "dist/didit-sdk.esm.js",
@@ -20,6 +20,9 @@
     "build:watch": "rollup -c -w",
     "dev": "node examples/server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:build-version": "npm run build && node scripts/verify-build-version.mjs",
+    "test:e2e": "npm run build && playwright test --project=chromium --project=firefox --project=webkit",
+    "test:visual": "npm run build && playwright test --project=chrome-visual",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
@@ -46,6 +49,7 @@
     "access": "public"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@rollup/plugin-typescript": "^11.1.6",
     "@types/jest": "^29.5.12",

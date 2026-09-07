@@ -97,6 +97,7 @@ export class VerificationModal {
         position: relative;
         width: 100%;
         max-width: 500px;
+        max-height: 90vh;
         max-height: 90dvh;
         border-radius: 16px;
         overflow: hidden;
@@ -109,7 +110,9 @@ export class VerificationModal {
 
       .${CSS_CLASSES.iframe} {
         width: 100%;
-        height: 700px;
+        height: 90vh;
+        height: 90dvh;
+        max-height: 700px;
         border: none;
         display: block;
       }
@@ -267,12 +270,15 @@ export class VerificationModal {
 
         .${CSS_CLASSES.container} {
           max-width: 100%;
+          max-height: 100vh;
           max-height: 100dvh;
           border-radius: 0;
         }
 
         .${CSS_CLASSES.iframe} {
+          height: 100vh;
           height: 100dvh;
+          max-height: none;
         }
       }
 
@@ -285,6 +291,7 @@ export class VerificationModal {
       .${CSS_CLASSES.embedded} .${CSS_CLASSES.iframe} {
         width: 100%;
         height: 100%;
+        max-height: none;
       }
 
       .${CSS_CLASSES.embedded} .${CSS_CLASSES.loading} {

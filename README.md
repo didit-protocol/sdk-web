@@ -28,6 +28,18 @@ yarn add @didit-protocol/sdk-web
 <script src="https://unpkg.com/@didit-protocol/sdk-web/dist/didit-sdk.umd.min.js"></script>
 ```
 
+## Package Version
+
+Inspect the installed SDK version at runtime:
+
+```typescript
+import { SDK_VERSION } from '@didit-protocol/sdk-web';
+
+console.log(SDK_VERSION);
+```
+
+`SDK_VERSION` is injected from `package.json` during the build. Release maintainers should update the package with `npm version <version> --no-git-tag-version`, then run `npm run test:build-version`. That check validates ESM, CommonJS, UMD, minified UMD, and the emitted TypeScript declaration against both the current version and a simulated future version.
+
 ## Quick Start
 
 ### ES Modules / TypeScript
@@ -174,9 +186,15 @@ interface DiditSdkConfiguration {
 }
 ```
 
+## Modal Sizing
+
+Modal mode uses a maximum width of 500px and a maximum height of 700px. On shorter desktop and landscape viewports, the iframe tracks 90% of the visible viewport so the modal never extends beyond its container. The hosted flow owns the scrollbar inside the iframe, keeping later steps reachable without scrolling the page behind the modal.
+
+Browsers that support dynamic viewport units use `dvh`, while older supported browsers fall back to `vh`. At widths of 540px and below, the modal fills the visible viewport. The close button and exit confirmation stay inside the modal at every size.
+
 ## Embedded Mode
 
-Render verification inline instead of a modal overlay:
+Render verification inline instead of a modal overlay. Embedded mode does not apply the modal's 500px by 700px cap; the SDK fills the host element's content box. Give the host an explicit or otherwise resolved height:
 
 ```html
 <div id="verification-container" style="width: 500px; height: 700px;"></div>
@@ -191,6 +209,8 @@ DiditSdk.shared.startVerification({
   }
 });
 ```
+
+If the host element has no resolved height, the embedded iframe also has no usable height. Resize the host element when your layout changes; the SDK continues to fill it automatically.
 
 ## Verification Results
 

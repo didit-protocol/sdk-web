@@ -1,6 +1,7 @@
 import { jest, describe, it, expect, afterEach } from "@jest/globals";
 import { VerificationModal } from "../modal";
 import type { DiditSdkConfiguration, VerificationEvent } from "../types";
+import { CSS_CLASSES } from "../constants";
 
 interface ModalInternals {
   iframe: HTMLIFrameElement | null;
@@ -146,5 +147,58 @@ describe("VerificationModal cross-modal isolation", () => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
 
     expect(a.onCloseConfirmed).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("VerificationModal iframe sizing", () => {
+  const openModals: VerificationModal[] = [];
+
+  afterEach(() => {
+    openModals.forEach((modal) => modal.destroy());
+    openModals.length = 0;
+    document.getElementById("didit-sdk-styles")?.remove();
+    document.body.style.overflow = "";
+  });
+
+  function injectedStyles(): string {
+    const { modal } = createModal();
+    openModals.push(modal);
+    modal.open("https://verify.didit.me/session");
+    const el = document.getElementById("didit-sdk-styles");
+    if (!el) throw new Error("Stylesheet was not injected");
+    return el.textContent ?? "";
+  }
+
+  // First matching rule body for a selector: the base rule, before any
+  // media-query or descendant override later in the sheet.
+  function baseRuleBody(styles: string, className: string): string {
+    const match = new RegExp(`\\.${className}\\s*\\{([^}]*)\\}`).exec(styles);
+    if (!match) throw new Error(`No rule found for .${className}`);
+    return match[1];
+  }
+
+  function descendantRuleBody(styles: string, ancestor: string, className: string): string {
+    const match = new RegExp(`\\.${ancestor}\\s+\\.${className}\\s*\\{([^}]*)\\}`).exec(styles);
+    if (!match) throw new Error(`No rule found for .${ancestor} .${className}`);
+    return match[1];
+  }
+
+  it("bounds the base iframe height by the container's viewport cap, so a short viewport cannot clip the flow", () => {
+    const styles = injectedStyles();
+    const container = baseRuleBody(styles, CSS_CLASSES.container);
+    const iframe = baseRuleBody(styles, CSS_CLASSES.iframe);
+
+    expect(container).toMatch(/max-height: 90vh;\s+max-height: 90dvh/);
+    expect(container).toContain("max-height: 90dvh");
+    expect(container).toContain("overflow: hidden");
+    expect(iframe).toMatch(/height: 90vh;\s+height: 90dvh;\s+max-height: 700px/);
+  });
+
+  it("clears the modal height cap in embedded mode, so a tall host is not truncated", () => {
+    const styles = injectedStyles();
+    const embeddedIframe = descendantRuleBody(styles, CSS_CLASSES.embedded, CSS_CLASSES.iframe);
+
+    expect(embeddedIframe).toContain("height: 100%");
+    expect(embeddedIframe).toContain("max-height: none");
   });
 });
