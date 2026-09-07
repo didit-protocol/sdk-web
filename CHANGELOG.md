@@ -2,6 +2,15 @@
 
 All notable changes to `@didit-protocol/sdk-web` will be documented in this file.
 
+## [0.3.1] - Unreleased
+
+### Fixed
+- Keep the verification iframe within its modal on short desktop and landscape viewports so the hosted flow remains scrollable to the end.
+- Derive the exported `SDK_VERSION` and its TypeScript declaration from the package version across every build format.
+
+### Changed
+- Add browser-level modal layout coverage for desktop, mobile, landscape, resizing, embedded mode, scrolling, and exit controls.
+
 ## [0.3.0] - 2026-09-01
 
 ### Added

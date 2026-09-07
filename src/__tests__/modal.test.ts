@@ -150,7 +150,6 @@ describe("VerificationModal cross-modal isolation", () => {
   });
 });
 
-
 describe("VerificationModal iframe sizing", () => {
   const openModals: VerificationModal[] = [];
 
@@ -180,23 +179,12 @@ describe("VerificationModal iframe sizing", () => {
 
   it("bounds the base iframe height by the container's viewport cap, so a short viewport cannot clip the flow", () => {
     const styles = injectedStyles();
-
-    // The container is bounded by viewport height and hides its overflow...
     const container = baseRuleBody(styles, CSS_CLASSES.container);
-    expect(container).toContain("max-height: 90dvh");
-    expect(container).toContain("overflow: hidden");
-
-    // ...so the iframe must not assert a fixed height that can exceed it.
-    // A viewport under ~778px tall would otherwise have the excess cut off
-    // silently, with no scrollbar and no way to reach the rest of the flow.
     const iframe = baseRuleBody(styles, CSS_CLASSES.iframe);
 
-    // Declared as a fallback pair: browsers without min()/dvh keep the fixed
-    // height, newer ones take the bounded one. Order carries the behaviour,
-    // so assert it rather than mere presence.
-    const fallbackAt = iframe.indexOf("height: 700px");
-    const boundedAt = iframe.indexOf("height: min(700px, 90dvh)");
-    expect(fallbackAt).toBeGreaterThanOrEqual(0);
-    expect(boundedAt).toBeGreaterThan(fallbackAt);
+    expect(container).toMatch(/max-height: 90vh;\s+max-height: 90dvh/);
+    expect(container).toContain("max-height: 90dvh");
+    expect(container).toContain("overflow: hidden");
+    expect(iframe).toMatch(/height: 90vh;\s+height: 90dvh;\s+max-height: 700px/);
   });
 });

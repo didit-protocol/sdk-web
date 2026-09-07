@@ -61,28 +61,40 @@ test("keeps the end of a long verification flow reachable", async ({ page }) => 
   expect(await frame.locator("body").evaluate((body) => body.scrollHeight > window.innerHeight)).toBe(true);
   await button.scrollIntoViewIfNeeded();
   await expect(button).toBeInViewport();
+  await expect(page.getByRole("button", { name: "Close verification" })).toBeInViewport();
 });
 
 test("uses the embedded host height without a viewport cap", async ({ page }) => {
   const iframe = await openFixture(page, { width: 1000, height: 900 }, "?embedded=true&hostHeight=480");
   const host = page.locator("#verification-container");
+  const hostContentHeight = await host.evaluate((element) => element.clientHeight);
 
-  await expectHeight(iframe, await elementHeight(host));
-  await expectHeight(page.locator(".didit-embedded"), await elementHeight(host));
+  await expectHeight(iframe, hostContentHeight);
+  await expectHeight(page.locator(".didit-embedded"), hostContentHeight);
 });
 
-test("keeps the close and exit-confirmation controls reachable", async ({ page }) => {
-  await openFixture(page, { width: 1366, height: 625 });
-  const close = page.getByRole("button", { name: "Close verification" });
+for (const viewport of [{ width: 1366, height: 625 }, { width: 390, height: 844 }]) {
+  test(`keeps exit controls reachable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await openFixture(page, viewport);
+    const close = page.getByRole("button", { name: "Close verification" });
 
-  await expect(close).toBeInViewport();
-  await close.click();
-  await expect(page.getByRole("heading", { name: "Exit verification?" })).toBeInViewport();
-  await expect(page.getByText("Continue", { exact: true })).toBeInViewport();
-});
+    await expect(close).toBeInViewport();
+    await close.click();
+    await expect(page.getByRole("heading", { name: "Exit verification?" })).toBeInViewport();
+    await expect(page.getByText("Continue", { exact: true })).toBeInViewport();
+  });
+}
 
 async function captureProof(page, name, viewport, options = "") {
   await openFixture(page, viewport, options);
+  await page.screenshot({ path: `${PROOF_DIR}/${name}.png`, fullPage: true });
+}
+
+async function captureScrolledProof(page, name, viewport) {
+  const iframe = await openFixture(page, viewport);
+  const button = iframe.contentFrame().getByRole("button", { name: "Continue verification" });
+
+  await button.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${PROOF_DIR}/${name}.png`, fullPage: true });
 }
 
@@ -91,4 +103,5 @@ test("captures visual proof", async ({ page }) => {
   await captureProof(page, "modal-light-desktop", { width: 1366, height: 625 });
   await captureProof(page, "modal-dark-desktop", { width: 1366, height: 625 }, "?theme=dark");
   await captureProof(page, "modal-light-mobile", { width: 390, height: 844 });
+  await captureScrolledProof(page, "modal-light-mobile-bottom", { width: 390, height: 844 });
 });

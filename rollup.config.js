@@ -5,6 +5,26 @@ import dts from 'rollup-plugin-dts';
 import { readFileSync } from 'fs';
 
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'));
+const versionPlaceholder = '__SDK_PACKAGE_VERSION__';
+
+function injectPackageVersion(version) {
+  return {
+    name: 'inject-package-version',
+    transform(code, id) {
+      const normalizedId = id.replaceAll('\\', '/');
+
+      if (!normalizedId.endsWith('/src/constants.ts')) return null;
+      if (!code.includes(versionPlaceholder)) this.error('SDK version placeholder is missing');
+
+      return { code: code.replaceAll(versionPlaceholder, version), map: null };
+    },
+    renderChunk(code) {
+      if (!code.includes(versionPlaceholder)) return null;
+
+      return { code: code.replaceAll(versionPlaceholder, version), map: null };
+    },
+  };
+}
 
 const banner = `/**
  * Didit SDK for Web v${packageJson.version}
@@ -23,6 +43,7 @@ export default [
       sourcemap: true,
     },
     plugins: [
+      injectPackageVersion(packageJson.version),
       resolve(),
       typescript({
         tsconfig: './tsconfig.json',
@@ -41,6 +62,7 @@ export default [
       exports: 'named',
     },
     plugins: [
+      injectPackageVersion(packageJson.version),
       resolve(),
       typescript({
         tsconfig: './tsconfig.json',
@@ -60,6 +82,7 @@ export default [
       exports: 'named',
     },
     plugins: [
+      injectPackageVersion(packageJson.version),
       resolve(),
       typescript({
         tsconfig: './tsconfig.json',
@@ -79,6 +102,7 @@ export default [
       exports: 'named',
     },
     plugins: [
+      injectPackageVersion(packageJson.version),
       resolve(),
       typescript({
         tsconfig: './tsconfig.json',
@@ -94,6 +118,6 @@ export default [
       file: 'dist/index.d.ts',
       format: 'esm',
     },
-    plugins: [dts()],
+    plugins: [injectPackageVersion(packageJson.version), dts()],
   },
 ];
