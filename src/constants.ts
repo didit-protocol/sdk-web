@@ -20,6 +20,16 @@ export const CSS_CLASSES = {
 
 export const SDK_VERSION = "__SDK_PACKAGE_VERSION__";
 
+/** The verification-URL query parameter each camera option is forwarded as. */
+export const CAMERA_QUERY_PARAMS = {
+  defaultDocumentCamera: "document_camera",
+  defaultLivenessCamera: "liveness_camera",
+  showDocumentCameraSwitchButton: "document_camera_switch",
+  showLivenessCameraSwitchButton: "liveness_camera_switch"
+} as const;
+
+export const CAMERA_LENSES = ["front", "back"] as const;
+
 export const languages  = [
     "ar",
     "bg",
