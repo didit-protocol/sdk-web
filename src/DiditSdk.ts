@@ -17,7 +17,7 @@ import type {
 
 import { VerificationModal } from "./modal";
 import { DEFAULT_CONFIG } from "./constants";
-import { SDKLogger, createVerificationError } from "./utils";
+import { SDKLogger, buildVerificationUrl, createVerificationError } from "./utils";
 import {
   DEFAULT_TRANSACTION_BASE_URL,
   DiditTransactionError,
@@ -121,7 +121,7 @@ export class DiditSdk {
         throw new Error("Invalid options: url is required");
       }
 
-      this._url = url;
+      this._url = buildVerificationUrl(url, config);
       this.setState("loading");
 
       this.emitInternalEvent("didit:started", {});

@@ -8,6 +8,7 @@ export type {
   VerificationError,
   VerificationResultType,
   VerificationResult,
+  CameraLens,
   DiditSdkConfiguration,
   StartVerificationOptions,
   VerificationEventType,

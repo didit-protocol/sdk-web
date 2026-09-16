@@ -20,6 +20,11 @@ export const CSS_CLASSES = {
 
 export const SDK_VERSION = "__SDK_PACKAGE_VERSION__";
 
+/** Query parameter the verification page reads for `defaultLivenessCamera`. */
+export const LIVENESS_CAMERA_QUERY_PARAM = "liveness_camera";
+
+export const CAMERA_LENSES = ["front", "back"] as const;
+
 export const languages  = [
     "ar",
     "bg",

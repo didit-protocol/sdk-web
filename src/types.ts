@@ -22,6 +22,12 @@ export interface VerificationResult {
   error?: VerificationError;
 }
 
+/**
+ * A physical camera on the end user's device. Mirrors the `CameraLens` option
+ * of the native SDKs.
+ */
+export type CameraLens = "front" | "back";
+
 export interface DiditSdkConfiguration {
   loggingEnabled?: boolean;
   containerElement?: HTMLElement;
@@ -31,6 +37,17 @@ export interface DiditSdkConfiguration {
   closeModalOnComplete?: boolean;
   embedded?: boolean;
   embeddedContainerId?: string;
+  /**
+   * The camera the face (liveness) capture opens first. `"front"` (the
+   * default) is the selfie camera; `"back"` opens the rear camera, for a
+   * kiosk or an operator pointing the device at the person being verified.
+   * Applies to the passive liveness check; a device without a rear camera
+   * keeps the front one, and the user can still switch cameras during the
+   * capture. Forwarded to the verification page as the `liveness_camera`
+   * query parameter of the verification URL.
+   * @default "front"
+   */
+  defaultLivenessCamera?: CameraLens;
 }
 
 export interface StartVerificationOptions {

@@ -183,8 +183,35 @@ interface DiditSdkConfiguration {
    * Required when embedded is true
    */
   embeddedContainerId?: string;
+
+  /**
+   * Camera the face (liveness) capture opens first: "front" or "back"
+   * Applies to passive liveness; devices without a rear camera keep the front one
+   * @default "front"
+   */
+  defaultLivenessCamera?: CameraLens;
 }
+
+type CameraLens = "front" | "back";
 ```
+
+## Camera Selection
+
+By default the face capture opens the front (selfie) camera. Set `defaultLivenessCamera: 'back'` to open the rear camera first instead, for example on a kiosk or when an operator holds the device and points it at the person being verified. Document capture always starts on the rear camera and is not affected.
+
+```typescript
+DiditSdk.shared.startVerification({
+  url,
+  configuration: {
+    defaultLivenessCamera: 'back'
+  }
+});
+```
+
+- Accepted values are `'front'` (the default) and `'back'`. Any other value is ignored.
+- The option applies to the passive liveness check. Active liveness is not affected.
+- Devices without a rear camera, such as laptops, keep the front camera. The user can still switch cameras during the capture.
+- The SDK forwards the option to the verification page as the `liveness_camera` query parameter of the verification URL. If you open the verification URL directly instead of through the SDK, add `?liveness_camera=back` to the URL yourself.
 
 ## Modal Sizing
 
