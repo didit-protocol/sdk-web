@@ -27,14 +27,16 @@ describe("startVerification defaultLivenessCamera", () => {
     DiditSdk.shared.destroy();
   });
 
-  it("loads the verification URL with liveness_camera=back when asked for the rear camera", async () => {
+  it("loads the verification URL with the camera options as query parameters", async () => {
     await DiditSdk.shared.startVerification({
       url: "https://verify.didit.me/session/token?vendor_data=user-1",
-      configuration: { defaultLivenessCamera: "back" }
+      configuration: { defaultLivenessCamera: "back", showLivenessCameraSwitchButton: false }
     });
     const loaded = verificationIframeUrl(DiditSdk.shared);
     expect(loaded.origin + loaded.pathname).toBe("https://verify.didit.me/session/token");
     expect(loaded.searchParams.get("liveness_camera")).toBe("back");
+    expect(loaded.searchParams.get("liveness_camera_switch")).toBe("false");
+    expect(loaded.searchParams.has("document_camera")).toBe(false);
     expect(loaded.searchParams.get("vendor_data")).toBe("user-1");
   });
 

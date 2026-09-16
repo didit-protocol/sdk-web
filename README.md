@@ -185,33 +185,62 @@ interface DiditSdkConfiguration {
   embeddedContainerId?: string;
 
   /**
+   * Camera the document capture opens first: "front" or "back"
+   * @default "back"
+   */
+  defaultDocumentCamera?: CameraLens;
+
+  /**
    * Camera the face (liveness) capture opens first: "front" or "back"
    * Applies to passive liveness; devices without a rear camera keep the front one
    * @default "front"
    */
   defaultLivenessCamera?: CameraLens;
+
+  /**
+   * Show the in-capture camera switcher on the document step
+   * false locks the user to defaultDocumentCamera
+   * @default true
+   */
+  showDocumentCameraSwitchButton?: boolean;
+
+  /**
+   * Show the in-capture camera switcher on the liveness step
+   * false locks the user to defaultLivenessCamera
+   * @default true
+   */
+  showLivenessCameraSwitchButton?: boolean;
 }
 
 type CameraLens = "front" | "back";
 ```
 
-## Camera Selection
+## Camera Options
 
-By default the face capture opens the front (selfie) camera. Set `defaultLivenessCamera: 'back'` to open the rear camera first instead, for example on a kiosk or when an operator holds the device and points it at the person being verified. Document capture always starts on the rear camera and is not affected.
+The same four camera options the native SDKs expose. By default the document capture opens the rear camera and the face capture opens the front (selfie) camera, and both steps offer an in-capture camera switcher on devices with more than one camera.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `defaultDocumentCamera` | `CameraLens` | `'back'` | Lens used when first entering the document capture screen |
+| `defaultLivenessCamera` | `CameraLens` | `'front'` | Lens used when first entering the liveness (passive face) capture screen |
+| `showDocumentCameraSwitchButton` | `boolean` | `true` | Show the in-capture camera switcher on the document screen; `false` locks the user to `defaultDocumentCamera` |
+| `showLivenessCameraSwitchButton` | `boolean` | `true` | Show the in-capture camera switcher on the liveness screen; `false` locks the user to `defaultLivenessCamera` |
 
 ```typescript
+// A kiosk: the operator points the device at the person, on the rear camera, with no way to switch
 DiditSdk.shared.startVerification({
   url,
   configuration: {
-    defaultLivenessCamera: 'back'
+    defaultLivenessCamera: 'back',
+    showLivenessCameraSwitchButton: false
   }
 });
 ```
 
-- Accepted values are `'front'` (the default) and `'back'`. Any other value is ignored.
-- The option applies to the passive liveness check. Active liveness is not affected.
-- Devices without a rear camera, such as laptops, keep the front camera. The user can still switch cameras during the capture.
-- The SDK forwards the option to the verification page as the `liveness_camera` query parameter of the verification URL. If you open the verification URL directly instead of through the SDK, add `?liveness_camera=back` to the URL yourself.
+- `CameraLens` is `'front'` or `'back'`; any other value is ignored, as is a non-boolean switcher flag.
+- A device without the requested camera keeps the one it has (a laptop asked for `'back'` still uses its webcam), and the switcher is hidden on single-camera devices regardless of the flags.
+- The liveness options apply to the passive liveness check. Active liveness is not affected.
+- The SDK forwards the options to the verification page as query parameters of the verification URL: `document_camera`, `liveness_camera`, `document_camera_switch` and `liveness_camera_switch`. If you open the verification URL directly instead of through the SDK, set them on the URL yourself (with `&` when the URL already has a query string, or through the `URL` API's `searchParams`).
 
 ## Modal Sizing
 
