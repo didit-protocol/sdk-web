@@ -2,6 +2,13 @@
 
 All notable changes to `@didit-protocol/sdk-web` will be documented in this file.
 
+## [0.4.0] - 2026-09-19
+
+### Added
+- The native SDKs' four camera options on `DiditSdkConfiguration`, with the same names, defaults and semantics: `defaultDocumentCamera` (`'back'`), `defaultLivenessCamera` (`'front'`), `showDocumentCameraSwitchButton` (`true`) and `showLivenessCameraSwitchButton` (`true`). Open the face (passive liveness) capture on the rear camera, or lock either capture step to one lens by hiding its in-capture camera switcher.
+- The options are forwarded to the hosted verification page as the `document_camera`, `liveness_camera`, `document_camera_switch` and `liveness_camera_switch` query parameters of the verification URL. A device without the requested camera keeps the one it has, and the switcher stays hidden on single-camera devices.
+- `CameraLens` type export (`'front' | 'back'`). A lens or switcher flag of the wrong type is ignored with a console warning instead of being forwarded.
+
 ## [0.3.1] - 2026-09-07
 
 ### Fixed
