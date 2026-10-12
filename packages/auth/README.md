@@ -36,6 +36,8 @@ Apple, GitHub and enterprise SSO) and handles MFA. The sign-in is bound to
 this browser with PKCE (S256) and a random `state`; `handleRedirectCallback`
 refuses a redirect it did not start, exchanges the one-time code and removes it
 from the address bar. A magic link completes in whichever tab opens it.
+Sign-ins started in several tabs at once each wait on their own and complete
+once, in any order; unfinished ones are forgotten after twenty minutes.
 
 Register `redirectUri` in the Didit console, exactly. It defaults to the
 current page without its query string. Create one client per application and
