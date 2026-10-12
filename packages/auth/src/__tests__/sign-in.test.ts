@@ -205,28 +205,59 @@ describe("sessions that end elsewhere", () => {
 });
 
 describe("other tabs", () => {
-  function storageEvent(oldValue: string | null, newValue: string | null): void {
-    window.dispatchEvent(
-      new StorageEvent("storage", { key: `didit-auth:${APPLICATION_ID}`, oldValue, newValue, storageArea: localStorage })
-    );
+  const KEY = `didit-auth:${APPLICATION_ID}`;
+
+  // As a browser does: the shared storage holds the new value before the other tabs get the event.
+  function otherTabWrites(newValue: string | null): void {
+    const oldValue = localStorage.getItem(KEY);
+    if (newValue === null) localStorage.removeItem(KEY);
+    else localStorage.setItem(KEY, newValue);
+    window.dispatchEvent(new StorageEvent("storage", { key: KEY, oldValue, newValue, storageArea: localStorage }));
   }
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   it("follows sign-outs and refreshes made by another tab", async () => {
     const { api, auth } = setup("password-sign-in");
     await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
     const listener = jest.fn();
     const unsubscribe = auth.onAuthStateChange(listener);
-    const before = localStorage.getItem(`didit-auth:${APPLICATION_ID}`);
+    const before = localStorage.getItem(KEY);
     const rotated = JSON.stringify({ ...JSON.parse(before ?? "{}"), accessToken: "rotated", refreshToken: "rotated" });
 
-    storageEvent(before, rotated);
-    storageEvent(rotated, null);
-    await Promise.resolve();
+    otherTabWrites(rotated);
+    await settle();
+    otherTabWrites(null);
+    await settle();
 
     expect(listener.mock.calls.map(([event]) => event)).toEqual(["TOKEN_REFRESHED", "SIGNED_OUT"]);
     unsubscribe();
-    storageEvent(null, before);
+    otherTabWrites(before);
+    await settle();
     expect(listener).toHaveBeenCalledTimes(2);
     api.verify(4);
+  });
+
+  it("reports nothing for another tab's change that arrives after this tab signed out", async () => {
+    const { api, auth, fixture } = setup("password-sign-in");
+    await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
+    advanceClock(5 * 60_000);
+    await auth.getToken();
+    const listener = jest.fn();
+    auth.onAuthStateChange(listener);
+    const before = localStorage.getItem(KEY);
+    const rotated = JSON.stringify({ ...JSON.parse(before ?? "{}"), accessToken: "rotated", refreshToken: "rotated" });
+
+    // The other tab refreshed first, but its event reaches this tab only after this tab's sign-out.
+    localStorage.setItem(KEY, rotated);
+    await auth.getSession({ force: true });
+    await auth.signOut();
+    window.dispatchEvent(new StorageEvent("storage", { key: KEY, oldValue: before, newValue: rotated, storageArea: localStorage }));
+    await settle();
+
+    expect(listener.mock.calls.map(([event]) => event)).toEqual(["SIGNED_OUT"]);
+    expect(stored()).toBeNull();
+    expect(fixture.exchanges[7].request.method).toBe("DELETE");
+    api.verify(7);
   });
 });

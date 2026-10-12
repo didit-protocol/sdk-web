@@ -506,9 +506,15 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     return run;
   }
 
-  async function onOtherTab(oldValue: string | null, newValue: string | null): Promise<void> {
-    const before = parseTokens(oldValue);
-    const after = parseTokens(newValue);
+  async function onOtherTab(oldValue: string | null): Promise<void> {
+    // A storage event can arrive after later changes, including this tab's own: report the change from
+    // what this tab last knew to what is stored now, and nothing when that is no change at all.
+    const value = await storage().getItem(storageKey);
+    const previous = observed === undefined ? oldValue : observed;
+    observed = value;
+    if (value === previous) return;
+    const before = parseTokens(previous);
+    const after = parseTokens(value);
 
     if (!after) {
       cached = null;
@@ -545,7 +551,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
       listeners.add(listener);
       if (!stopSync && sharedAcrossTabs()) {
         const handler = (event: StorageEvent) => {
-          if (event.key === storageKey) void onOtherTab(event.oldValue, event.newValue);
+          if (event.key === storageKey) void onOtherTab(event.oldValue);
         };
         window.addEventListener("storage", handler);
         stopSync = () => window.removeEventListener("storage", handler);
