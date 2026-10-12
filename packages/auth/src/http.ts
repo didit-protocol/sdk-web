@@ -79,16 +79,16 @@ export function createHttpClient(
       throw new DiditAuthError("network_error", error instanceof Error ? error.message : undefined);
     }
     const text = response.status === 204 ? "" : await response.text().catch(() => "");
-    let body: Body = null;
+    let data: unknown = null;
     try {
-      body = text ? JSON.parse(text) : null;
+      data = text ? JSON.parse(text) : null;
     } catch {
-      body = null;
+      data = null;
     }
     if (!response.ok) {
-      const retryAfter = Number(response.headers.get("Retry-After")) || undefined;
-      throw toError(response.status, body, retryAfter);
+      const body = data && typeof data === "object" && !Array.isArray(data) ? (data as Body) : null;
+      throw toError(response.status, body, Number(response.headers.get("Retry-After")) || undefined);
     }
-    return body as T;
+    return data as T;
   };
 }
