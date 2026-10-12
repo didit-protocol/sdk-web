@@ -3,7 +3,7 @@ import { TextEncoder } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { configureEvents, flush, resetEventsForTesting, submitEvent } from "../events";
 import { getDeviceFingerprintPayload, resetDeviceFingerprintForTesting } from "../fingerprint";
-import { recordedEvents, replay, scenario, sentRequests } from "./device-lane";
+import { recordedBody, recordedEvents, replay, respond, scenario, sentRequests } from "./device-lane";
 
 const originalEncoder = Object.getOwnPropertyDescriptor(globalThis, "TextEncoder");
 const originalSubtle = Object.getOwnPropertyDescriptor(crypto, "subtle");
@@ -95,7 +95,7 @@ describe("event delivery while the native fingerprint hash is pending", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(sentRequests(fetchMock)[0].init.keepalive).toBe(true);
     } finally {
-      completeSend(await replay("exit")("https://example.test/v1/events/batch/", fetchMock.mock.calls[0]?.[1]));
+      completeSend(respond(201, recordedBody("exit")));
       await releaseHash();
       await flushing;
     }
