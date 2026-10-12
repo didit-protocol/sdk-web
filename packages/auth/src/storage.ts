@@ -45,3 +45,56 @@ export function resolveStorage(option: DiditAuthStorageOption = "local"): DiditA
   if (typeof option === "object") return option;
   return (option === "memory" ? null : webStorage(option)) ?? memoryStorage();
 }
+
+/**
+ * One value kept in IndexedDB. Once `write` resolves, every later `read` in any tab of the origin
+ * returns it, which web storage does not promise. `read` resolves undefined when nothing was kept or
+ * IndexedDB cannot be used; neither method rejects.
+ */
+export interface CommittedValue {
+  read(): Promise<string | null | undefined>;
+  write(value: string | null): Promise<void>;
+}
+
+export function committedValue(key: string): CommittedValue {
+  let database: Promise<IDBDatabase> | null = null;
+
+  function run<T>(mode: IDBTransactionMode, use: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+    database ??= new Promise((resolve, reject) => {
+      const request = indexedDB.open("didit-auth", 1);
+      request.onupgradeneeded = () => request.result.createObjectStore("values");
+      request.onsuccess = () => {
+        // Never hold up a later version of this database.
+        request.result.onversionchange = () => {
+          request.result.close();
+          database = null;
+        };
+        resolve(request.result);
+      };
+      request.onerror = () => reject(request.error);
+    });
+    return database.then(
+      (db) =>
+        new Promise<T>((resolve, reject) => {
+          const transaction = db.transaction("values", mode);
+          const request = use(transaction.objectStore("values"));
+          transaction.oncomplete = () => resolve(request.result);
+          transaction.onabort = () => reject(transaction.error);
+        })
+    );
+  }
+
+  return {
+    read: () =>
+      run("readonly", (store) => store.get(key)).then(
+        (value) => (typeof value === "string" || value === null ? value : undefined),
+        () => undefined
+      ),
+    // A value that could not be kept must not be read as the latest one.
+    write: (value) =>
+      run("readwrite", (store) => store.put(value, key)).then(
+        () => undefined,
+        () => run("readwrite", (store) => store.delete(key)).then(() => undefined, () => undefined)
+      )
+  };
+}

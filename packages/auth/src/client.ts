@@ -3,7 +3,15 @@ import { codeChallenge, decodeText, randomString } from "./encoding";
 import { DiditAuthError } from "./errors";
 import { createHttpClient, type RequestOptions } from "./http";
 import { parsePublishableKey } from "./key";
-import { memoryStorage, resolveStorage, webStorage, type DiditAuthStorage, type SyncStorage } from "./storage";
+import {
+  committedValue,
+  memoryStorage,
+  resolveStorage,
+  webStorage,
+  type CommittedValue,
+  type DiditAuthStorage,
+  type SyncStorage
+} from "./storage";
 import type {
   DiditAgentGrant,
   DiditAuth,
@@ -198,6 +206,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
   const listeners = new Set<DiditAuthListener>();
   let tokenStore: DiditAuthStorage | null = null;
   let pendingStore: SyncStorage | null = null;
+  let lockedStore: CommittedValue | null | undefined;
   let cached: { session: DiditSession; sessionId: string; at: number } | null = null;
   let sessionRequest: Promise<DiditSession | null> | null = null;
   let refreshing: Promise<Tokens | null> | null = null;
@@ -239,14 +248,30 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
 
   const readTokens = async () => parseTokens(await storage().getItem(storageKey));
 
+  // localStorage can show a tab another tab's write a moment after that tab released the token lock
+  // (WebKit does), and acting on the older tokens would present a used refresh token, which revokes the
+  // session, or end a replaced session with a rotated access token. So each holder of the lock also
+  // commits the tokens to IndexedDB, and the next holder reads them from there.
+  function committed(): CommittedValue | null {
+    if (lockedStore === undefined) lockedStore = committedValue(storageKey);
+    return lockedStore;
+  }
+
+  // The stored tokens as the last holder of the token lock left them. Call only while holding it.
+  async function lockedTokens(): Promise<Tokens | null> {
+    const raw = await committed()?.read();
+    return raw === undefined ? readTokens() : parseTokens(raw);
+  }
+
+  // Call only while holding the token lock.
   async function writeTokens(tokens: Tokens | null): Promise<void> {
     observed = tokens ? JSON.stringify(tokens) : null;
     if (observed) await storage().setItem(storageKey, observed);
     else await storage().removeItem(storageKey);
+    await committed()?.write(observed);
   }
 
-  async function signedOut(): Promise<void> {
-    const had = await readTokens();
+  async function signedOut(had: Tokens | null): Promise<void> {
     await writeTokens(null);
     cached = null;
     attempt = null;
@@ -266,7 +291,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     const run = async (): Promise<Tokens | null> => {
       // Another tab may have rotated the tokens while this one waited for the lock. Presenting
       // an already used refresh token revokes the whole session, so use theirs instead.
-      const latest = await readTokens();
+      const latest = await lockedTokens();
       if (!latest || latest.refreshToken !== stale.refreshToken) return latest;
       try {
         const next = fromResponse(
@@ -279,7 +304,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
         return next;
       } catch (error) {
         if (!(error instanceof DiditAuthError) || error.code !== "invalid_grant") throw error;
-        await signedOut();
+        await signedOut(latest);
         return null;
       }
     };
@@ -344,7 +369,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
       throw new DiditAuthError("step_up_user_mismatch", "A different person completed the sign-in.");
     }
     const previous = await withTokenLock(async () => {
-      const previous = await readTokens();
+      const previous = await lockedTokens();
       await writeTokens(tokens);
       return previous;
     });
@@ -583,8 +608,8 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
 
     async signOut() {
       const tokens = await withTokenLock(async () => {
-        const tokens = await readTokens();
-        await signedOut();
+        const tokens = await lockedTokens();
+        await signedOut(tokens);
         return tokens;
       });
       // Best effort: the local sign-out stands even when Didit cannot be reached.
