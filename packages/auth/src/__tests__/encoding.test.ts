@@ -12,7 +12,7 @@ describe("PKCE", () => {
   it("draws verifiers and states the API accepts", () => {
     const verifier = randomString(32);
 
-    // service-didit-auth: code_verifier matches [A-Za-z0-9._~-]{43,128}.
+    // The API accepts a code_verifier matching [A-Za-z0-9._~-]{43,128}.
     expect(verifier).toMatch(/^[A-Za-z0-9._~-]{43,128}$/);
     expect(randomString(16)).toMatch(/^[A-Za-z0-9_-]{22}$/);
     expect(randomString(32)).not.toBe(verifier);

@@ -9,7 +9,7 @@ export interface Exchange {
 }
 
 /**
- * Real exchanges between this SDK and a local service-didit-auth, recorded in
+ * Real exchanges between this SDK and a local Didit auth service, recorded in
  * order for one scenario (see fixtures/README.md). Extra keys are the inputs
  * and outcomes of that recording, such as the code that was emailed.
  */

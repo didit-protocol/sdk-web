@@ -17,7 +17,7 @@ export default defineConfig({
     { name: "chromium", testIgnore: live, use: { browserName: "chromium" } },
     { name: "firefox", testIgnore: live, use: { browserName: "firefox" } },
     { name: "webkit", testIgnore: live, use: { browserName: "webkit" } },
-    // Against a running service-didit-auth; see e2e/live.spec.mjs.
+    // Against a running Didit auth service; see e2e/live.spec.mjs.
     { name: "live", testMatch: live, use: { browserName: "chromium" } }
   ]
 });

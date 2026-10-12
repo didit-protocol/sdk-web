@@ -1,8 +1,8 @@
-// The SDK against a running service-didit-auth: the real hosted page, token
+// The SDK against a running Didit auth service: the real hosted page, token
 // rotation, passkeys with a virtual authenticator and an emailed code.
 //
 //   DIDIT_AUTH_LIVE_UPSTREAM=http://127.0.0.1:8765   the service (proxied as http://localhost:8766,
-//                                                     which must be its CUSTOMER_AUTH_ORIGIN)
+//                                                     which must be its canonical auth origin)
 //   DIDIT_AUTH_LIVE_APPLICATION=<application id>      a sandbox application with password, code and
 //                                                     passkey on, agents on, http://localhost:4174 and
 //                                                     http://localhost:8766 allowed with
@@ -24,7 +24,7 @@ const PUBLISHABLE_KEY = `pk_test_${Buffer.from(API_BASE).toString("base64url")}`
 const APP = "http://localhost:4174/e2e/fixtures/app.html";
 const SAME_ORIGIN_APP = `${AUTH_ORIGIN}/e2e/fixtures/app.html`;
 
-test.skip(!DIDIT_AUTH_LIVE_UPSTREAM || !DIDIT_AUTH_LIVE_APPLICATION, "needs a running service-didit-auth");
+test.skip(!DIDIT_AUTH_LIVE_UPSTREAM || !DIDIT_AUTH_LIVE_APPLICATION, "needs a running Didit auth service");
 
 async function openApp(page, url = APP) {
   await page.goto(url);

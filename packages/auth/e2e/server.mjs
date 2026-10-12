@@ -4,8 +4,8 @@
 //   and @didit-protocol/signals (until that package lands, the fingerprint
 //   source it is built from, transpiled on request).
 // - http://127.0.0.1:4175 answers the runtime API with the exchanges recorded
-//   against service-didit-auth (src/__tests__/fixtures), applying the same
-//   CORS rules as its CustomerCorsMiddleware, so a request the real API would
+//   against the Didit auth service (src/__tests__/fixtures), applying the same
+//   CORS rules as that API, so a request the real API would
 //   refuse cross-origin fails here too. GET /__replay/load?scenario=a,b loads
 //   recordings; GET /__replay/report lists every request and any mismatch.
 // - With DIDIT_AUTH_LIVE_UPSTREAM set, http://localhost:8766 serves the same
@@ -117,7 +117,7 @@ async function replay(request, response) {
   const origin = request.headers.origin;
 
   if (request.method === "OPTIONS") return send(response, headers["Access-Control-Allow-Origin"] ? 200 : 403, null, headers);
-  // As RuntimeView: the canonical auth origin and the application's allowed origins only.
+  // As the API: only the canonical auth origin and the application's allowed origins.
   if (origin && origin !== "http://127.0.0.1:4175" && !ALLOWED_ORIGINS.includes(origin)) {
     return send(response, 403, JSON.stringify({ detail: "origin_not_allowed" }), { "Content-Type": "application/json" });
   }
