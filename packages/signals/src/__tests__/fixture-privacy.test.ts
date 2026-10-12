@@ -50,7 +50,7 @@ describe("recorded device lane fixture privacy", () => {
     const identity = ({ index, event_id, event_uuid }: (typeof accepted)[number]) => [index, event_id, event_uuid];
 
     expect(new Set(accepted.map(({ event_uuid }) => event_uuid)).size).toBe(accepted.length);
-    expect(replayed.map(identity)).toEqual(accepted.map(identity));
-    expect(recordings.scenarios.replayed.request).toEqual(recordings.scenarios.accepted.request);
+    expect(JSON.stringify(replayed.map(identity)) === JSON.stringify(accepted.map(identity))).toBe(true);
+    expect(JSON.stringify(recordings.scenarios.replayed.request) === JSON.stringify(recordings.scenarios.accepted.request)).toBe(true);
   });
 });
