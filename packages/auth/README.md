@@ -180,16 +180,17 @@ claims.vendor_data;  // your id for them
 claims.act;          // set when an AI agent acts for them (null otherwise): check claims.act.scopes
 ```
 
-`verifyToken` accepts only ES256 access tokens (header `typ: at+jwt`, so an
-ID token is refused) signed by one of the issuer's published keys (found
-through its OpenID discovery document), issued by your application (`iss`), for
-your application (`aud`) and not expired (5 seconds of clock tolerance). The
-discovery document and the keys are cached for ten minutes; a token signed
-with a key the server has not seen yet reloads the keys, at most once every 30 seconds. Concurrent requests share one load, and
-while the issuer is unreachable the last good keys keep working and it is
-asked again at most once every 5 seconds. Pass
-`issuer`, `audience` or `jwksUri` to override what the publishable key
-implies. It runs on Node.js 20+ and edge runtimes with WebCrypto.
+`verifyToken` accepts only ES256 access tokens (header `typ: at+jwt`, so an ID
+token is refused) signed by one of the issuer's published keys (found through
+its OpenID discovery document), issued by your application (`iss`), for your
+application (`aud`) and not expired (5 seconds of clock tolerance). The
+discovery document and the keys are cached for ten minutes; a token signed with
+a key the server has not seen yet reloads the keys, at most once every 30
+seconds. Concurrent requests share one load, and while the issuer is
+unreachable the last good keys keep working and it is asked again at most once
+every 5 seconds. Pass `issuer`, `audience` or `jwksUri` to override what the
+publishable key implies. It runs on Node.js 20+ and edge runtimes with
+WebCrypto.
 
 Access tokens stay valid until they expire. Before an action that must see a
 sign-out or a block at once, also check the session with the API.

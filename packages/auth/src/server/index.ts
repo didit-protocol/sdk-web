@@ -58,8 +58,7 @@ const KEYS_TTL_MS = 10 * 60_000;
 const COOLDOWN_AFTER_LOAD_MS = 30_000;
 const COOLDOWN_AFTER_FAILURE_MS = 5_000;
 const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
-// The issuer signs access tokens as "at+jwt" and ID tokens as "JWT" with the same keys and claims
-// (RFC 9068 section 4 also allows the full media type).
+// RFC 9068 section 4: an access token is typed "at+jwt", or the full media type.
 const ACCESS_TOKEN_TYPES = ["at+jwt", "application/at+jwt"];
 
 const discovered = new Map<string, Cached<string>>();
@@ -205,7 +204,7 @@ export async function verifyToken(token: string, options: VerifyTokenOptions = {
   if (header?.alg !== "ES256" || typeof header.kid !== "string" || header.crit !== undefined) {
     throw invalid("The token is not signed with ES256 by a known key.");
   }
-  // An ID token is signed by the same issuer for the same audience; only access tokens pass.
+  // The issuer signs ID tokens ("JWT") with the same keys, issuer and audience: only access tokens pass.
   if (!ACCESS_TOKEN_TYPES.includes(header.typ as string)) throw invalid("The token is not an access token.");
   if (signature.length !== 64 || !claims || typeof claims !== "object" || Array.isArray(claims)) {
     throw invalid("The token is malformed.");
