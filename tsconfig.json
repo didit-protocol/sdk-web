@@ -20,7 +20,6 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "outDir": "./dist",
-    "rootDir": "./src",
     "baseUrl": ".",
     "paths": {
       "@didit-protocol/signals": ["./packages/signals/src/index.ts"]
