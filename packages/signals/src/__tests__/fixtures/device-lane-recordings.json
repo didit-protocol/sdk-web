@@ -1,0 +1,1244 @@
+{
+  "about": "Real answers of the Didit verification API to POST /v1/events/batch/, recorded on 2026-10-12 from a local run of the service with this package's own build sending the requests. Tokens are replaced by the label of the credential state they had (valid, expired, used_up, revoked, origin_bound, session_only, monitoring_disabled, unknown). too_many was sent raw: the SDK never puts more than 500 events in one request.",
+  "scenarios": {
+    "accepted": {
+      "token": "valid",
+      "headerNames": [
+        "Content-Type",
+        "X-Monitoring-Token"
+      ],
+      "request": {
+        "events": [
+          {
+            "event_id": "rec-signup-1",
+            "event_category": "auth",
+            "action_type": "signup",
+            "occurred_at": "2026-10-12T08:11:41.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-login-1",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:11:51.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-login-failed-1",
+            "event_category": "auth",
+            "action_type": "login_failed",
+            "occurred_at": "2026-10-12T08:12:01.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "reason": "wrong_password"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "accepted_count": 3,
+          "replayed_count": 0,
+          "rejected_count": 0,
+          "results": [
+            {
+              "index": 0,
+              "outcome": "accepted",
+              "event_uuid": "f35f90f9-b95d-4be1-af47-40fa4f20e94d",
+              "event_id": "rec-signup-1",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:11:41.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 1,
+              "outcome": "accepted",
+              "event_uuid": "b8412edc-cad7-41d9-8d50-197b17d55bc0",
+              "event_id": "rec-login-1",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:11:51.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 2,
+              "outcome": "accepted",
+              "event_uuid": "99f79a44-9601-44a5-9e79-835360d795d3",
+              "event_id": "rec-login-failed-1",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:01.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            }
+          ]
+        }
+      }
+    },
+    "replayed": {
+      "token": "valid",
+      "headerNames": [
+        "Content-Type",
+        "X-Monitoring-Token"
+      ],
+      "request": {
+        "events": [
+          {
+            "event_id": "rec-signup-1",
+            "event_category": "auth",
+            "action_type": "signup",
+            "occurred_at": "2026-10-12T08:11:41.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-login-1",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:11:51.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-login-failed-1",
+            "event_category": "auth",
+            "action_type": "login_failed",
+            "occurred_at": "2026-10-12T08:12:01.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "reason": "wrong_password"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "accepted_count": 0,
+          "replayed_count": 3,
+          "rejected_count": 0,
+          "results": [
+            {
+              "index": 0,
+              "outcome": "replayed",
+              "event_uuid": "f35f90f9-b95d-4be1-af47-40fa4f20e94d",
+              "event_id": "rec-signup-1",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:11:41.120000Z",
+              "idempotent_replay": true,
+              "rule_matches": []
+            },
+            {
+              "index": 1,
+              "outcome": "replayed",
+              "event_uuid": "b8412edc-cad7-41d9-8d50-197b17d55bc0",
+              "event_id": "rec-login-1",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:11:51.120000Z",
+              "idempotent_replay": true,
+              "rule_matches": []
+            },
+            {
+              "index": 2,
+              "outcome": "replayed",
+              "event_uuid": "99f79a44-9601-44a5-9e79-835360d795d3",
+              "event_id": "rec-login-failed-1",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:01.120000Z",
+              "idempotent_replay": true,
+              "rule_matches": []
+            }
+          ]
+        }
+      }
+    },
+    "partial": {
+      "token": "valid",
+      "headerNames": [
+        "Content-Type",
+        "X-Monitoring-Token"
+      ],
+      "request": {
+        "events": [
+          {
+            "event_id": "rec-logout-1",
+            "event_category": "auth",
+            "action_type": "logout",
+            "occurred_at": "2026-10-12T08:12:11.120Z",
+            "time_zone": "UTC"
+          },
+          {
+            "event_id": "rec-deposit-1",
+            "event_category": "payment",
+            "action_type": "deposit_initiated",
+            "occurred_at": "2026-10-12T08:12:21.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "amount": "50.00"
+            }
+          },
+          {
+            "event_id": "rec-login-1",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:11:51.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "passkey"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": 207,
+        "body": {
+          "accepted_count": 1,
+          "replayed_count": 0,
+          "rejected_count": 2,
+          "results": [
+            {
+              "index": 0,
+              "outcome": "accepted",
+              "event_uuid": "a2a7b091-6833-49fb-9a0f-ab0760b23994",
+              "event_id": "rec-logout-1",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:11.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 1,
+              "event_id": "rec-deposit-1",
+              "outcome": "rejected",
+              "errors": {
+                "payload": [
+                  "payment.deposit_initiated requires: currency, payment_method, payment_reference_id, status."
+                ]
+              }
+            },
+            {
+              "index": 2,
+              "event_id": "rec-login-1",
+              "outcome": "rejected",
+              "errors": {
+                "event_id": "event_id 'rec-login-1' already exists with a different payload."
+              }
+            }
+          ]
+        }
+      }
+    },
+    "scoped": {
+      "token": "session_only",
+      "headerNames": [
+        "Content-Type",
+        "X-Monitoring-Token"
+      ],
+      "request": {
+        "events": [
+          {
+            "event_id": "rec-page-view-1",
+            "event_category": "session",
+            "action_type": "page_view",
+            "occurred_at": "2026-10-12T08:12:26.120Z",
+            "time_zone": "UTC",
+            "session": {
+              "session_id": "web-1",
+              "page_url": "https://shop.example/checkout"
+            }
+          },
+          {
+            "event_id": "rec-login-scoped-1",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:31.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": 207,
+        "body": {
+          "accepted_count": 1,
+          "replayed_count": 0,
+          "rejected_count": 1,
+          "results": [
+            {
+              "index": 0,
+              "outcome": "accepted",
+              "event_uuid": "0400cd6f-c84c-4cae-99c4-65c746fcc3e2",
+              "event_id": "rec-page-view-1",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "low_value",
+              "expires_at": "2026-10-26T08:12:26.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 1,
+              "event_id": "rec-login-scoped-1",
+              "outcome": "rejected",
+              "errors": {
+                "event_category": [
+                  "This credential may not submit 'auth' events."
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "invalid_token": {
+      "token": "unknown",
+      "headerNames": [
+        "Content-Type",
+        "X-Monitoring-Token"
+      ],
+      "request": {
+        "events": [
+          {
+            "event_id": "rec-unknown-1",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:36.120Z",
+            "time_zone": "UTC"
+          }
+        ]
+      },
+      "response": {
+        "status": 401,
+        "body": {
+          "detail": "Invalid monitoring token."
+        }
+      }
+    },
+    "expired_token": {
+      "token": "expired",
+      "headerNames": [
+        "Content-Type",
+        "X-Monitoring-Token"
+      ],
+      "request": {
+        "events": [
+          {
+            "event_id": "rec-expired-1",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:36.120Z",
+            "time_zone": "UTC"
+          }
+        ]
+      },
+      "response": {
+        "status": 401,
+        "body": {
+          "detail": "Monitoring token has expired."
+        }
+      }
+    },
+    "used_up": {
+      "token": "used_up",
+      "headerNames": [
+        "Content-Type",
+        "X-Monitoring-Token"
+      ],
+      "request": {
+        "events": [
+          {
+            "event_id": "rec-used-up-1",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:36.120Z",
+            "time_zone": "UTC"
+          }
+        ]
+      },
+      "response": {
+        "status": 401,
+        "body": {
+          "detail": "Monitoring token exceeded its maximum number of uses."
+        }
+      }
+    },
+    "revoked": {
+      "token": "revoked",
+      "headerNames": [
+        "Content-Type",
+        "X-Monitoring-Token"
+      ],
+      "request": {
+        "events": [
+          {
+            "event_id": "rec-revoked-1",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:36.120Z",
+            "time_zone": "UTC"
+          }
+        ]
+      },
+      "response": {
+        "status": 401,
+        "body": {
+          "detail": "Monitoring token has been revoked."
+        }
+      }
+    },
+    "origin_bound": {
+      "token": "origin_bound",
+      "headerNames": [
+        "Content-Type",
+        "X-Monitoring-Token"
+      ],
+      "request": {
+        "events": [
+          {
+            "event_id": "rec-origin-1",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:36.120Z",
+            "time_zone": "UTC"
+          }
+        ]
+      },
+      "response": {
+        "status": 401,
+        "body": {
+          "detail": "Monitoring token is not valid for this origin."
+        }
+      }
+    },
+    "monitoring_disabled": {
+      "token": "monitoring_disabled",
+      "headerNames": [
+        "Content-Type",
+        "X-Monitoring-Token"
+      ],
+      "request": {
+        "events": [
+          {
+            "event_id": "rec-disabled-1",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:36.120Z",
+            "time_zone": "UTC"
+          }
+        ]
+      },
+      "response": {
+        "status": 403,
+        "body": {
+          "detail": "Event monitoring is not enabled for this application. Turn on event ingestion in the transaction monitoring settings before submitting events.",
+          "code": "event_monitoring_disabled"
+        }
+      }
+    },
+    "batch_of_25": {
+      "token": "valid",
+      "headerNames": [
+        "Content-Type",
+        "X-Monitoring-Token"
+      ],
+      "request": {
+        "events": [
+          {
+            "event_id": "rec-batch-01",
+            "event_category": "session",
+            "action_type": "page_view",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC"
+          },
+          {
+            "event_id": "rec-batch-02",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-03",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-04",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-05",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-06",
+            "event_category": "session",
+            "action_type": "page_view",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC"
+          },
+          {
+            "event_id": "rec-batch-07",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-08",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-09",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-10",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-11",
+            "event_category": "session",
+            "action_type": "page_view",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC"
+          },
+          {
+            "event_id": "rec-batch-12",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-13",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-14",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-15",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-16",
+            "event_category": "session",
+            "action_type": "page_view",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC"
+          },
+          {
+            "event_id": "rec-batch-17",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-18",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-19",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-20",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-21",
+            "event_category": "session",
+            "action_type": "page_view",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC"
+          },
+          {
+            "event_id": "rec-batch-22",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-23",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-24",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          },
+          {
+            "event_id": "rec-batch-25",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:37.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "password"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "accepted_count": 25,
+          "replayed_count": 0,
+          "rejected_count": 0,
+          "results": [
+            {
+              "index": 0,
+              "outcome": "accepted",
+              "event_uuid": "4bc76dde-f226-4f62-9554-d0753c399ab3",
+              "event_id": "rec-batch-01",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "low_value",
+              "expires_at": "2026-10-26T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 1,
+              "outcome": "accepted",
+              "event_uuid": "e4239ac6-5b89-49fa-af86-dfd765055579",
+              "event_id": "rec-batch-02",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 2,
+              "outcome": "accepted",
+              "event_uuid": "2599cc37-d67f-42e2-935b-8ea4381fcf44",
+              "event_id": "rec-batch-03",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 3,
+              "outcome": "accepted",
+              "event_uuid": "672ea064-a414-43c6-a859-832986441b78",
+              "event_id": "rec-batch-04",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 4,
+              "outcome": "accepted",
+              "event_uuid": "9cbd4266-c8c3-40ab-9812-16b793d6a060",
+              "event_id": "rec-batch-05",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 5,
+              "outcome": "accepted",
+              "event_uuid": "9c53aed9-4789-4c85-a225-31f5b73ae332",
+              "event_id": "rec-batch-06",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "low_value",
+              "expires_at": "2026-10-26T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 6,
+              "outcome": "accepted",
+              "event_uuid": "665eff62-4343-4b9f-b37f-c3ada91ec70b",
+              "event_id": "rec-batch-07",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 7,
+              "outcome": "accepted",
+              "event_uuid": "850af9f7-6908-46f2-b865-1a0d9f0a5c08",
+              "event_id": "rec-batch-08",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 8,
+              "outcome": "accepted",
+              "event_uuid": "e947928c-af6d-4d50-8be1-c3c992fad5dc",
+              "event_id": "rec-batch-09",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 9,
+              "outcome": "accepted",
+              "event_uuid": "760b5bc9-43d0-46a2-96d6-fa391fbe2438",
+              "event_id": "rec-batch-10",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 10,
+              "outcome": "accepted",
+              "event_uuid": "fc446971-ae70-4ba4-bed1-7e7eb8a12509",
+              "event_id": "rec-batch-11",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "low_value",
+              "expires_at": "2026-10-26T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 11,
+              "outcome": "accepted",
+              "event_uuid": "c6566e63-9520-4df9-a967-85079e5566ce",
+              "event_id": "rec-batch-12",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 12,
+              "outcome": "accepted",
+              "event_uuid": "fb764d6d-33bb-42d0-85a3-6d765103fc33",
+              "event_id": "rec-batch-13",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 13,
+              "outcome": "accepted",
+              "event_uuid": "0f718779-3b0e-45a2-86f2-fa2d9519b52f",
+              "event_id": "rec-batch-14",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 14,
+              "outcome": "accepted",
+              "event_uuid": "98514622-1144-429d-845e-afbcbbc5119f",
+              "event_id": "rec-batch-15",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 15,
+              "outcome": "accepted",
+              "event_uuid": "56a7454c-4ae5-40a7-a28a-9e631de16e6c",
+              "event_id": "rec-batch-16",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "low_value",
+              "expires_at": "2026-10-26T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 16,
+              "outcome": "accepted",
+              "event_uuid": "e46b073f-37d2-4cfc-895c-d6f6e5eaed92",
+              "event_id": "rec-batch-17",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 17,
+              "outcome": "accepted",
+              "event_uuid": "26cd99d3-d069-4473-95c9-3f284a47d588",
+              "event_id": "rec-batch-18",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 18,
+              "outcome": "accepted",
+              "event_uuid": "287bda8c-6957-440e-8063-e00cf619a4db",
+              "event_id": "rec-batch-19",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 19,
+              "outcome": "accepted",
+              "event_uuid": "419a8cbb-6d17-48bb-8044-d5c4a47db332",
+              "event_id": "rec-batch-20",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 20,
+              "outcome": "accepted",
+              "event_uuid": "301919e6-5a9a-4c58-a1c5-a95c73e08795",
+              "event_id": "rec-batch-21",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "low_value",
+              "expires_at": "2026-10-26T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 21,
+              "outcome": "accepted",
+              "event_uuid": "58c8cdce-24a8-4efe-8bda-b75524743ea4",
+              "event_id": "rec-batch-22",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 22,
+              "outcome": "accepted",
+              "event_uuid": "68b39cf6-a04c-4fef-910d-e155b09e9191",
+              "event_id": "rec-batch-23",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 23,
+              "outcome": "accepted",
+              "event_uuid": "deb248a4-f9f1-4ebc-9362-6ce6185d3533",
+              "event_id": "rec-batch-24",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 24,
+              "outcome": "accepted",
+              "event_uuid": "9ee621cd-502d-4be5-8152-b047e9ba5d70",
+              "event_id": "rec-batch-25",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:37.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            }
+          ]
+        }
+      }
+    },
+    "timer": {
+      "token": "valid",
+      "headerNames": [
+        "Content-Type",
+        "X-Monitoring-Token"
+      ],
+      "request": {
+        "events": [
+          {
+            "event_id": "rec-timer-1",
+            "event_category": "auth",
+            "action_type": "login",
+            "occurred_at": "2026-10-12T08:12:38.120Z",
+            "time_zone": "UTC",
+            "payload": {
+              "method": "email_code"
+            }
+          }
+        ]
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "accepted_count": 1,
+          "replayed_count": 0,
+          "rejected_count": 0,
+          "results": [
+            {
+              "index": 0,
+              "outcome": "accepted",
+              "event_uuid": "c8322dae-79e9-4429-90df-bc0260821656",
+              "event_id": "rec-timer-1",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:38.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            }
+          ]
+        }
+      }
+    },
+    "exit": {
+      "token": "valid",
+      "headerNames": [
+        "Content-Type",
+        "X-Monitoring-Token"
+      ],
+      "request": {
+        "events": [
+          {
+            "event_id": "rec-exit-1",
+            "event_category": "auth",
+            "action_type": "logout",
+            "occurred_at": "2026-10-12T08:12:39.120Z",
+            "time_zone": "UTC"
+          },
+          {
+            "event_id": "rec-exit-2",
+            "event_category": "session",
+            "action_type": "session_ended",
+            "occurred_at": "2026-10-12T08:12:39.120Z",
+            "time_zone": "UTC"
+          }
+        ]
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "accepted_count": 2,
+          "replayed_count": 0,
+          "rejected_count": 0,
+          "results": [
+            {
+              "index": 0,
+              "outcome": "accepted",
+              "event_uuid": "9efaa4ce-18b6-4d66-bb87-e6fb11abc62a",
+              "event_id": "rec-exit-1",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:39.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            },
+            {
+              "index": 1,
+              "outcome": "accepted",
+              "event_uuid": "31c19881-c006-467c-841e-c51d753fa2a7",
+              "event_id": "rec-exit-2",
+              "status": "ACCEPTED",
+              "score": 0,
+              "rules_evaluated_count": 0,
+              "rules_matched_count": 0,
+              "correlation_pending": false,
+              "retention_class": "standard",
+              "expires_at": "2026-11-11T08:12:39.120000Z",
+              "idempotent_replay": false,
+              "rule_matches": []
+            }
+          ]
+        }
+      }
+    },
+    "too_many": {
+      "token": "valid",
+      "request": {
+        "eventCount": 501
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "events": "A batch accepts at most 500 events; received 501."
+        }
+      }
+    }
+  }
+}

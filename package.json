@@ -15,8 +15,11 @@
   "files": [
     "dist"
   ],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "build": "rollup -c",
+    "build": "npm run build -w @didit-protocol/signals && rollup -c",
     "build:watch": "rollup -c -w",
     "dev": "node examples/server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
@@ -24,9 +27,10 @@
     "test:e2e": "npm run build && playwright test --project=chromium --project=firefox --project=webkit",
     "test:visual": "npm run build && playwright test --project=chrome-visual",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-    "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist",
-    "prepublishOnly": "npm run clean && npm run build"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p packages/signals",
+    "clean": "rm -rf dist packages/signals/dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "test:size": "npm run test:size -w @didit-protocol/signals"
   },
   "keywords": [
     "didit",
@@ -48,6 +52,9 @@
     "registry": "https://registry.npmjs.org/",
     "access": "public"
   },
+  "dependencies": {
+    "@didit-protocol/signals": "^0.1.0"
+  },
   "devDependencies": {
     "@playwright/test": "^1.61.0",
     "@rollup/plugin-node-resolve": "^15.2.3",
@@ -58,6 +65,7 @@
     "rollup": "^4.9.6",
     "rollup-plugin-dts": "^6.1.0",
     "@rollup/plugin-terser": "^0.4.4",
+    "terser": "^5.31.0",
     "ts-jest": "^29.1.2",
     "tslib": "^2.6.2",
     "typescript": "^5.3.3"

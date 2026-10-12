@@ -7,6 +7,7 @@ A lightweight JavaScript/TypeScript SDK for embedding Didit identity verificatio
 - 🎯 **Simple API** - Singleton pattern with easy-to-use methods
 - 🔐 **Flexible Integration** - Use UniLink URL directly or create sessions via backend
 - 💸 **Transaction Submission** - Submit monitored transactions (incl. Travel Rule) with a scoped token, automatic device intelligence, and an auto-launched wallet-ownership flow
+- 🛡️ **Event Monitoring** - Send sign-ups, logins, failed logins and other end-user events to Didit in batches, tied to the same person as their verifications and transactions
 - 📱 **Responsive** - Works on desktop and mobile browsers
 - 🎨 **Customizable** - Configuration options for styling and behavior
 - 📦 **Multiple Formats** - ESM, CommonJS, and UMD builds
@@ -27,6 +28,8 @@ yarn add @didit-protocol/sdk-web
 ```html
 <script src="https://unpkg.com/@didit-protocol/sdk-web/dist/didit-sdk.umd.min.js"></script>
 ```
+
+Event monitoring and device signals live in [`@didit-protocol/signals`](packages/signals), a small package that `@didit-protocol/sdk-web` depends on and re-exports. Install it on its own when you only need events: `npm install @didit-protocol/signals`.
 
 ## Package Version
 
@@ -406,6 +409,55 @@ Key points:
 
 Full guide: [SDK Transaction Submission](https://docs.didit.me/transaction-monitoring/sdk-transaction-submission).
 
+## Event Monitoring
+
+Send what your end users do (sign-up, login, failed login, logout, password reset, MFA, device change) to Didit's [event monitoring](https://docs.didit.me/transaction-monitoring/events), so every event shows up in the console on the same person as their verifications and transactions and your rules can act on it.
+
+Your backend mints a short-lived monitoring token for the signed-in person with `POST /v3/events/sdk-token/`, then hands it to the page:
+
+```typescript
+import { DiditSdk, DiditEventError, configureEvents, flush } from "@didit-protocol/sdk-web";
+
+// Optional: hear about events Didit refused or the SDK had to drop.
+configureEvents({
+  onError: (error: DiditEventError) => console.warn(error.type, error.eventIds, error.errors),
+});
+
+DiditSdk.shared.submitEvent({
+  monitoringToken, // minted by YOUR backend for this person - never ship an API key
+  event: { category: "auth", actionType: "login", payload: { method: "password" } },
+});
+
+DiditSdk.shared.submitEvent({
+  monitoringToken,
+  event: { category: "auth", actionType: "login_failed", payload: { reason: "wrong_password" } },
+});
+
+// Before a redirect you control, send what is waiting and read the outcome of each event:
+const { acceptedCount, rejectedCount, pendingCount, results } = await flush();
+```
+
+How events travel:
+
+- **Batched** to `POST /v1/events/batch/` with the `X-Monitoring-Token` header: as soon as 25 events are waiting, after 5 seconds, and when the page is hidden or closed. Change the numbers with `configureEvents({ batchSize, flushIntervalMs })`.
+- **The person comes from the token**, never from the page: Didit binds every event to the `vendor_data` the token was minted for. Each event keeps the token it was submitted with, so events from before and after a sign-in never mix people.
+- **Device intelligence** is attached to every batch (the same fingerprint as transaction submissions); IP address, user agent and origin are taken server-side.
+- **Leaving the page** sends what is waiting with `fetch` and `keepalive`, which outlives the page (browsers allow 64 KiB per page for this). `sendBeacon` is not used because it cannot carry the token header.
+- **Safe retries**: on a network error, timeout, rate limit or server error the same events are sent again after 10, 20 and 40 seconds, then every minute (or right away when you call `flush()`). An event Didit already stored comes back as `replayed`, never as a duplicate.
+- **Refusals are final**: an invalid, expired, revoked or used-up token (`invalid_token`, `expired_token`), event monitoring switched off for the application (`monitoring_disabled`) or an event that fails validation (`validation`) is reported through `onError` and in the `flush()` results, and is not sent again.
+- **Bounded memory**: at most 1,000 events wait in memory (`maxQueueSize`). When the queue is full, page views and other low-value events are dropped first (`dropped`); security, payment, dispute, responsible-gambling and bet events are never dropped.
+
+| Event field | Description |
+|-------------|-------------|
+| `category` | `auth`, `session`, `security`, `payment`, `dispute`, `gameplay`, `bonus`, `affiliate`, `responsible_gambling` or `custom` |
+| `actionType` | What happened, e.g. `signup`, `login`, `login_failed`, `logout`, `password_reset`, `mfa_challenge` |
+| `eventId` | Your idempotency key; a UUID is generated when omitted. `submitEvent` returns it |
+| `occurredAt` | `Date` or ISO 8601 string; defaults to now |
+| `payload` | Category-specific keys, e.g. `payment_reference_id`, `amount`, `currency`, `payment_method` and `status` for payments |
+| `session`, `transactionContext`, `customValues`, `subject`, `business`, `timeZone` | Optional context; `subject` only adds profile hints, the person always comes from the token |
+
+Full guide: [SDK Event Submission](https://docs.didit.me/transaction-monitoring/sdk-event-submission).
+
 ## API Reference
 
 ### DiditSdk.shared
@@ -418,6 +470,7 @@ The singleton SDK instance.
 |--------|-------------|
 | `startVerification(options)` | Start the verification flow |
 | `submitTransaction(options)` | Submit a monitored transaction with a scoped token ([guide](https://docs.didit.me/transaction-monitoring/sdk-transaction-submission)) |
+| `submitEvent(options)` | Queue an end-user event for event monitoring with a monitoring token; returns the event id ([Event Monitoring](#event-monitoring)) |
 | `close()` | Programmatically close the verification modal |
 | `destroy()` | Destroy the SDK instance and clean up |
 
