@@ -36,6 +36,8 @@ Apple, GitHub and enterprise SSO) and handles MFA. The sign-in is bound to
 this browser with PKCE (S256) and a random `state`; `handleRedirectCallback`
 refuses a redirect it did not start, exchanges the one-time code and removes it
 from the address bar. A magic link completes in whichever tab opens it.
+Sign-ins started in several tabs at once each wait on their own and complete
+once, in any order; unfinished ones are forgotten after twenty minutes.
 
 Register `redirectUri` in the Didit console, exactly. It defaults to the
 current page without its query string. Create one client per application and
@@ -64,18 +66,21 @@ they expire. Refresh tokens rotate, and Didit revokes the whole session when a
 used one is presented again, so the SDK refreshes once for all the tabs of
 your origin (Web Locks) and the other tabs take the new tokens. A sign-in or
 sign-out waits for a refresh another tab has in flight, so that refresh cannot
-overwrite the new session or sign the person back in.
+overwrite the new session or sign the person back in. A tab can see another
+tab's `localStorage` write a moment late, so the tab holding the lock also
+keeps the tokens in IndexedDB, and the next one reads them from there.
 
 `getSession()` asks the API and caches the answer for 30 seconds; pass
 `{ force: true }` before a decision that must see a revocation immediately.
 
 ### Where tokens are kept
 
-`storage` is `"local"` (default: `localStorage`, shared by your tabs),
-`"session"` (this tab only), `"memory"` (gone on reload) or your own store with
-`getItem`, `setItem` and `removeItem` (they may return promises). Anything
-running on your pages can read web storage, so keep a strict Content Security
-Policy; Didit limits the damage of a stolen refresh token by rotating it.
+`storage` is `"local"` (default: `localStorage`, shared by your tabs, with a
+copy in IndexedDB for the tabs to agree on), `"session"` (this tab only),
+`"memory"` (gone on reload) or your own store with `getItem`, `setItem` and
+`removeItem` (they may return promises). Anything running on your pages can
+read web storage and IndexedDB, so keep a strict Content Security Policy; Didit
+limits the damage of a stolen refresh token by rotating it.
 
 ## Your own screens (headless)
 

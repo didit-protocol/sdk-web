@@ -3,7 +3,15 @@ import { codeChallenge, decodeText, randomString } from "./encoding";
 import { DiditAuthError } from "./errors";
 import { createHttpClient, type RequestOptions } from "./http";
 import { parsePublishableKey } from "./key";
-import { memoryStorage, resolveStorage, webStorage, type DiditAuthStorage } from "./storage";
+import {
+  committedValue,
+  memoryStorage,
+  resolveStorage,
+  webStorage,
+  type CommittedValue,
+  type DiditAuthStorage,
+  type SyncStorage
+} from "./storage";
 import type {
   DiditAgentGrant,
   DiditAuth,
@@ -107,7 +115,7 @@ interface Attempt {
   invitation?: string;
 }
 
-/** A hosted sign-in waiting for its redirect, keyed by its state. */
+/** A hosted sign-in waiting for its redirect, stored under its state. */
 interface PendingRedirect {
   verifier: string;
   redirectUri: string;
@@ -187,14 +195,18 @@ function withCode(redirectUri: string, code: string, state: string): string {
 export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
   const key = parsePublishableKey(options.publishableKey);
   const storageKey = `didit-auth:${key.applicationId}`;
-  const pendingKey = `${storageKey}:pending`;
+  // Each hosted sign-in waits under its own key: written once by the tab that starts it, removed by the
+  // one that completes it. No tab rewrites another's entry, so sign-ins started or completed in several
+  // tabs at the same moment cannot drop each other or bring back one already used.
+  const pendingPrefix = `${storageKey}:pending:`;
   const signals = options.deviceSignals ?? "auto";
   const request = createHttpClient(key.apiBase, options.fetch ?? ((input, init) => fetch(input, init)), () =>
     deviceSignalsEnabled(signals, key.apiBase) ? deviceHeaders() : Promise.resolve({})
   );
   const listeners = new Set<DiditAuthListener>();
   let tokenStore: DiditAuthStorage | null = null;
-  let pendingStore: DiditAuthStorage | null = null;
+  let pendingStore: SyncStorage | null = null;
+  let lockedStore: CommittedValue | null | undefined;
   let cached: { session: DiditSession; sessionId: string; at: number } | null = null;
   let sessionRequest: Promise<DiditSession | null> | null = null;
   let refreshing: Promise<Tokens | null> | null = null;
@@ -236,14 +248,30 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
 
   const readTokens = async () => parseTokens(await storage().getItem(storageKey));
 
+  // localStorage can show a tab another tab's write a moment after that tab released the token lock
+  // (WebKit does), and acting on the older tokens would present a used refresh token, which revokes the
+  // session, or end a replaced session with a rotated access token. So each holder of the lock also
+  // commits the tokens to IndexedDB, and the next holder reads them from there.
+  function committed(): CommittedValue | null {
+    if (lockedStore === undefined) lockedStore = sharedAcrossTabs() ? committedValue(storageKey) : null;
+    return lockedStore;
+  }
+
+  // The stored tokens as the last holder of the token lock left them. Call only while holding it.
+  async function lockedTokens(): Promise<Tokens | null> {
+    const raw = await committed()?.read();
+    return raw === undefined ? readTokens() : parseTokens(raw);
+  }
+
+  // Call only while holding the token lock.
   async function writeTokens(tokens: Tokens | null): Promise<void> {
     observed = tokens ? JSON.stringify(tokens) : null;
     if (observed) await storage().setItem(storageKey, observed);
     else await storage().removeItem(storageKey);
+    await committed()?.write(observed);
   }
 
-  async function signedOut(): Promise<void> {
-    const had = await readTokens();
+  async function signedOut(had: Tokens | null): Promise<void> {
     await writeTokens(null);
     cached = null;
     attempt = null;
@@ -263,7 +291,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     const run = async (): Promise<Tokens | null> => {
       // Another tab may have rotated the tokens while this one waited for the lock. Presenting
       // an already used refresh token revokes the whole session, so use theirs instead.
-      const latest = await readTokens();
+      const latest = await lockedTokens();
       if (!latest || latest.refreshToken !== stale.refreshToken) return latest;
       try {
         const next = fromResponse(
@@ -276,7 +304,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
         return next;
       } catch (error) {
         if (!(error instanceof DiditAuthError) || error.code !== "invalid_grant") throw error;
-        await signedOut();
+        await signedOut(latest);
         return null;
       }
     };
@@ -341,7 +369,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
       throw new DiditAuthError("step_up_user_mismatch", "A different person completed the sign-in.");
     }
     const previous = await withTokenLock(async () => {
-      const previous = await readTokens();
+      const previous = await lockedTokens();
       await writeTokens(tokens);
       return previous;
     });
@@ -355,28 +383,33 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     return session;
   }
 
-  async function readPending(): Promise<Record<string, PendingRedirect>> {
+  function parsePending(raw: string | null): PendingRedirect | null {
     try {
-      const all: Record<string, PendingRedirect> = JSON.parse((await pendingStorage().getItem(pendingKey)) || "{}");
-      for (const [state, pending] of Object.entries(all)) {
-        if (!(Date.now() - pending.createdAt < REDIRECT_TTL_MS)) delete all[state];
-      }
-      return all;
+      const pending = raw ? JSON.parse(raw) : null;
+      return pending && typeof pending.verifier === "string" && Date.now() - pending.createdAt < REDIRECT_TTL_MS
+        ? pending
+        : null;
     } catch {
-      return {};
+      return null;
     }
   }
 
-  async function writePending(all: Record<string, PendingRedirect>): Promise<void> {
-    if (Object.keys(all).length) await pendingStorage().setItem(pendingKey, JSON.stringify(all));
-    else await pendingStorage().removeItem(pendingKey);
+  // Reads and removes a sign-in's entry with no await in between, so this tab can complete it only once.
+  function takePending(state: string): PendingRedirect | null {
+    try {
+      const store = pendingStorage();
+      const raw = store.getItem(pendingPrefix + state);
+      store.removeItem(pendingPrefix + state);
+      return parsePending(raw);
+    } catch {
+      return null;
+    }
   }
 
   async function redirect(opts: SignInRedirectOptions = {}, stepUpUser: string | null = null): Promise<void> {
     const verifier = randomString(32);
     const state = randomString(16);
     const redirectUri = opts.redirectUri ?? defaultRedirectUri();
-    const pending = await readPending();
     const url = new URL(`${key.apiBase}/sign-in/`);
     const query: Record<string, string | undefined> = {
       redirect_uri: redirectUri,
@@ -385,9 +418,20 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
       code_challenge_method: "S256",
       language: language(opts.language)
     };
+    const store = pendingStorage();
 
-    pending[state] = { verifier, redirectUri, returnTo: opts.returnTo ?? null, stepUpUser, createdAt: Date.now() };
-    await writePending(pending);
+    // Forget sign-ins abandoned in any tab (closed pages, links never opened).
+    for (const name of Array.from({ length: store.length }, (_, index) => store.key(index))) {
+      if (name?.startsWith(pendingPrefix) && !parsePending(store.getItem(name))) store.removeItem(name);
+    }
+    const pending: PendingRedirect = {
+      verifier,
+      redirectUri,
+      returnTo: opts.returnTo ?? null,
+      stepUpUser,
+      createdAt: Date.now()
+    };
+    store.setItem(pendingPrefix + state, JSON.stringify(pending));
     for (const [name, value] of Object.entries(query)) if (value) url.searchParams.set(name, value);
     await (options.navigate ? options.navigate(url.href) : location.assign(url.href));
   }
@@ -405,14 +449,11 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
       ["code", "state", "error"].forEach((name) => clean.searchParams.delete(name));
       history.replaceState(history.state, "", clean.href);
     }
-    const all = await readPending();
-    const pending = state ? all[state] : undefined;
+    const pending = state ? takePending(state) : null;
 
-    if (!state || !pending) {
+    if (!pending) {
       throw new DiditAuthError("invalid_state", "This sign-in was not started in this browser, or it expired.");
     }
-    delete all[state];
-    await writePending(all);
     if (!code) throw new DiditAuthError(address.searchParams.get("error") || "invalid_request");
     return {
       session: await exchange(code, pending.verifier, pending.redirectUri, pending.stepUpUser),
@@ -567,8 +608,8 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
 
     async signOut() {
       const tokens = await withTokenLock(async () => {
-        const tokens = await readTokens();
-        await signedOut();
+        const tokens = await lockedTokens();
+        await signedOut(tokens);
         return tokens;
       });
       // Best effort: the local sign-out stands even when Didit cannot be reached.

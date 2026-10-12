@@ -6,8 +6,8 @@ export default {
   testEnvironmentOptions: { url: "http://localhost:4174/e2e/fixtures/app.html" },
   extensionsToTreatAsEsm: [".ts"],
   moduleNameMapper: {
-    // Until @didit-protocol/signals lands in this workspace, run the fingerprint source it is built from.
-    "^@didit-protocol/signals$": "<rootDir>/../../src/fingerprint.ts",
+    // The tests run against the signals source, not a stale build.
+    "^@didit-protocol/signals$": "<rootDir>/../signals/src/index.ts",
     "^(\\.{1,2}/.*)\\.js$": "$1"
   },
   transform: {
