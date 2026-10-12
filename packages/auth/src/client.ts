@@ -26,7 +26,6 @@ import {
 } from "./webauthn";
 
 const LANGUAGES = ["en", "es", "fr", "de", "ja"];
-const PROVIDERS = ["google", "microsoft", "apple", "github"];
 // Refresh this long before the five-minute access token expires.
 const EXPIRY_MARGIN_MS = 30_000;
 // The runtime API allows 30 requests a minute per IP and endpoint.
@@ -632,10 +631,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     },
 
     social: {
-      async signIn({ provider, ...opts }) {
-        if (!PROVIDERS.includes(provider)) throw new DiditAuthError("invalid_request", `Unknown provider: ${provider}`);
-        return redirect(opts);
-      }
+      signIn: (opts) => redirect(opts)
     },
 
     passkeys: {

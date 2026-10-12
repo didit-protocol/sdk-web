@@ -277,8 +277,8 @@ describe("verifyToken", () => {
     // The address stays known while the issuer is down again after it expires.
     app.discoveryStatus = 503;
     clock.mockReturnValue(now + 6_000 + 10 * 60_000);
-    await expect(verifyToken(tokens[0], options)).resolves.toBeTruthy();
-    await expect(verifyToken(tokens[1], options)).resolves.toBeTruthy();
+    await expect(verifyToken(await token(app), options)).resolves.toBeTruthy();
+    await expect(verifyToken(await token(app), options)).resolves.toBeTruthy();
     expect(app.discoveryRequests).toBe(3);
   });
 
