@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import { BASE_PATH } from "../constants.js";
 import type { SignInPageProps } from "../props.js";
@@ -13,7 +13,8 @@ async function hostedRedirect(route: "sign-in" | "sign-up", { searchParams }: Si
 
   try {
     signedIn = Boolean((await auth()).session);
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error);
     signedIn = false;
   }
   redirect(signedIn ? target : `${BASE_PATH}/${route}?redirect_url=${encodeURIComponent(target)}`);

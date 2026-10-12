@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { unstable_rethrow } from "next/navigation";
 
 import type { DiditSession } from "@didit-protocol/auth-react/provider";
 
@@ -14,6 +15,8 @@ export async function DiditAuth({ children, appearance, locale, nonce }: DiditAu
   try {
     session = (await auth()).session;
   } catch (error) {
+    // Next.js signals (dynamic rendering, redirects) must pass through.
+    unstable_rethrow(error);
     console.error("[didit-auth] Could not read the session; rendering signed out.", error);
   }
   const language = locale ?? negotiateLocale((await headers()).get("accept-language"));
