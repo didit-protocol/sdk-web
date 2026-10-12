@@ -196,6 +196,57 @@ describe("submitEvent and flush against the recorded device lane", () => {
     expect(await flush()).toMatchObject({ acceptedCount: 1, pendingCount: 0 });
   });
 
+  it.each([
+    ["unknown outcome", (body: any) => { body.results[0].outcome = "unknown"; }],
+    ["missing index", (body: any) => { delete body.results[0].index; }],
+    ["wrong index", (body: any) => { body.results[0].index = 8; }],
+    ["duplicate index", (body: any) => { body.results.push(body.results[0]); }]
+  ])("keeps events pending after an acknowledgement with %s", async (_label, corrupt) => {
+    const body = JSON.parse(JSON.stringify(recordedBody("timer")));
+
+    corrupt(body);
+    fetchMock.mockResolvedValueOnce(respond(201, body)).mockImplementationOnce(replay("timer"));
+    submitRecorded("timer");
+    expect(await flush()).toMatchObject({ acceptedCount: 0, rejectedCount: 0, pendingCount: 1 });
+    expect(onError).not.toHaveBeenCalled();
+    expect(await flush()).toMatchObject({ acceptedCount: 1, pendingCount: 0 });
+  });
+
+  it("does not settle a missing index using another event's position", async () => {
+    const body = JSON.parse(JSON.stringify(recordedBody("accepted")));
+
+    body.results = body.results.slice(1).reverse();
+    fetchMock.mockResolvedValueOnce(respond(201, body));
+    submitRecorded("accepted");
+    expect(await flush()).toMatchObject({ acceptedCount: 2, rejectedCount: 0, pendingCount: 1 });
+    expect(sentRequests(fetchMock)).toHaveLength(1);
+  });
+
+  it("counts a large Unicode fingerprint in the exact keepalive budget", async () => {
+    const userAgent = jest.spyOn(window.navigator, "userAgent", "get").mockReturnValue("語".repeat(8000));
+
+    fetchMock.mockReturnValue(new Promise<Response>(() => undefined));
+    configureEvents({ batchSize: 500 });
+    submitEvent({ monitoringToken: "valid", event: { category: "custom", actionType: "big", payload: { text: "語".repeat(18000) } } });
+    window.dispatchEvent(new Event("pagehide"));
+    await settle();
+    expect(fetchMock).not.toHaveBeenCalled();
+    userAgent.mockRestore();
+  });
+
+  it("shares the keepalive budget across repeated page exits while requests are pending", async () => {
+    const send = () => submitEvent({ monitoringToken: "valid", event: { category: "custom", actionType: "big", payload: { text: "x".repeat(40000) } } });
+
+    fetchMock.mockReturnValue(new Promise<Response>(() => undefined));
+    send();
+    window.dispatchEvent(new Event("pagehide"));
+    await settle();
+    send();
+    window.dispatchEvent(new Event("pagehide"));
+    await settle();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("backs off after a failure instead of retrying on the normal interval", async () => {
     jest.useFakeTimers();
     fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch")).mockImplementationOnce(replay("timer"));
