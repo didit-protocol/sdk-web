@@ -35,10 +35,10 @@ const deviceHeaders = (entry) => Object.keys(entry.headers ?? {}).filter((name) 
 
 const storedTokens = (tab) => tab.evaluate((key) => JSON.parse(localStorage.getItem(key)), TOKENS);
 
-// From the moment the tab calls holdOtherTabs() until it calls deliverOtherTabs(), the tab sees other tabs'
-// writes to the stored tokens, and their storage events, as they were before. WebKit sometimes shows a tab
-// another tab's write a moment after that tab released the token lock (one run in twenty or so, unforced);
-// this makes it happen every time. Call before the tab opens a page, so its listener runs before the SDK's.
+// Between holdOtherTabs() and deliverOtherTabs(), the tab does not see other tabs' writes to the stored
+// tokens (its own still show) and gets their storage events only at the end. WebKit now and then shows a
+// tab another tab's write a moment after that tab released the token lock; this makes it happen every
+// time. Call before the tab opens a page, so this storage listener runs before the SDK's.
 async function delayOtherTabs(tab) {
   await tab.addInitScript((key) => {
     const { getItem, setItem, removeItem } = Storage.prototype;
@@ -76,6 +76,9 @@ async function delayOtherTabs(tab) {
 }
 
 const LATE = " (this tab sees the other tab's write late)";
+
+// The tab is waiting for the token lock, which another tab holds.
+const waitsForLock = (tab) => expect.poll(() => tab.evaluate(async () => (await navigator.locks.query()).pending.length)).toBe(1);
 
 // Moves the tab's clock past its access token's expiry and starts a refresh that stays in flight, as on
 // a slow network, until the returned route is continued. The tab then holds the token lock.
@@ -257,9 +260,6 @@ test(`two tabs near expiry refresh the session once${LATE}`, async ({ context, p
   }
 });
 
-// The tab is waiting for the token lock, which another tab holds.
-const waitsForLock = (tab) => expect.poll(() => tab.evaluate(async () => (await navigator.locks.query()).pending.length)).toBe(1);
-
 for (const late of [false, true]) {
   test(`a sign-out waits for another tab's refresh, so the refreshed tokens cannot sign the person back in${late ? LATE : ""}`, async ({
     context,
@@ -347,6 +347,24 @@ for (const late of [false, true]) {
     expect(seen.filter((entry) => entry.mismatch)).toEqual([]);
   });
 }
+
+test("with storage per tab, signing out in one tab leaves another tab's session alone", async ({ context, page, request }) => {
+  await loadRecording(request, "password-sign-in");
+  const tabs = [page, await context.newPage()];
+  for (const tab of tabs) {
+    await openApp(tab, { scenario: tab === page ? "password-sign-in" : undefined, create: false });
+    await tab.evaluate((key) => window.didit.create({ publishableKey: key, storage: "session" }), PUBLISHABLE_KEY);
+  }
+  await page.evaluate((password) => window.auth.password.signIn({ email: "person@example.com", password }), PASSWORD);
+  const signedIn = await page.evaluate((key) => sessionStorage.getItem(key), TOKENS);
+
+  await tabs[1].evaluate(() => window.auth.signOut());
+
+  expect(await page.evaluate((key) => sessionStorage.getItem(key), TOKENS)).toBe(signedIn);
+  const seen = await requestsSeen(request);
+  expect(seen.filter((entry) => entry.method === "DELETE")).toEqual([]);
+  expect(seen.filter((entry) => entry.mismatch)).toEqual([]);
+});
 
 test("sends device signals when the page and the API share an origin", async ({ page, request }) => {
   await loadRecording(request, "password-reset");
