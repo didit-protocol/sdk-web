@@ -302,6 +302,20 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     }
   }
 
+  // Ends a session this browser no longer uses. The API ends a session only for one of its
+  // live access tokens, so an expired one is renewed with the session's refresh token first.
+  async function endSession(tokens: Tokens): Promise<void> {
+    let { accessToken } = tokens;
+    if (tokens.expiresAt - EXPIRY_MARGIN_MS <= Date.now()) {
+      accessToken = (
+        await request<TokenResponse>("token/", {
+          body: { grant_type: "refresh_token", refresh_token: tokens.refreshToken }
+        })
+      ).access_token;
+    }
+    await request("session/", { method: "DELETE", token: accessToken });
+  }
+
   async function exchange(
     code: string,
     verifier: string,
@@ -325,7 +339,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     attempt = null;
     if (previous && previous.sessionId !== tokens.sessionId) {
       // This browser can no longer use the replaced session: end it at Didit too.
-      await request("session/", { method: "DELETE", token: previous.accessToken }).catch(() => undefined);
+      await endSession(previous).catch(() => undefined);
     }
     emit("SIGNED_IN", session);
     return session;
