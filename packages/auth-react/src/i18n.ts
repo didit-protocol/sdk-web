@@ -17,7 +17,7 @@ export const supportedLocales = Object.keys(catalog);
 export function resolveLocale(tag: string | null | undefined): AuthLocale {
   const language = (tag ?? "").trim().toLowerCase().split(/[-_]/)[0];
 
-  return Object.hasOwn(catalog, language) ? language as AuthLocale : "en";
+  return Object.prototype.hasOwnProperty.call(catalog, language) ? language as AuthLocale : "en";
 }
 
 export function messagesFor(locale: string): Messages {
