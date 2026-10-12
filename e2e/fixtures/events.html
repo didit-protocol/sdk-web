@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Web SDK events fixture</title>
+    <script type="importmap">
+      { "imports": { "@didit-protocol/signals": "../../packages/signals/dist/didit-signals.esm.js" } }
+    </script>
+  </head>
+  <body>
+    <script type="module">
+      // ?build=esm (default) loads the sdk-web ES module build, ?build=umd its
+      // script-tag build and ?build=signals-umd the @didit-protocol/signals one.
+      const build = new URLSearchParams(window.location.search).get("build") ?? "esm";
+
+      function loadScript(src) {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = src;
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.append(script);
+        });
+      }
+
+      async function load() {
+        if (build === "esm") {
+          const sdk = await import("../../dist/didit-sdk.esm.js");
+          return { ...sdk, submitEvent: (options) => sdk.DiditSdk.shared.submitEvent(options) };
+        }
+        if (build === "umd") {
+          await loadScript("../../dist/didit-sdk.umd.min.js");
+          return { ...window.DiditSDK, submitEvent: (options) => window.DiditSDK.DiditSdk.shared.submitEvent(options) };
+        }
+        await loadScript("../../packages/signals/dist/didit-signals.umd.min.js");
+        return window.DiditSignals;
+      }
+
+      window.events = await load();
+      document.body.dataset.ready = "true";
+    </script>
+  </body>
+</html>
