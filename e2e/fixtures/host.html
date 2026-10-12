@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Web SDK modal fixture</title>
     <link rel="stylesheet" href="colors_and_type.css">
+    <!-- The ES module build imports @didit-protocol/signals; a bundler resolves it, a bare page maps it. -->
+    <script type="importmap">
+      { "imports": { "@didit-protocol/signals": "../../packages/signals/dist/didit-signals.esm.js" } }
+    </script>
     <style>
       html,
       body {

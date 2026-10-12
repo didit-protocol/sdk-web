@@ -14,7 +14,9 @@ import type {
   TransactionActionCompletedCallback,
   TransactionActionCompletedError
 } from "./types";
+import type { SubmitEventOptions } from "@didit-protocol/signals";
 
+import { submitEvent } from "@didit-protocol/signals";
 import { VerificationModal } from "./modal";
 import { DEFAULT_CONFIG } from "./constants";
 import { SDKLogger, buildVerificationUrl, createVerificationError } from "./utils";
@@ -199,6 +201,31 @@ export class DiditSdk {
     }
 
     return result;
+  }
+
+  /**
+   * Queues an end-user event (sign-up, login, failed login, logout, password
+   * reset, MFA, device change...) for Didit's event monitoring, so it appears
+   * in the console tied to the same person as their verifications and
+   * transactions. Returns the event id.
+   *
+   * The request is authenticated with a short-lived monitoring token minted by
+   * your backend for that person (POST /v3/events/sdk-token/) and sent via the
+   * X-Monitoring-Token header; the person always comes from the token. Events
+   * are batched to /v1/events/batch/ with the device fingerprint attached, and
+   * sent when 25 are waiting, every 5 seconds and when the page is hidden or
+   * closed. Tune the queue with `configureEvents` and send right away with
+   * `flush`, both exported by this package.
+   *
+   * @param options monitoringToken, the event and an optional baseUrl
+   * (defaults to https://verification.didit.me).
+   * @returns The event id: yours when you set event.eventId, otherwise a new UUID.
+   * @throws {DiditEventError} "invalid_token" without a monitoringToken,
+   * "validation" without an event category and action type.
+   */
+  public submitEvent(options: SubmitEventOptions): string {
+    SDKLogger.log("Submitting event:", options?.event?.category, options?.event?.actionType);
+    return submitEvent(options);
   }
 
   /**
