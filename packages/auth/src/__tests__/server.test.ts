@@ -23,6 +23,8 @@ interface Tenant {
   keys: SigningKey[];
   jwksStatus: number;
   jwksRequests: number;
+  discoveryStatus: number;
+  discoveryRequests: number;
   discovery?: Record<string, unknown>;
 }
 
@@ -43,6 +45,8 @@ beforeAll(async () => {
         .writeHead(200, { "Content-Type": "application/json" })
         .end(JSON.stringify({ keys: tenant.keys.map((key) => key.jwk) }));
     }
+    tenant.discoveryRequests++;
+    if (tenant.discoveryStatus !== 200) return void response.writeHead(tenant.discoveryStatus).end();
     response
       .writeHead(200, { "Content-Type": "application/json" })
       .end(JSON.stringify(tenant.discovery ?? { issuer: tenant.issuer, jwks_uri: `${tenant.issuer}/jwks` }));
@@ -71,7 +75,9 @@ async function tenant(): Promise<Tenant> {
     publishableKey: publishableKeyFor(issuer),
     keys: [await signingKey()],
     jwksStatus: 200,
-    jwksRequests: 0
+    jwksRequests: 0,
+    discoveryStatus: 200,
+    discoveryRequests: 0
   };
   tenants.set(applicationId, created);
   return created;
@@ -243,6 +249,37 @@ describe("verifyToken", () => {
     expect((await rejection(verifyToken(await token(down), { publishableKey: down.publishableKey }))).code).toBe(
       "jwks_unavailable"
     );
+  });
+
+  it("shares one discovery request between concurrent tokens and waits a cooldown after the issuer fails", async () => {
+    const app = await tenant();
+    const options = { publishableKey: app.publishableKey };
+    const now = Date.now();
+    const clock = jest.spyOn(Date, "now").mockReturnValue(now);
+    const tokens = await Promise.all([1, 2, 3, 4, 5].map(() => token(app)));
+
+    // Five requests while the issuer is down: one discovery request between them, then none until the cooldown ends.
+    app.discoveryStatus = 503;
+    for (const failed of await Promise.all(tokens.map((value) => rejection(verifyToken(value, options))))) {
+      expect(failed.code).toBe("jwks_unavailable");
+    }
+    expect(app.discoveryRequests).toBe(1);
+    for (const value of tokens) expect((await rejection(verifyToken(value, options))).code).toBe("jwks_unavailable");
+    expect(app.discoveryRequests).toBe(1);
+
+    // Once the cooldown ends the next requests try again, sharing one discovery and one key set request.
+    app.discoveryStatus = 200;
+    clock.mockReturnValue(now + 6_000);
+    await Promise.all(tokens.map((value) => verifyToken(value, options)));
+    expect(app.discoveryRequests).toBe(2);
+    expect(app.jwksRequests).toBe(1);
+
+    // The address stays known while the issuer is down again after it expires.
+    app.discoveryStatus = 503;
+    clock.mockReturnValue(now + 6_000 + 10 * 60_000);
+    await expect(verifyToken(tokens[0], options)).resolves.toBeTruthy();
+    await expect(verifyToken(tokens[1], options)).resolves.toBeTruthy();
+    expect(app.discoveryRequests).toBe(3);
   });
 
   it("refuses discovery documents that name another issuer or an insecure key address", async () => {

@@ -42,24 +42,23 @@ export interface DiditTokenClaims {
   [claim: string]: unknown;
 }
 
-/** Something loaded from the issuer: the discovered key address, or the key set itself. */
-interface Cached<T> {
-  value?: T;
+interface KeySet {
+  keys: Map<string, CryptoKey>;
   loadedAt: number;
   retryAt: number;
   pending?: Promise<void>;
 }
 
-// Both are reloaded after ten minutes, and keys sooner when a token names a key
-// this process has not seen (rotation). Loads happen at most once per cooldown,
-// so neither unknown key ids nor an unreachable issuer can make every request hit it.
+// Keys are reloaded after ten minutes, or sooner when a token names a key this
+// process has not seen (rotation), at most once per cooldown so unknown key ids
+// cannot make every request hit the issuer.
 const KEYS_TTL_MS = 10 * 60_000;
 const COOLDOWN_AFTER_LOAD_MS = 30_000;
 const COOLDOWN_AFTER_FAILURE_MS = 5_000;
 const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 
-const discovered = new Map<string, Cached<string>>();
-const keySets = new Map<string, Cached<Map<string, CryptoKey>>>();
+const keySets = new Map<string, KeySet>();
+const discovered = new Map<string, { jwksUri: string; loadedAt: number }>();
 
 function invalid(message: string): DiditAuthError {
   return new DiditAuthError("invalid_token", message, { status: 401 });
