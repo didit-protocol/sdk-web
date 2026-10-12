@@ -20,6 +20,10 @@ import {
   type ScenarioName
 } from "./device-lane";
 
+interface RecordedBatch {
+  results: Record<string, unknown>[];
+}
+
 const BATCH_URL = "https://verification.didit.me/v1/events/batch/";
 
 function submitRecorded(name: ScenarioName, token = scenario(name).token): string[] {
@@ -198,10 +202,10 @@ describe("submitEvent and flush against the recorded device lane", () => {
   });
 
   it.each([
-    ["unknown outcome", (body: any) => { body.results[0].outcome = "unknown"; }],
-    ["missing index", (body: any) => { delete body.results[0].index; }],
-    ["wrong index", (body: any) => { body.results[0].index = 8; }],
-    ["duplicate index", (body: any) => { body.results.push(body.results[0]); }]
+    ["unknown outcome", (body: RecordedBatch) => { body.results[0].outcome = "unknown"; }],
+    ["missing index", (body: RecordedBatch) => { delete body.results[0].index; }],
+    ["wrong index", (body: RecordedBatch) => { body.results[0].index = 8; }],
+    ["duplicate index", (body: RecordedBatch) => { body.results.push(body.results[0]); }]
   ])("keeps events pending after an acknowledgement with %s", async (_label, corrupt) => {
     const body = JSON.parse(JSON.stringify(recordedBody("timer")));
 
@@ -384,6 +388,41 @@ describe("submitEvent and flush against the recorded device lane", () => {
     expect(requests.map((request) => request.init.headers["X-Monitoring-Token"])).toEqual(["valid", "session_only"]);
     expect(requests[0].body.events.map((event) => event.event_id)).toEqual(["rec-signup-1", "rec-login-1", "rec-login-failed-1"]);
     expect(result).toMatchObject({ acceptedCount: 4, rejectedCount: 1, pendingCount: 0 });
+  });
+
+  it("keeps the endpoint chosen at submission and isolates batches by endpoint", async () => {
+    fetchMock.mockImplementation(replay("timer"));
+    const [event] = recordedEvents("timer");
+
+    submitEvent({ monitoringToken: "valid", event, baseUrl: "https://first.example.test" });
+    configureEvents({ baseUrl: "https://second.example.test" });
+    submitEvent({ monitoringToken: "valid", event });
+    expect(await flush()).toMatchObject({ acceptedCount: 2, pendingCount: 0 });
+    expect(sentRequests(fetchMock).map(({ url }) => url)).toEqual([
+      "https://first.example.test/v1/events/batch/",
+      "https://second.example.test/v1/events/batch/"
+    ]);
+  });
+
+  it("freezes the event payload before the caller can mutate it", async () => {
+    const events = recordedEvents("accepted").map((event) => JSON.parse(JSON.stringify(event)) as DiditEvent);
+
+    fetchMock.mockImplementation(replay("accepted"));
+    events.forEach((event) => submitEvent({ monitoringToken: "valid", event }));
+    events[0].payload!.method = "changed";
+    expect(await flush()).toMatchObject({ acceptedCount: 3, pendingCount: 0 });
+    expect(sentRequests(fetchMock)[0].body.events).toEqual(scenario("accepted").request.events);
+  });
+
+  it("serializes concurrent explicit flushes without sending the batch twice", async () => {
+    fetchMock.mockImplementation(replay("timer"));
+    submitRecorded("timer");
+
+    const results = await Promise.all([flush(), flush(), flush()]);
+
+    expect(results.reduce((sum, result) => sum + result.acceptedCount, 0)).toBe(1);
+    expect(results.every((result) => result.pendingCount === 0)).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("drops low-value events first when the queue is full and never drops payment events", async () => {

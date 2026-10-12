@@ -243,12 +243,6 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-/**
- * Sends one batch and settles its events. Returns false when the batch has to
- * be retried (network error, timeout, rate limit, 5xx, unreadable answer): the
- * events stay queued with the same ids, so a batch the server already stored
- * comes back as "replayed" instead of being stored twice.
- */
 function byteLength(json: string): number {
   return encodeURIComponent(json).replace(/%[\dA-F]{2}/g, "-").length;
 }
@@ -259,6 +253,12 @@ function batchBody(batch: QueuedEvent[], fingerprint: DeviceFingerprintPayload |
   return `{"events":[${batch.map((entry) => entry.json).join(",")}]${fingerprintJson}}`;
 }
 
+/**
+ * Sends one batch and settles its events. Returns false when the batch has to
+ * be retried (network error, timeout, rate limit, 5xx, unreadable answer): the
+ * events stay queued with the same ids, so a batch the server already stored
+ * comes back as "replayed" instead of being stored twice.
+ */
 async function send(
   batch: QueuedEvent[], result: DiditEventFlushResult, fingerprint: DeviceFingerprintPayload | null, keepalive = false
 ): Promise<boolean> {
