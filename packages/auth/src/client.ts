@@ -201,6 +201,8 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
   let attempt: Attempt | null = null;
   let enrollment: string | null = null;
   let stopSync: (() => void) | null = null;
+  // The stored tokens as this tab last wrote or reported them (undefined until then).
+  let observed: string | null | undefined;
 
   // Resolved on first use, so creating the client during server rendering touches no browser API.
   const storage = () => (tokenStore ??= resolveStorage(options.storage));
@@ -235,7 +237,8 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
   const readTokens = async () => parseTokens(await storage().getItem(storageKey));
 
   async function writeTokens(tokens: Tokens | null): Promise<void> {
-    if (tokens) await storage().setItem(storageKey, JSON.stringify(tokens));
+    observed = tokens ? JSON.stringify(tokens) : null;
+    if (observed) await storage().setItem(storageKey, observed);
     else await storage().removeItem(storageKey);
   }
 
