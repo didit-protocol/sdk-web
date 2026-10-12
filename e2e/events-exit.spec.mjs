@@ -109,3 +109,37 @@ test("closing a page while hashing is pending delivers the queued events", async
   await expect.poll(async () => (await received(request, lane)).length, { timeout: 1000 }).toBe(1);
   expect((await received(request, lane))[0].body.events).toEqual(recording.request.events);
 });
+
+test("return navigation retains delivery without duplicates when back/forward caching is enabled", async ({ playwright, browserName, request }, testInfo) => {
+  const browser = await playwright[browserName].launch(browserName === "chromium"
+    ? { channel: "chromium", ignoreDefaultArgs: ["--disable-back-forward-cache"] }
+    : {});
+  const lane = `${testInfo.project.name}-${testInfo.testId}`;
+
+  try {
+    const page = await browser.newPage();
+
+    await prepare(page, lane, "esm", "pending");
+    await page.evaluate(({ events, token }) => {
+      events.forEach((event) => window.events.submitEvent({ monitoringToken: token, event }));
+      location.href = "/e2e/fixtures/host.html";
+    }, { events, token: recording.token });
+    await page.waitForURL("**/e2e/fixtures/host.html");
+    await expect.poll(async () => (await received(request, lane)).length, { timeout: 1000 }).toBe(1);
+    // Restoring a cached document does not fire a new load event.
+    await page.goBack({ waitUntil: "commit" });
+    await page.waitForFunction(() => window.events && document.visibilityState === "visible");
+    const lifecycle = await page.evaluate(() => JSON.parse(sessionStorage.getItem("exit-lifecycle")));
+    const hidden = lifecycle.find((event) => event.type === "pagehide");
+
+    expect(hidden.pending).toBe(1);
+    if (hidden.persisted) expect(lifecycle.some((event) => event.type === "pageshow" && event.persisted)).toBe(true);
+    testInfo.annotations.push({ type: "restored from back/forward cache", description: String(hidden.persisted) });
+    await page.evaluate(() => window.events.getDeviceFingerprintPayload());
+    expect((await page.evaluate(() => window.events.flush())).pendingCount).toBe(0);
+    expect((await received(request, lane)).length).toBe(1);
+    expect((await received(request, lane))[0].body.events).toEqual(recording.request.events);
+  } finally {
+    await browser.close();
+  }
+});
