@@ -33,7 +33,8 @@
     "prepublishOnly": "npm run clean && npm run build",
     "build:auth": "npm run build -w @didit-protocol/auth-react -w @didit-protocol/auth-nextjs",
     "test:auth": "npm run test -w @didit-protocol/auth-react -w @didit-protocol/auth-nextjs",
-    "typecheck:auth": "npm run typecheck -w @didit-protocol/auth-react -w @didit-protocol/auth-nextjs"
+    "typecheck:auth": "npm run typecheck -w @didit-protocol/auth-react -w @didit-protocol/auth-nextjs",
+    "lint": "eslint packages/auth-react/src packages/auth-nextjs/src examples/nextjs"
   },
   "keywords": [
     "didit",

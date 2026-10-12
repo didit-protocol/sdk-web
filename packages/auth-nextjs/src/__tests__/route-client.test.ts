@@ -121,3 +121,13 @@ describe("the Next.js browser client", () => {
     await expect(client.revokeAgent("x")).rejects.toThrow(/404/);
   });
 });
+
+it("keeps the signed-in state and allows retry when sign-out is rejected", async () => {
+  routes({ "POST /auth/sign-out": { status: 503 } });
+  const navigate = jest.fn();
+  const client = createRouteClient({ initialSession: session, navigate });
+
+  await expect(client.signOut()).rejects.toThrow(/retry/);
+  expect(client.getSnapshot().status).toBe("signed-in");
+  expect(navigate).not.toHaveBeenCalled();
+});
