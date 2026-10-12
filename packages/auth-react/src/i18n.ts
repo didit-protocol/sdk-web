@@ -7,15 +7,17 @@ import type { Messages } from "./locales/types.js";
 
 export type { Messages };
 
-const catalog: Record<string, Messages> = { en, es, fr, de, ja };
+const catalog = { en, es, fr, de, ja };
+
+export type AuthLocale = keyof typeof catalog;
 
 export const supportedLocales = Object.keys(catalog);
 
 /** The supported language for a BCP 47 tag such as `es-MX`, else English. */
-export function resolveLocale(tag: string | null | undefined): string {
+export function resolveLocale(tag: string | null | undefined): AuthLocale {
   const language = (tag ?? "").trim().toLowerCase().split(/[-_]/)[0];
 
-  return language in catalog ? language : "en";
+  return Object.hasOwn(catalog, language) ? language as AuthLocale : "en";
 }
 
 export function messagesFor(locale: string): Messages {
