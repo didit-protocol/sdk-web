@@ -32,6 +32,8 @@ async function call(config: DiditAuthConfig, path: string, init: RequestInit = {
   return fetch(`${config.frontendApi}/${path}`, {
     ...init,
     cache: "no-store",
+    redirect: "error",
+    signal: AbortSignal.timeout(15_000),
     headers: { Accept: "application/json", ...init.headers }
   });
 }

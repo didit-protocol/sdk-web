@@ -37,6 +37,10 @@ function parseUrl(name: string, value: string): URL {
   if (url.protocol !== "https:" && !(url.protocol === "http:" && LOCAL_HOSTS.has(url.hostname))) {
     throw new DiditAuthConfigError(`${name} must use https (http is accepted only for localhost).`);
   }
+  if (url.username || url.password || url.search || url.hash) {
+    throw new DiditAuthConfigError(`${name} must not contain credentials, a query or a fragment.`);
+  }
+
   return url;
 }
 

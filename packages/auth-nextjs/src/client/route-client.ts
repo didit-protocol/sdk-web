@@ -1,6 +1,8 @@
 import { createAuthStore, snapshotOf } from "@didit-protocol/auth-react/provider";
 import type { AgentGrant, AuthClient, DiditSession, RedirectOptions } from "@didit-protocol/auth-react/provider";
 
+import { safeReturnTo } from "../server/return-to.js";
+
 import { BASE_PATH, CLIENT_HEADER } from "../constants.js";
 
 export interface RouteAuthClient extends AuthClient {
@@ -68,9 +70,11 @@ export function createRouteClient({
     signUp: (options) => go("sign-up", hereOr(options)),
     stepUp: (options) => go("step-up", hereOr(options)),
     async signOut(options) {
-      await call("sign-out", { method: "POST" }).catch(() => undefined);
+      const response = await call("sign-out", { method: "POST" });
+
+      if (!response.ok) throw new Error("[didit-auth] Could not sign out. Please retry.");
       store.set(snapshotOf(null));
-      navigate(options?.redirectUrl ?? "/");
+      navigate(safeReturnTo(options?.redirectUrl) ?? "/");
     },
     async getToken() {
       const response = await call("token");

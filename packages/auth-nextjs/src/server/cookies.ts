@@ -49,6 +49,8 @@ export interface Transaction {
   state: string;
   /** Path to return to after signing in. */
   returnTo: string;
+  /** Identity that must complete a step-up. */
+  userId?: string;
 }
 
 export function transactionCookie(names: CookieNames, state: string): string {
@@ -57,15 +59,15 @@ export function transactionCookie(names: CookieNames, state: string): string {
 
 // Verifier and state are base64url and encodeURIComponent always escapes ":".
 export function encodeTransaction(value: Transaction): string {
-  return [value.verifier, value.state, encodeURIComponent(value.returnTo)].join(":");
+  return [value.verifier, value.state, encodeURIComponent(value.returnTo), ...(value.userId ? [encodeURIComponent(value.userId)] : [])].join(":");
 }
 
 export function decodeTransaction(raw: string | undefined): Transaction | null {
   const parts = raw?.split(":");
 
-  if (!parts || parts.length !== 3) return null;
+  if (!parts || (parts.length !== 3 && parts.length !== 4)) return null;
   try {
-    return { verifier: parts[0], state: parts[1], returnTo: decodeURIComponent(parts[2]) };
+    return { verifier: parts[0], state: parts[1], returnTo: decodeURIComponent(parts[2]), ...(parts[3] ? { userId: decodeURIComponent(parts[3]) } : {}) };
   } catch {
     return null;
   }
@@ -79,5 +81,5 @@ export interface SessionCookies {
 export function readSessionCookies(names: CookieNames, get: (name: string) => string | undefined): SessionCookies {
   const access = get(names.access);
 
-  return { access: access && access.length <= 128 ? access : null, refresh: decodeRefresh(get(names.refresh)) };
+  return { access: access && access.length <= 3800 && /^[A-Za-z0-9_.-]+$/.test(access) ? access : null, refresh: decodeRefresh(get(names.refresh)) };
 }

@@ -40,31 +40,32 @@ function fresh<T>(map: Map<string, Expiring<T>>, key: string): T | null {
 
 /** The session behind an access token, reused for a few seconds so a page render costs one call at most. */
 export function cachedSession(config: DiditAuthConfig, accessToken: string): Promise<DiditSession | null> {
-  const hit = fresh(sessions, accessToken);
+  const key = `${config.frontendApi}\n${accessToken}`;
+  const hit = config.sessionCacheMs > 0 ? fresh(sessions, key) : null;
 
   if (hit) return Promise.resolve(hit);
-  let lookup = sessionLookups.get(accessToken);
+  let lookup = sessionLookups.get(key);
 
   if (!lookup) {
     lookup = fetchSession(config, accessToken)
       .then((session) => {
-        if (session && config.sessionCacheMs > 0) remember(sessions, accessToken, session, config.sessionCacheMs);
-        else sessions.delete(accessToken);
+        if (session && config.sessionCacheMs > 0) remember(sessions, `${config.frontendApi}\n${accessToken}`, session, Math.min(config.sessionCacheMs, Date.parse(session.expiresAt) - Date.now()));
+        else sessions.delete(key);
         return session;
       })
-      .finally(() => sessionLookups.delete(accessToken));
-    sessionLookups.set(accessToken, lookup);
+      .finally(() => sessionLookups.delete(key));
+    sessionLookups.set(key, lookup);
   }
   return lookup;
 }
 
 /** Seeds the cache with a session that was just validated (after a sign-in). */
 export function primeSession(config: DiditAuthConfig, accessToken: string, session: DiditSession): void {
-  if (config.sessionCacheMs > 0) remember(sessions, accessToken, session, config.sessionCacheMs);
+  if (config.sessionCacheMs > 0) remember(sessions, `${config.frontendApi}\n${accessToken}`, session, Math.min(config.sessionCacheMs, Date.parse(session.expiresAt) - Date.now()));
 }
 
-export function forgetSession(accessToken: string): void {
-  sessions.delete(accessToken);
+export function forgetSession(config: DiditAuthConfig, accessToken: string): void {
+  sessions.delete(`${config.frontendApi}\n${accessToken}`);
 }
 
 /**
@@ -72,16 +73,17 @@ export function forgetSession(accessToken: string): void {
  * Resolves `null` when the grant is spent or the session is over.
  */
 export function refreshOnce(config: DiditAuthConfig, refreshToken: string): Promise<TokenSet | null> {
-  const recent = fresh(refreshed, refreshToken);
+  const key = `${config.frontendApi}\n${refreshToken}`;
+  const recent = fresh(refreshed, key);
 
   if (recent) return Promise.resolve(recent);
-  let pending = refreshes.get(refreshToken);
+  let pending = refreshes.get(key);
 
   if (!pending) {
     pending = refreshTokens(config, refreshToken)
       .then(
         (tokens) => {
-          remember(refreshed, refreshToken, tokens, REFRESH_GRACE_MS);
+          remember(refreshed, key, tokens, REFRESH_GRACE_MS);
           return tokens;
         },
         (error: unknown) => {
@@ -89,8 +91,8 @@ export function refreshOnce(config: DiditAuthConfig, refreshToken: string): Prom
           throw error;
         }
       )
-      .finally(() => refreshes.delete(refreshToken));
-    refreshes.set(refreshToken, pending);
+      .finally(() => refreshes.delete(key));
+    refreshes.set(key, pending);
   }
   return pending;
 }

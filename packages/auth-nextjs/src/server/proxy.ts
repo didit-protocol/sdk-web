@@ -131,7 +131,7 @@ function appOrigin(config: DiditAuthConfig): string {
 function sameOrigin(request: NextRequest, config: DiditAuthConfig): boolean {
   const origin = request.headers.get("origin");
 
-  if (origin) return origin === appOrigin(config) || origin === request.nextUrl.origin;
+  if (origin) return origin === appOrigin(config);
   return request.headers.get("sec-fetch-site") === "same-origin";
 }
 
@@ -145,11 +145,16 @@ function json(body: unknown, status = 200): NextResponse {
 
 async function startHostedSignIn(request: NextRequest, config: DiditAuthConfig): Promise<NextResponse> {
   const returnTo = safeReturnTo(request.nextUrl.searchParams.get("redirect_url")) ?? "/";
+  const stepUp = request.nextUrl.pathname === `${config.basePath}/step-up`;
+  const current = stepUp ? await resolve(request, config, true) : null;
+
+  if (stepUp && !current?.session) return json({ error: "signed_out" }, 401);
   const verifier = randomString();
   const state = randomString();
   // The hosted page opens on sign-in and links to sign-up and password reset itself.
   const hosted = new URL(`${config.frontendApi}/sign-in/`);
 
+  hosted.searchParams.set("language", negotiateLocale(request.headers.get("accept-language")));
   hosted.searchParams.set("redirect_uri", config.redirectUri);
   hosted.searchParams.set("state", state);
   hosted.searchParams.set("code_challenge", await codeChallenge(verifier));
@@ -159,9 +164,11 @@ async function startHostedSignIn(request: NextRequest, config: DiditAuthConfig):
 
   response.cookies.set(
     transactionCookie(cookieNames(config), state),
-    encodeTransaction({ verifier, state, returnTo }),
+    encodeTransaction({ verifier, state, returnTo, ...(current?.session ? { userId: current.session.user.id } : {}) }),
     cookieOptions(config, 600)
   );
+  writeUpdate(response, config, current?.update ?? null);
+
   return response;
 }
 
@@ -199,14 +206,22 @@ async function completeSignIn(request: NextRequest, config: DiditAuthConfig): Pr
   const session = await fetchSession(config, tokens.accessToken);
 
   if (!session) return callbackFailure(request, config, returnTo, "session_unavailable");
+  if (transaction.userId && transaction.userId !== session.user.id) {
+    await endSession(config, tokens.accessToken);
+    const rejected = callbackFailure(request, config, returnTo, "identity_mismatch");
+
+    rejected.cookies.set(transactionCookie(names, state), "", cookieOptions(config, 0));
+    return rejected;
+  }
   primeSession(config, tokens.accessToken, session);
 
   // Signing in again in this browser (for example to confirm it is you) replaces the earlier session.
-  const previous = readCookies(request, names).access;
+  const old = readCookies(request, names);
+  const previous = old.access ?? (old.refresh ? (await refreshOnce(config, old.refresh.token))?.accessToken : null);
 
   if (previous && previous !== tokens.accessToken) {
-    forgetSession(previous);
-    await endSession(config, previous).catch(() => undefined);
+    forgetSession(config, previous);
+    await endSession(config, previous);
   }
   const response = noStore(NextResponse.redirect(new URL(returnTo, config.redirectUri), 303));
 
@@ -220,12 +235,10 @@ async function signOut(request: NextRequest, config: DiditAuthConfig, options: D
   const { access, refresh } = readCookies(request, cookieNames(config));
   let token = access;
 
-  if (!token && refresh) token = (await refreshOnce(config, refresh.token).catch(() => null))?.accessToken ?? null;
+  if (!token && refresh) token = (await refreshOnce(config, refresh.token))?.accessToken ?? null;
   if (token) {
-    forgetSession(token);
-    await endSession(config, token).catch((error: unknown) => {
-      console.error("[didit-auth] Could not end the session with Didit; the cookies are cleared anyway.", error);
-    });
+    forgetSession(config, token);
+    await endSession(config, token);
   }
   const target = safeReturnTo(request.nextUrl.searchParams.get("redirect_url")) ?? options.afterSignOutUrl ?? "/";
   const response = fromClient(request)
