@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, jest } from "@jest/globals";
-import { randomUUID, webcrypto } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
@@ -52,11 +52,13 @@ beforeAll(async () => {
 });
 
 afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 async function signingKey(kid = randomUUID()): Promise<SigningKey> {
-  const pair = await webcrypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
-  const { kty, crv, x, y } = await webcrypto.subtle.exportKey("jwk", pair.publicKey);
+  const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+  const { kty, crv, x, y } = await crypto.subtle.exportKey("jwk", pair.publicKey);
   return { kid, privateKey: pair.privateKey, jwk: { kty, crv, x, y, kid, alg: "ES256", use: "sig" } };
 }
 
@@ -94,7 +96,7 @@ async function token(
     exp: now + 300,
     ...claims
   })}`;
-  const signature = await webcrypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key.privateKey, Buffer.from(input));
+  const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key.privateKey, Buffer.from(input));
   return `${input}.${Buffer.from(signature).toString("base64url")}`;
 }
 

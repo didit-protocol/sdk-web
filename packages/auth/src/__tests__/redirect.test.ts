@@ -116,7 +116,7 @@ describe("step-up", () => {
     expect(session.userId).toBe(fixture.result);
     expect(tokens()?.sessionId).not.toBe(before?.sessionId);
     // The last recorded request ends the replaced session with its own token.
-    expect(fixture.exchanges.at(-1)?.request).toEqual({
+    expect(fixture.exchanges[fixture.exchanges.length - 1].request).toEqual({
       method: "DELETE",
       path: "session/",
       authorization: `Bearer ${before?.accessToken}`
@@ -134,8 +134,9 @@ describe("step-up", () => {
       code: "step_up_user_mismatch"
     });
     expect(tokens()?.sessionId).toBe(fixture.sessionBefore);
-    expect(fixture.exchanges.at(-1)?.request.method).toBe("DELETE");
-    expect(fixture.exchanges.at(-1)?.request.authorization).not.toContain(tokens()?.accessToken);
+    const last = fixture.exchanges[fixture.exchanges.length - 1].request;
+    expect(last.method).toBe("DELETE");
+    expect(last.authorization).not.toContain(tokens()?.accessToken);
     api.verify();
   });
 
