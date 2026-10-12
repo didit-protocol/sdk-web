@@ -2,16 +2,34 @@ import { afterEach, describe, expect, it } from "@jest/globals";
 
 import { committedValue } from "../storage";
 
-// jsdom has no IndexedDB. This one keeps values in a map, completes each transaction on a later task as
-// browsers do, and aborts every put while `failPuts` is set, as a full disk does.
+// jsdom has no IndexedDB. This one keeps values in a map shared by every connection, completes each
+// transaction on a later task as browsers do, and aborts every put while `failPuts` is set, as a full disk
+// does. `failOpens` fails that many of the next opens, and `loseConnections` closes every open connection
+// the way a browser does when its storage process goes away: transactions then throw.
 function installIndexedDB() {
   const values = new Map<string, unknown>();
-  const control = { failPuts: false };
+  const connections = new Set<Record<string, unknown>>();
+  const control = {
+    failPuts: false,
+    failOpens: 0,
+    loseConnections() {
+      for (const connection of connections) {
+        connection.closed = true;
+        (connection.onclose as (() => void) | undefined)?.();
+      }
+      connections.clear();
+    }
+  };
   const later = (task: () => void) => setTimeout(task, 0);
-  const database = {
-    createObjectStore: () => undefined,
-    close: () => undefined,
-    transaction() {
+  const connect = () => {
+    const connection: Record<string, unknown> = { closed: false };
+    connection.createObjectStore = () => undefined;
+    connection.close = () => {
+      connection.closed = true;
+      connections.delete(connection);
+    };
+    connection.transaction = () => {
+      if (connection.closed) throw new DOMException("The database connection is closing.", "InvalidStateError");
       const transaction: Record<string, unknown> = { error: null };
       const finish = (request: { result?: unknown }, apply: () => unknown, fails = false) => {
         later(() => {
@@ -31,14 +49,23 @@ function installIndexedDB() {
         delete: (key: string) => finish({}, () => void values.delete(key))
       });
       return transaction;
-    }
+    };
+    connections.add(connection);
+    return connection;
   };
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: {
       open() {
-        const request: Record<string, unknown> = { result: database };
+        const request: Record<string, unknown> = {};
         later(() => {
+          if (control.failOpens > 0) {
+            control.failOpens -= 1;
+            request.error = new DOMException("Internal error opening backing store.", "UnknownError");
+            (request.onerror as () => void)();
+            return;
+          }
+          request.result = connect();
           (request.onupgradeneeded as () => void)();
           (request.onsuccess as () => void)();
         });
@@ -75,6 +102,32 @@ describe("committedValue", () => {
     control.failPuts = false;
 
     await expect(value.read()).resolves.toBeUndefined();
+  });
+
+  it("opens IndexedDB again after it failed to, so another tab does not read an older value", async () => {
+    const control = installIndexedDB();
+    const thisTab = committedValue("didit-auth:application");
+    const otherTab = committedValue("didit-auth:application");
+    await otherTab.write("older");
+
+    control.failOpens = 1;
+    await thisTab.write("newer");
+    await expect(otherTab.read()).resolves.toBeUndefined();
+
+    await thisTab.write("newest");
+    await expect(otherTab.read()).resolves.toBe("newest");
+  });
+
+  it("opens IndexedDB again after the browser closed the connection", async () => {
+    const control = installIndexedDB();
+    const thisTab = committedValue("didit-auth:application");
+    const otherTab = committedValue("didit-auth:application");
+    await thisTab.write("older");
+
+    control.loseConnections();
+    await thisTab.write("newer");
+    await expect(otherTab.read()).resolves.toBe("newer");
+    await expect(thisTab.read()).resolves.toBe("newer");
   });
 
   it("reads undefined, and writes nothing, where there is no IndexedDB", async () => {
