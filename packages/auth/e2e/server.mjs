@@ -114,9 +114,13 @@ async function replay(request, response) {
   const match = /^\/auth\/v2\/authentication\/[0-9a-f-]{36}\/(.*)$/.exec(url.pathname);
   if (!match) return serveStatic(request, response);
   const headers = cors(request, { "Cache-Control": "no-store" });
-  const allowed = !request.headers.origin || ALLOWED_ORIGINS.includes(request.headers.origin) || request.headers.origin === "http://127.0.0.1:4175";
+  const origin = request.headers.origin;
 
-  if (request.method === "OPTIONS") return send(response, allowed && headers["Access-Control-Allow-Origin"] ? 200 : 403, null, headers);
+  if (request.method === "OPTIONS") return send(response, headers["Access-Control-Allow-Origin"] ? 200 : 403, null, headers);
+  // As RuntimeView: the canonical auth origin and the application's allowed origins only.
+  if (origin && origin !== "http://127.0.0.1:4175" && !ALLOWED_ORIGINS.includes(origin)) {
+    return send(response, 403, JSON.stringify({ detail: "origin_not_allowed" }), { "Content-Type": "application/json" });
+  }
   if (match[1] === "sign-in/") {
     const callback = hostedSignIn(url);
     journal.push({ method: "GET", path: "sign-in/", query: Object.fromEntries(url.searchParams), mismatch: !callback });
