@@ -8,7 +8,7 @@ export function toBase64Url(input: ArrayBuffer | Uint8Array): string {
 }
 
 /** Strict base64url decoding: no padding, no standard-alphabet characters. */
-export function fromBase64Url(value: string): Uint8Array {
+export function fromBase64Url(value: string) {
   if (!BASE64URL.test(value) || value.length % 4 === 1) throw new TypeError("invalid base64url");
   const binary = atob(value.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((value.length + 3) % 4));
   const bytes = new Uint8Array(binary.length);

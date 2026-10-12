@@ -272,9 +272,14 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     };
     const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
 
-    refreshing ??= (locks ? locks.request(`${storageKey}:refresh`, run) : run()).finally(() => {
-      refreshing = null;
-    });
+    if (!refreshing) {
+      // The Web Locks API serializes refreshes across this origin's tabs. It resolves
+      // with the callback's settled value, which its DOM typing models as a nested promise.
+      const task = locks ? (locks.request(`${storageKey}:refresh`, run) as unknown as Promise<Tokens | null>) : run();
+      refreshing = task.finally(() => {
+        refreshing = null;
+      });
+    }
     return refreshing;
   }
 

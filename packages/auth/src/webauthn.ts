@@ -21,7 +21,7 @@ export function requestOptions(json: PasskeyOptionsJSON): PublicKeyCredentialReq
     ...json,
     challenge: fromBase64Url(json.challenge),
     allowCredentials: descriptors(json.allowCredentials)
-  } as PublicKeyCredentialRequestOptions;
+  } as unknown as PublicKeyCredentialRequestOptions;
 }
 
 export function creationOptions(json: PasskeyOptionsJSON): PublicKeyCredentialCreationOptions {
@@ -30,7 +30,7 @@ export function creationOptions(json: PasskeyOptionsJSON): PublicKeyCredentialCr
     challenge: fromBase64Url(json.challenge),
     user: { ...json.user, id: fromBase64Url(json.user?.id ?? "") },
     excludeCredentials: descriptors(json.excludeCredentials)
-  } as PublicKeyCredentialCreationOptions;
+  } as unknown as PublicKeyCredentialCreationOptions;
 }
 
 /** The registration or authentication response JSON the API verifies. */

@@ -175,7 +175,7 @@ export async function verifyToken(token: string, options: VerifyTokenOptions = {
   const parts = typeof token === "string" ? token.split(".") : [];
   let header: Record<string, unknown>;
   let claims: Record<string, unknown>;
-  let signature: Uint8Array;
+  let signature: ReturnType<typeof fromBase64Url>;
 
   try {
     if (parts.length !== 3) throw new Error();
