@@ -81,6 +81,42 @@ test("signs in on the real hosted page, refreshes, and signs out at Didit", asyn
   ]);
 });
 
+for (const order of [
+  [0, 1],
+  [1, 0]
+]) {
+  test(`two tabs sign in on the real hosted page at the same moment (tab ${order[0] + 1} completes first)`, async ({ context, page, request }) => {
+    const people = ["browser-person@example.com", "second-browser-person@example.com"];
+    const tabs = [page, await context.newPage()];
+    for (const tab of tabs) await openApp(tab);
+
+    // Both tabs leave for the hosted page at once, as tabs a browser restores together do when signed out.
+    await Promise.all(tabs.map((tab) => tab.evaluate(() => void window.auth.signIn())));
+    for (const [index, tab] of tabs.entries()) {
+      await tab.waitForURL(`${API_BASE}/sign-in/**`);
+      await tab.getByLabel("Email address").fill(people[index]);
+      await tab.getByLabel("Password", { exact: true }).fill(DIDIT_AUTH_LIVE_PASSWORD);
+      await tab.getByRole("button", { name: "Continue", exact: true }).click();
+      await tab.waitForURL(/\/e2e\/fixtures\/app\.html\?code=/);
+    }
+
+    const tokens = [];
+    for (const index of order) {
+      await openApp(tabs[index], tabs[index].url());
+      const session = await tabs[index].evaluate(async () => (await window.auth.handleRedirectCallback()).session);
+      expect(session.email).toBe(people[index]);
+      tokens[index] = await tabs[index].evaluate(() => window.auth.getToken());
+    }
+    // The tabs share the session completed last; the one it replaced was ended at Didit.
+    const replaced = await request.get(`${API_BASE}/session/`, { headers: { Authorization: `Bearer ${tokens[order[0]]}` } });
+    expect(replaced.status()).toBe(401);
+    for (const tab of tabs) {
+      expect((await tab.evaluate(() => window.auth.getSession({ force: true })))?.email).toBe(people[order[1]]);
+    }
+    await page.evaluate(() => window.auth.signOut());
+  });
+}
+
 test("two tabs refresh once and the session survives (the API revokes it on refresh-token reuse)", async ({ context, page }) => {
   const seen = watchRequests(page);
   await openApp(page);
