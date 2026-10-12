@@ -1,7 +1,7 @@
 import { jest, describe, it, expect, beforeEach, afterEach } from "@jest/globals";
 import { DiditSdk } from "../DiditSdk";
 import { VerificationModal } from "../modal";
-import { resetDeviceFingerprintForTesting } from "../fingerprint";
+import { resetDeviceFingerprintForTesting } from "../../packages/signals/src/fingerprint";
 import type { DiditTransactionPayload, SubmitTransactionResult } from "../types";
 
 // These tests exercise the real VerificationModal and the real

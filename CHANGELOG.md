@@ -2,6 +2,16 @@
 
 All notable changes to `@didit-protocol/sdk-web` will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- `DiditSdk.shared.submitEvent()` queues end-user events (sign-up, login, failed login, logout, password reset, MFA, device change) for Didit's event monitoring with a monitoring token minted by your backend. Events are batched to `POST /v1/events/batch/` with the `X-Monitoring-Token` header and the device fingerprint, and sent when 25 are waiting, every 5 seconds and when the page is hidden or closed.
+- Re-exports the `@didit-protocol/signals` API: `submitEvent`, `flush`, `configureEvents`, `DiditEventError`, `DEFAULT_EVENTS_BASE_URL`, `getDeviceFingerprintPayload`, `buildFingerprintHeaders` and their types.
+
+### Changed
+- The device fingerprint moved into the new `@didit-protocol/signals` package, now a dependency. Transaction submissions send the same fingerprint as before.
+- npm ES module and CommonJS imports share `@didit-protocol/signals`. Existing standalone `dist/didit-sdk.esm.js` and script-tag URLs remain self-contained. The CommonJS package entry uses a `.cjs` extension for Node compatibility.
+
 ## [0.4.0] - 2026-09-19
 
 ### Added

@@ -2,14 +2,14 @@
   "name": "@didit-protocol/sdk-web",
   "version": "0.4.0",
   "description": "Didit Identity Verification SDK for Web Applications",
-  "main": "dist/didit-sdk.cjs.js",
-  "module": "dist/didit-sdk.esm.js",
+  "main": "dist/didit-sdk.cjs",
+  "module": "dist/didit-sdk.module.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/didit-sdk.esm.js",
-      "require": "./dist/didit-sdk.cjs.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/didit-sdk.module.js",
+      "require": "./dist/didit-sdk.cjs"
     }
   },
   "files": [
@@ -20,7 +20,7 @@
     "examples/*"
   ],
   "scripts": {
-    "build": "rollup -c",
+    "build": "npm run build -w @didit-protocol/signals && rollup -c",
     "build:watch": "rollup -c -w",
     "dev": "node examples/server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
@@ -28,10 +28,12 @@
     "test:e2e": "npm run build && playwright test --project=chromium --project=firefox --project=webkit",
     "test:visual": "npm run build && playwright test --project=chrome-visual",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-    "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p packages/signals",
+    "clean": "rm -rf dist packages/signals/dist",
     "prepublishOnly": "npm run clean && npm run build",
-    "build:auth": "npm run build -w @didit-protocol/auth-react -w @didit-protocol/auth-nextjs",
+    "test:size": "npm run test:size -w @didit-protocol/signals",
+    "test:packages": "node scripts/verify-packages.mjs",
+    "build:auth": "npm run build -w @didit-protocol/signals -w @didit-protocol/auth -w @didit-protocol/auth-react -w @didit-protocol/auth-nextjs",
     "test:auth": "npm run test -w @didit-protocol/auth-react -w @didit-protocol/auth-nextjs",
     "typecheck:auth": "npm run typecheck -w @didit-protocol/auth-react -w @didit-protocol/auth-nextjs",
     "lint": "eslint packages/auth-react/src packages/auth-nextjs/src examples/nextjs examples/react examples/shared"
@@ -56,10 +58,12 @@
     "registry": "https://registry.npmjs.org/",
     "access": "public"
   },
+  "dependencies": {
+    "@didit-protocol/signals": "^0.1.0"
+  },
   "devDependencies": {
     "@playwright/test": "^1.61.0",
     "@rollup/plugin-node-resolve": "^15.2.3",
-    "@rollup/plugin-terser": "^0.4.4",
     "@rollup/plugin-typescript": "^11.1.6",
     "@types/jest": "^29.5.12",
     "eslint": "^9.39.5",
@@ -67,6 +71,8 @@
     "jest-environment-jsdom": "^29.7.0",
     "rollup": "^4.9.6",
     "rollup-plugin-dts": "^6.1.0",
+    "@rollup/plugin-terser": "^0.4.4",
+    "terser": "^5.31.0",
     "ts-jest": "^29.1.2",
     "tslib": "^2.6.2",
     "typescript": "^5.3.3",
