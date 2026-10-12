@@ -18,13 +18,16 @@ function useHostedRedirect(screen: "signIn" | "signUp", redirectUrl: string | un
   const { status } = useAuthSnapshot();
   const started = useRef(false);
 
-  useEffect(() => {
+  useEffect(function openHostedPage() {
     if (status === "loading" || started.current) return;
     started.current = true;
     const target = safeReturnTo(redirectUrl) ?? returnToFromLocation() ?? "/";
 
     if (status === "signed-in") window.location.replace(target);
-    else void client[screen]({ redirectUrl: target });
+    else client[screen]({ redirectUrl: target }).catch(() => {
+      started.current = false;
+      console.error("[didit-auth] Could not open the sign-in page.");
+    });
   }, [client, redirectUrl, screen, status]);
 }
 

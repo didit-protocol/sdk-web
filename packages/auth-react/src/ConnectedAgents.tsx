@@ -45,7 +45,7 @@ function describe(grant: AgentGrant, labels: Record<string, string> | undefined,
  */
 export function ConnectedAgents({ applicationName, scopeLabels }: ConnectedAgentsProps) {
   const { client, appearance, locale } = useDiditAuthContext();
-  const { status } = useAuthSnapshot();
+  const { status, session } = useAuthSnapshot();
   const [load, setLoad] = useState<Load>({ kind: "loading" });
   const [revokedAt, setRevokedAt] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -53,11 +53,13 @@ export function ConnectedAgents({ applicationName, scopeLabels }: ConnectedAgent
   const titleId = useId();
   const t = messagesFor(locale);
 
-  useEffect(() => {
+  useEffect(function loadAgentGrants() {
     if (status !== "signed-in") return undefined;
     let live = true;
 
     setLoad({ kind: "loading" });
+    setRevokedAt({});
+    setNotice(null);
     client.listAgents().then(
       (grants) => live && setLoad({ kind: "ready", grants }),
       () => live && setLoad({ kind: "error" })
@@ -65,7 +67,7 @@ export function ConnectedAgents({ applicationName, scopeLabels }: ConnectedAgent
     return () => {
       live = false;
     };
-  }, [client, status]);
+  }, [client, status, session?.id]);
 
   if (status !== "signed-in") return null;
 
@@ -140,7 +142,7 @@ export function ConnectedAgents({ applicationName, scopeLabels }: ConnectedAgent
                     disabled={busy !== null}
                     aria-busy={busy === grant.id}
                     aria-label={`${t.agentsRevoke}: ${grant.agentName}`}
-                    onClick={() => void revoke(grant)}
+                    onClick={() => revoke(grant)}
                   >
                     {t.agentsRevoke}
                   </button>

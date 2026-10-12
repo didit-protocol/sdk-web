@@ -33,7 +33,7 @@ export function UserButton({ afterSignOutUrl = "/" }: UserButtonProps) {
   const menuId = useId();
   const t = messagesFor(locale);
 
-  useEffect(() => {
+  useEffect(function focusAccountMenu() {
     if (!open) return;
     firstItem.current?.focus();
     const onPointer = (event: PointerEvent) => {
@@ -87,7 +87,9 @@ export function UserButton({ afterSignOutUrl = "/" }: UserButtonProps) {
             className="didit-ub-item"
             onClick={() => {
               setOpen(false);
-              void client.signOut({ redirectUrl: afterSignOutUrl });
+              client.signOut({ redirectUrl: afterSignOutUrl }).catch(() =>
+                console.error("[didit-auth] Could not sign out.")
+              );
             }}
           >
             {t.signOut}

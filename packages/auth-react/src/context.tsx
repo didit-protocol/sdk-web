@@ -26,8 +26,8 @@ export interface DiditAuthProviderProps {
 
 /** Makes an authentication client available to every Didit component and hook below it. */
 export function DiditAuthProvider({ client, appearance, locale, nonce, children }: DiditAuthProviderProps) {
-  useEffect(() => {
-    void client.load();
+  useEffect(function loadSession() {
+    client.load().catch(() => console.error("[didit-auth] Could not load the session."));
   }, [client]);
 
   const value = useMemo(
