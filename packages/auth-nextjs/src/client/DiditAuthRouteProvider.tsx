@@ -16,7 +16,7 @@ export interface DiditAuthRouteProviderProps extends DiditAuthProps {
 export function DiditAuthRouteProvider({ initialSession, ...provider }: DiditAuthRouteProviderProps) {
   const [client] = useState(() => createRouteClient({ initialSession }));
 
-  useEffect(() => {
+  useEffect(function acceptServerSession() {
     if (initialSession !== undefined) client.setSession(initialSession);
   }, [client, initialSession]);
 

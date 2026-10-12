@@ -21,4 +21,5 @@ export interface Messages {
   poweredBy: string;
   accountMenu: string;
   signOut: string;
+  signOutError: string;
 }

@@ -28,6 +28,8 @@ export function UserButton({ afterSignOutUrl = "/" }: UserButtonProps) {
   const { client, appearance, locale } = useDiditAuthContext();
   const { session } = useAuthSnapshot();
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState(false);
+  const [busy, setBusy] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const firstItem = useRef<HTMLButtonElement>(null);
   const menuId = useId();
@@ -85,15 +87,18 @@ export function UserButton({ afterSignOutUrl = "/" }: UserButtonProps) {
             type="button"
             role="menuitem"
             className="didit-ub-item"
+            disabled={busy}
             onClick={() => {
-              setOpen(false);
-              client.signOut({ redirectUrl: afterSignOutUrl }).catch(() =>
-                console.error("[didit-auth] Could not sign out.")
-              );
+              setBusy(true);
+              setError(false);
+              client.signOut({ redirectUrl: afterSignOutUrl }).then(
+                () => setOpen(false), () => setError(true)
+              ).finally(() => setBusy(false));
             }}
           >
             {t.signOut}
           </button>
+          {error ? <p role="alert" className="didit-ca-empty">{t.signOutError}</p> : null}
         </div>
       ) : null}
     </div>

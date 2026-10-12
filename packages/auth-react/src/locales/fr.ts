@@ -15,6 +15,7 @@ export const fr: Messages = {
   agentsRevokedNotice: "La session de {agent} a pris fin partout. Il ne peut plus agir en votre nom tant que vous ne l'aurez pas de nouveau autorisé.",
   agentsRevokeError: "Impossible de révoquer {agent}. Réessayez.",
   poweredBy: "Propulsé par",
+  signOutError: "Impossible de vous déconnecter. Réessayez.",
   accountMenu: "Compte",
   signOut: "Se déconnecter"
 };

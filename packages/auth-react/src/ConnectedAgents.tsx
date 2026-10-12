@@ -8,6 +8,13 @@ import { format, messagesFor, type Messages } from "./i18n.js";
 import { AlertCircleIcon, CheckCircleIcon, DiditLockup } from "./icons.js";
 import type { AgentGrant } from "./types.js";
 
+export interface AgentDetails {
+  /** Localized publisher attribution supplied by your application's agent catalog. */
+  publisherLabel?: string;
+  /** Localized activity description supplied by your application's audit log. */
+  activityLabel?: string;
+}
+
 export interface ConnectedAgentsProps {
   /** Your application's name, as people know it. */
   applicationName?: string;
@@ -17,6 +24,8 @@ export interface ConnectedAgentsProps {
    * `{ "payouts:read": "Sees your payouts" }`. Unlabelled scopes show their name.
    */
   scopeLabels?: Record<string, string>;
+  /** Optional display metadata from your app, keyed by agent id. Never inferred by the SDK. */
+  agentDetails?: Record<string, AgentDetails>;
 }
 
 type Load = { kind: "loading" } | { kind: "error" } | { kind: "ready"; grants: AgentGrant[] };
@@ -43,7 +52,13 @@ function describe(grant: AgentGrant, labels: Record<string, string> | undefined,
  * The AI agents the signed-in person allowed to act for them, each with a
  * Revoke button. Revoking ends the agent's access everywhere at once.
  */
-export function ConnectedAgents({ applicationName, scopeLabels }: ConnectedAgentsProps) {
+export function ConnectedAgents(props: ConnectedAgentsProps) {
+  const { session } = useAuthSnapshot();
+
+  return session ? <AgentList key={session.id} {...props} /> : null;
+}
+
+function AgentList({ applicationName, scopeLabels, agentDetails }: ConnectedAgentsProps) {
   const { client, appearance, locale } = useDiditAuthContext();
   const { status, session } = useAuthSnapshot();
   const [load, setLoad] = useState<Load>({ kind: "loading" });
@@ -112,6 +127,7 @@ export function ConnectedAgents({ applicationName, scopeLabels }: ConnectedAgent
           {rows.map((grant) => {
             const gone = revokedAt[grant.id];
             const can = describe(grant, scopeLabels, locale, t);
+            const details = agentDetails?.[grant.agentId];
             const meta = gone
               ? now - gone < JUST_NOW_MS
                 ? t.agentsRevokedJustNow
@@ -125,13 +141,11 @@ export function ConnectedAgents({ applicationName, scopeLabels }: ConnectedAgent
                 </span>
                 <span className="didit-ca-tx">
                   <span className="didit-ca-n">
-                    {/* The board sets the name in the row's 13px line, at the label size. */}
-                    <b>
-                      <span>{grant.agentName}</span>
-                    </b>
+                    <b>{grant.agentName}</b>
+                    {details?.publisherLabel ? <span>{details.publisherLabel}</span> : null}
                   </span>
                   {can ? <span className="didit-ca-d">{can}</span> : null}
-                  <span className="didit-ca-m">{meta}</span>
+                  <span className="didit-ca-m">{!gone && details?.activityLabel ? `${details.activityLabel} · ` : ""}{meta}</span>
                 </span>
                 {gone ? (
                   <span className="didit-status">{t.agentsRevoked}</span>

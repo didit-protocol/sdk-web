@@ -15,6 +15,7 @@ export const es: Messages = {
   agentsRevokedNotice: "La sesión de {agent} terminó en todas partes. No puede actuar por ti hasta que vuelvas a aprobarlo.",
   agentsRevokeError: "No hemos podido revocar a {agent}. Inténtalo de nuevo.",
   poweredBy: "Con la tecnología de",
+  signOutError: "No pudimos cerrar tu sesión. Inténtalo de nuevo.",
   accountMenu: "Cuenta",
   signOut: "Cerrar sesión"
 };

@@ -5,7 +5,7 @@ export { useAuth, useUser, type UseAuthResult, type UseUserResult } from "./hook
 export { SignedIn, SignedOut } from "./control.js";
 export { SignIn, SignUp, type SignInProps } from "./SignIn.js";
 export { UserButton, type UserButtonProps } from "./UserButton.js";
-export { ConnectedAgents, type ConnectedAgentsProps } from "./ConnectedAgents.js";
+export { ConnectedAgents, type AgentDetails, type ConnectedAgentsProps } from "./ConnectedAgents.js";
 export { createAuthStore, snapshotOf, type AuthStore } from "./store.js";
 export { resolveLocale, supportedLocales } from "./i18n.js";
 export { safeReturnTo } from "./return-to.js";

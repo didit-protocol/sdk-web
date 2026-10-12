@@ -4,6 +4,7 @@ export { DiditAuthRouteProvider as DiditAuth, type DiditAuthRouteProviderProps }
 export { SignIn, SignUp } from "./client/SignIn.js";
 export { ConnectedAgents, SignedIn, SignedOut, UserButton, useAuth, useUser } from "@didit-protocol/auth-react/provider";
 export type {
+  AgentDetails,
   AgentGrant,
   Appearance,
   ConnectedAgentsProps,
