@@ -49,7 +49,7 @@ describe("auth()", () => {
   it("protect() sends a signed-out visitor to sign in, back to the page they asked for", async () => {
     replay();
     requestWith({}, { "x-didit-auth-path": "/account/agents?x=1" });
-    const error = await auth.protect().catch((caught: { digest?: string }) => caught);
+    const error = (await auth.protect().catch((caught: unknown) => caught)) as { digest: string };
 
     expect(error.digest).toContain("/auth/sign-in?redirect_url=%2Faccount%2Fagents%3Fx%3D1");
   });
@@ -57,7 +57,7 @@ describe("auth()", () => {
   it("protect() ignores a forged path that leaves the site", async () => {
     replay();
     requestWith({}, { "x-didit-auth-path": "//evil.example" });
-    const error = await auth.protect({ signInUrl: "/sign-in" }).catch((caught: { digest?: string }) => caught);
+    const error = (await auth.protect({ signInUrl: "/sign-in" }).catch((caught: unknown) => caught)) as { digest: string };
 
     expect(error.digest).toMatch(/;\/sign-in;/);
   });
