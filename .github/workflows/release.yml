@@ -79,6 +79,16 @@ jobs:
           npm run typecheck
           npm run test:build-version
 
+      - name: Require the published @didit-protocol/signals
+        run: |
+          set -euo pipefail
+          # npm ci links the workspace copy, so check what an installer will actually get.
+          RANGE=$(node -p "require('./package.json').dependencies['@didit-protocol/signals']")
+          if [ -z "$(npm view "@didit-protocol/signals@$RANGE" version 2>/dev/null)" ]; then
+            echo "No published @didit-protocol/signals matches $RANGE: release it (signals-v* tag) first." >&2
+            exit 1
+          fi
+
       - name: Update npm for trusted publishing
         run: npm install -g npm@^11.5.1
 

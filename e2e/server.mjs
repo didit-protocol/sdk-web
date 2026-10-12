@@ -1,11 +1,16 @@
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
 
 const HOST = "127.0.0.1";
 const PORT = 4173;
 const ROOT = process.cwd();
+const RECORDINGS = JSON.parse(
+  await readFile(resolve(ROOT, "packages/signals/src/__tests__/fixtures/device-lane-recordings.json"), "utf8")
+).scenarios;
+// Requests each test lane received, so parallel browsers never read each other's.
+const received = new Map();
 const CONTENT_TYPES = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -26,7 +31,61 @@ function sendError(response, statusCode) {
   response.end(statusCode === 404 ? "Not found" : "Forbidden");
 }
 
+function sendJson(response, statusCode, body) {
+  response.writeHead(statusCode, { "Content-Type": "application/json" });
+  response.end(JSON.stringify(body));
+}
+
+async function readBody(request) {
+  const chunks = [];
+  for await (const chunk of request) chunks.push(chunk);
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+/**
+ * The device lane, POST /e2e/lane/<test id>/v1/events/batch/: answers with the
+ * real recorded answer for exactly this token and these events, or 501 so a
+ * test can never pass on an answer that was not recorded for its request.
+ */
+async function serveEventLane(request, response, pathname) {
+  const lane = /^\/e2e\/lane\/([\w-]+)\/v1\/events\/batch\/$/.exec(pathname);
+  const receivedMatch = /^\/e2e\/lane\/([\w-]+)\/received$/.exec(pathname);
+  if (receivedMatch && request.method === "GET") {
+    sendJson(response, 200, received.get(receivedMatch[1]) ?? []);
+    return true;
+  }
+  if (!lane || request.method !== "POST") return false;
+
+  const body = JSON.parse(await readBody(request));
+  const token = request.headers["x-monitoring-token"];
+  const requests = received.get(lane[1]) ?? [];
+  requests.push({ headers: request.headers, body });
+  received.set(lane[1], requests);
+
+  const recording = Object.values(RECORDINGS).find(
+    (scenario) =>
+      scenario.token === token &&
+      JSON.stringify(scenario.request.events) === JSON.stringify(body.events)
+  );
+  if (recording) {
+    sendJson(response, recording.response.status, recording.response.body);
+  } else {
+    sendJson(response, 501, { detail: "No recording matches the request." });
+  }
+  return true;
+}
+
 async function serve(request, response) {
+  const { pathname } = new URL(request.url ?? "/", `http://${HOST}:${PORT}`);
+  if (pathname.startsWith("/e2e/lane/")) {
+    try {
+      if (await serveEventLane(request, response, pathname)) return;
+    } catch (error) {
+      sendJson(response, 500, { detail: "Event fixture request failed." });
+      return;
+    }
+  }
+
   const filePath = resolveRequestPath(request.url ?? "/");
 
   if (!filePath) return sendError(response, 403);

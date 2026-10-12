@@ -7,7 +7,7 @@ import {
   pollTransactionAfterAction,
   submitTransactionRequest
 } from "../transactions";
-import { resetDeviceFingerprintForTesting } from "../fingerprint";
+import { resetDeviceFingerprintForTesting } from "../../packages/signals/src/fingerprint";
 import type { DiditTransactionPayload } from "../types";
 
 const fullPayload: DiditTransactionPayload = {

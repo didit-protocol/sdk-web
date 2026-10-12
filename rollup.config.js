@@ -26,6 +26,9 @@ function injectPackageVersion(version) {
   };
 }
 
+// Package imports share signals; existing browser URLs remain self-contained.
+const external = ['@didit-protocol/signals'];
+
 const banner = `/**
  * Didit SDK for Web v${packageJson.version}
  * (c) ${new Date().getFullYear()} Didit
@@ -33,11 +36,12 @@ const banner = `/**
  */`;
 
 export default [
-  // ESM build
+  // Package ESM build
   {
     input: 'src/index.ts',
+    external,
     output: {
-      file: 'dist/didit-sdk.esm.js',
+      file: 'dist/didit-sdk.module.js',
       format: 'esm',
       banner,
       sourcemap: true,
@@ -51,16 +55,27 @@ export default [
       }),
     ],
   },
+  // Standalone ESM build, including existing CDN imports without an import map.
+  {
+    input: 'src/index.ts',
+    output: { file: 'dist/didit-sdk.esm.js', format: 'esm', banner, sourcemap: true },
+    plugins: [
+      injectPackageVersion(packageJson.version),
+      resolve(),
+      typescript({ tsconfig: './tsconfig.json', declaration: false }),
+    ],
+  },
   // CommonJS build
   {
     input: 'src/index.ts',
-    output: {
-      file: 'dist/didit-sdk.cjs.js',
+    external,
+    output: ['dist/didit-sdk.cjs', 'dist/didit-sdk.cjs.js'].map((file) => ({
+      file,
       format: 'cjs',
       banner,
       sourcemap: true,
       exports: 'named',
-    },
+    })),
     plugins: [
       injectPackageVersion(packageJson.version),
       resolve(),
@@ -114,6 +129,7 @@ export default [
   // Type declarations
   {
     input: 'src/index.ts',
+    external,
     output: {
       file: 'dist/index.d.ts',
       format: 'esm',

@@ -24,4 +24,6 @@ jobs:
       - run: npm test -- --runInBand
       - run: npm run typecheck
       - run: npm run test:build-version
+      - run: npm run test:size
+      - run: npm run test:packages
       - run: npm run test:e2e
