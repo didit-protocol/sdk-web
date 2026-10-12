@@ -10,6 +10,7 @@ import {
   toSession
 } from "../server/runtime-api";
 import { ENV, recorded, replay } from "./replay";
+import grantPages from "./fixtures/grants-pages.json";
 
 const config = resolveConfig(ENV);
 
@@ -104,4 +105,18 @@ describe("runtime API", () => {
 
     await expect(revokeGrant(config, "token", "00000000-0000-4000-8000-0000000000ff")).rejects.toMatchObject({ status: 404 });
   });
+  it("reads every page without following response-provided URLs", async () => {
+    const { calls, remaining } = replay(
+      { method: "GET", path: "grants/?limit=100", response: grantPages.pages[0] },
+      { method: "GET", path: "grants/?limit=100&offset=100", response: grantPages.pages[1] }
+    );
+    const grants = await listGrants(config, "token");
+
+    expect(grants).toHaveLength(101);
+    expect(grants[100].id).toBe(grantPages.pages[1].body.results[0].id);
+    expect(new Set(grants.map(grant => grant.id)).size).toBe(101);
+    expect(remaining()).toEqual([]);
+    expect(calls).toHaveLength(2);
+  });
+
 });
