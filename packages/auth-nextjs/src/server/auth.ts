@@ -31,8 +31,9 @@ function settings(): DiditAuthConfig {
 }
 
 const readAuth = cache(async (): Promise<AuthState> => {
-  const current = settings();
+  // Reading cookies first marks the route dynamic before any configuration is needed.
   const store = await cookies();
+  const current = settings();
   const { access } = readSessionCookies(cookieNames(current), (name) => store.get(name)?.value);
   const session = access ? await cachedSession(current, access) : null;
 
