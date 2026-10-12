@@ -8,7 +8,7 @@ import type {
   TransactionErrorType
 } from "./types";
 
-import { buildFingerprintHeaders, getDeviceFingerprintPayload } from "./fingerprint";
+import { buildFingerprintHeaders, getDeviceFingerprintPayload } from "@didit-protocol/signals";
 
 export const DEFAULT_TRANSACTION_BASE_URL = "https://verification.didit.me";
 
