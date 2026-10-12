@@ -11,6 +11,7 @@ const MAILBOX = process.env.E2E_MAILBOX ?? "";
 // Optional: a command that gives the signed-up person agent grants; it gets the email as its last argument.
 const SEED_GRANTS = process.env.E2E_SEED_GRANTS ?? "";
 
+const APP = `http://localhost:${process.env.E2E_PORT ?? 3000}`;
 const email = `person${Date.now()}@example.com`;
 const password = "A-long-random-passphrase-491!";
 const newPassword = "Another-long-passphrase-582!";
@@ -81,6 +82,10 @@ test("a protected page sends a signed-out visitor to the hosted sign-in", async 
 
 test("sign up with an email code lands back in the app, signed in", async () => {
   await page.goto("/sign-up");
+  const state = new URL(page.url()).searchParams.get("state")!;
+  const transaction = `didit_tx.${state.slice(0, 16)}`;
+
+  expect(await cookie(transaction)).toBeDefined();
   await page.locator('button[name="action"][value="show_signup"]').click();
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(password);
@@ -93,14 +98,15 @@ test("sign up with an email code lands back in the app, signed in", async () => 
   await page.locator('input[name="code"]').fill(`${code![1]}${code![2]}`);
   await page.locator('button[name="action"][value="complete"]').click();
 
-  await expect(page).toHaveURL("http://localhost:3000/");
+  await expect(page).toHaveURL(`${APP}/`);
   await expect(page.getByRole("heading", { name: "You are signed in" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Account" })).toBeVisible();
   const access = await cookie("didit_at");
   const refresh = await cookie("didit_rt");
 
   expect(access?.httpOnly && refresh?.httpOnly).toBe(true);
-  expect((await context.cookies()).some((entry) => entry.name.startsWith("didit_tx."))).toBe(false);
+  // This sign-in's transaction cookie is spent; an abandoned one simply expires.
+  expect(await cookie(transaction)).toBeUndefined();
 });
 
 test("the account page is rendered on the server with the session", async () => {
@@ -154,7 +160,7 @@ test("confirming it is you signs in again and replaces the session", async () =>
   await page.goto("/account/security");
   await page.getByRole("button", { name: "Sign in again to continue" }).click();
   await signInOnHostedPage(password);
-  await expect(page).toHaveURL("http://localhost:3000/account/security");
+  await expect(page).toHaveURL(`${APP}/account/security`);
   const after = await session();
 
   expect(after?.id).toBeDefined();
@@ -191,10 +197,10 @@ test("a forgotten password is reset and the new one signs in", async () => {
   await page.goto(link![1].replace(/&amp;/g, "&"));
   await page.locator('input[name="password"]').fill(newPassword);
   await page.locator('button[name="action"][value="new_password"]').click();
-  await expect(page.locator("form button, p").first()).toBeVisible();
+  await expect(page.getByText("Your password has been changed.")).toBeVisible();
 
   await page.goto("/sign-in?redirect_url=/account");
   await signInOnHostedPage(newPassword);
-  await expect(page).toHaveURL("http://localhost:3000/account");
+  await expect(page).toHaveURL(`${APP}/account`);
   await expect(page.getByTestId("email")).toContainText(email);
 });
