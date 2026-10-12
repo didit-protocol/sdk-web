@@ -61,7 +61,7 @@ The person an event belongs to always comes from the token: Didit overwrites any
 
 - Every request carries the `X-Monitoring-Token` header and the device fingerprint (`fingerprint_v2` in the body plus the `X-Didit-PID` and `X-Didit-FP-Hash` headers).
 - Each event keeps the token it was submitted with; events with different tokens never share a request, so a sign-out and a new sign-in on the same page never mix people.
-- At page exit, browsers allow 64 KiB of `keepalive` requests per page; what does not fit stays queued and is sent if the page comes back. `sendBeacon` is not used: it cannot carry the token header.
+- Delivery is best effort: the in-memory queue is lost when the page closes, and browsers may terminate requests. At page exit, browsers allow 64 KiB of `keepalive` requests per page; what does not fit stays queued and is sent if the page comes back. `sendBeacon` is not used: it cannot carry the token header.
 - On a network error, HTTP timeout (408), rate limit (429), server error (5xx) or an unreadable answer, the same events are sent again after 10, 20 and 40 seconds, then every minute. They are re-sent byte for byte, so an event Didit already stored comes back as `replayed` instead of being stored twice.
 - A refusal is final and is reported through `onError` and in the `flush()` results:
 
@@ -106,7 +106,7 @@ Sends everything that is waiting. Never rejects: events that could not be sent a
 | `baseUrl` | `https://verification.didit.me` | Didit verification API base URL |
 | `batchSize` | `25` | Send as soon as this many events are waiting (1 to 500) |
 | `flushIntervalMs` | `5000` | Send waiting events after this many milliseconds |
-| `maxQueueSize` | `1000` | Events held in memory. When full, low-value events (`session.page_view` and the like) are dropped first; `security`, `payment`, `dispute`, `responsible_gambling` and bet events are never dropped |
+| `maxQueueSize` | `1000` | Events held in memory. When full, low-value events (`session.page_view` and the like) are dropped first; `security`, `payment`, `dispute`, `responsible_gambling` and bet events are never dropped, so this is a soft limit |
 | `onError` | none | Called with a `DiditEventError` for every refused or dropped event |
 
 ### Device signals

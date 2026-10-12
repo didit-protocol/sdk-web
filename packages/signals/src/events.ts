@@ -276,6 +276,7 @@ async function send(
   try {
     const response = await fetch(batch[0].url, {
       method: "POST",
+      redirect: "error",
       keepalive,
       headers: {
         "Content-Type": "application/json",

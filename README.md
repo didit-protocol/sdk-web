@@ -411,7 +411,7 @@ Full guide: [SDK Transaction Submission](https://docs.didit.me/transaction-monit
 
 ## Event Monitoring
 
-Send what your end users do (sign-up, login, failed login, logout, password reset, MFA, device change) to Didit's [event monitoring](https://docs.didit.me/transaction-monitoring/events), so every event shows up in the console on the same person as their verifications and transactions and your rules can act on it.
+Send what your end users do (sign-up, login, failed login, logout, password reset, MFA, device change) to Didit's [event monitoring](https://docs.didit.me/transaction-monitoring/events), where accepted events are associated with the same person as their verifications and transactions.
 
 Your backend mints a short-lived monitoring token for the signed-in person with `POST /v3/events/sdk-token/`, then hands it to the page:
 
@@ -442,10 +442,10 @@ How events travel:
 - **Batched** to `POST /v1/events/batch/` with the `X-Monitoring-Token` header: as soon as 25 events are waiting, after 5 seconds, and when the page is hidden or closed. Change the numbers with `configureEvents({ batchSize, flushIntervalMs })`.
 - **The person comes from the token**, never from the page: Didit binds every event to the `vendor_data` the token was minted for. Each event keeps the token it was submitted with, so events from before and after a sign-in never mix people.
 - **Device intelligence** is attached to every batch (the same fingerprint as transaction submissions); IP address, user agent and origin are taken server-side.
-- **Leaving the page** sends what is waiting with `fetch` and `keepalive`, which outlives the page (browsers allow 64 KiB per page for this). `sendBeacon` is not used because it cannot carry the token header.
-- **Safe retries**: on a network error, timeout, rate limit or server error the same events are sent again after 10, 20 and 40 seconds, then every minute (or right away when you call `flush()`). An event Didit already stored comes back as `replayed`, never as a duplicate.
+- **Leaving the page** sends waiting events that fit the request budget with `fetch` and `keepalive`, which outlives the page (browsers allow 64 KiB per page for this). `sendBeacon` is not used because it cannot carry the token header.
+- **Safe retries**: on a network error, HTTP timeout, rate limit or server error the same events are sent again after 10, 20 and 40 seconds, then every minute (or right away when you call `flush()`). An event Didit already stored comes back as `replayed`, never as a duplicate.
 - **Refusals are final**: an invalid, expired, revoked or used-up token (`invalid_token`, `expired_token`), event monitoring switched off for the application (`monitoring_disabled`) or an event that fails validation (`validation`) is reported through `onError` and in the `flush()` results, and is not sent again.
-- **Bounded memory**: at most 1,000 events wait in memory (`maxQueueSize`). When the queue is full, page views and other low-value events are dropped first (`dropped`); security, payment, dispute, responsible-gambling and bet events are never dropped.
+- **Queue pressure**: the queue targets 1,000 waiting events (`maxQueueSize`). When the queue is full, page views and other low-value events are dropped first (`dropped`); security, payment, dispute, responsible-gambling and bet events are never dropped, so protected events can exceed that target.
 
 | Event field | Description |
 |-------------|-------------|
@@ -455,6 +455,8 @@ How events travel:
 | `occurredAt` | `Date` or ISO 8601 string; defaults to now |
 | `payload` | Category-specific keys, e.g. `payment_reference_id`, `amount`, `currency`, `payment_method` and `status` for payments |
 | `session`, `transactionContext`, `customValues`, `subject`, `business`, `timeZone` | Optional context; `subject` only adds profile hints, the person always comes from the token |
+
+Delivery is best effort: the queue is in memory, and browsers can terminate pending requests. Await `flush()` and check `pendingCount` before a redirect you control. Browser delivery requires the API to allow `X-Monitoring-Token` and the fingerprint headers in its CORS policy.
 
 Full guide: [SDK Event Submission](https://docs.didit.me/transaction-monitoring/sdk-event-submission).
 
