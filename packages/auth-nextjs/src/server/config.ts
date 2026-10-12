@@ -1,3 +1,5 @@
+import { BASE_PATH } from "../constants.js";
+
 export class DiditAuthConfigError extends Error {
   constructor(message: string) {
     super(`[didit-auth] ${message}`);
@@ -64,7 +66,7 @@ export function resolveConfig(env: Env = process.env): DiditAuthConfig {
     frontendApi: `${api.origin}${api.pathname}`.replace(/\/+$/, ""),
     redirectUri: callback.href,
     callbackPath: callback.pathname,
-    basePath: "/auth",
+    basePath: BASE_PATH,
     secure: callback.protocol === "https:",
     sessionCacheMs: Number.isFinite(cacheSeconds) && cacheSeconds >= 0 ? Math.min(cacheSeconds, 300) * 1000 : 30_000
   };

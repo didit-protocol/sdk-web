@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import type { DiditSession } from "@didit-protocol/auth-react/provider";
 
+import { CLIENT_HEADER, PATH_HEADER } from "../constants.js";
 import { resolveConfig, type DiditAuthConfig, type Env } from "./config.js";
 import {
   cookieNames,
@@ -26,11 +27,6 @@ import {
   type TokenSet
 } from "./runtime-api.js";
 import { cachedSession, forgetSession, primeSession, refreshOnce } from "./session-cache.js";
-
-/** Request header carrying the requested path to server components, for `auth.protect()`. */
-export const PATH_HEADER = "x-didit-auth-path";
-/** Header the browser client sends on its calls; another site cannot send it without CORS. */
-export const CLIENT_HEADER = "x-didit-auth";
 
 export type RouteMatcher = string | RegExp | ReadonlyArray<string | RegExp> | ((request: NextRequest) => boolean);
 
