@@ -1,0 +1,138 @@
+{
+  "scenario": "mfa-enroll",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "code": "553949",
+  "recoveryCodes": 10,
+  "events": [],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "KxT1AMX3s7eyLz5i5ri_KA",
+          "code_challenge": "RBdRWybkTMptELSj6wRtFTuBOOrrClf2ZQgrYM66zCc",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "yNP4ESksIuUQvzPxnG6XYvtdOZ2wdH8gROxrfBd7tOw",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "yNP4ESksIuUQvzPxnG6XYvtdOZ2wdH8gROxrfBd7tOw",
+          "email": "new-person@example.com",
+          "password": "Correct-horse-battery-91"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "code": "MpWxawWYQc4PDYU7JZ2LyXcsyKwNTuSJ16zq8P1EAMQ",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "KxT1AMX3s7eyLz5i5ri_KA"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "MpWxawWYQc4PDYU7JZ2LyXcsyKwNTuSJ16zq8P1EAMQ",
+          "code_verifier": "UQ0fGiyXLakuPJWJO0GyyFjU8-LfJDfA4RoSb4t0Y94",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "ygIceZNO6dn7cvHaDCrnXv7s_Y7_2qJzwsAwjhqTTtM",
+          "refresh_token": "xSvDWJQDBEkcHwTSwCS-2zedRxPJ-Cy43i_mlTZOy40Ljif-VP3dgoFdj6HGR5zV",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "7f014097-8b18-4d7d-8f2c-b4522ae74d2f"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer ygIceZNO6dn7cvHaDCrnXv7s_Y7_2qJzwsAwjhqTTtM"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "0522fdc5-577e-4efb-9f10-e761375f534b",
+          "sid": "7f014097-8b18-4d7d-8f2c-b4522ae74d2f",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "new-person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T08:14:25.329172Z",
+          "organizations": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "mfa/enroll/",
+        "authorization": "Bearer ygIceZNO6dn7cvHaDCrnXv7s_Y7_2qJzwsAwjhqTTtM",
+        "body": {}
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "challenge": "ej08LsKAWIDfIgjK9AaN1fM_LE57aLgW3W88KdCH0kg",
+          "uri": "otpauth://totp/Local%20Test%20App:new-person%40example.com?secret=XF2ITOA7V47ZPMISILGT7HYGX346DPSF&issuer=Local%20Test%20App"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "mfa/confirm/",
+        "authorization": "Bearer ygIceZNO6dn7cvHaDCrnXv7s_Y7_2qJzwsAwjhqTTtM",
+        "body": {
+          "challenge": "ej08LsKAWIDfIgjK9AaN1fM_LE57aLgW3W88KdCH0kg",
+          "code": "553949"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "recovery_codes": [
+            "v1panqKe5E8H0uvj5zM2vEgx",
+            "T1O55-5KvkzB4ADg86eCjv2S",
+            "4LpOc-wnVIdISmVSxZpih9-J",
+            "oTb9VOoRqioh3xshqLKdKquV",
+            "eZFE5L-8WwSeJRpBzC7BSrj3",
+            "dCB8__VV01CCo7Br4YP9rVce",
+            "4lvg6NBC2LmtMni_mMBQlYNS",
+            "GJlMpC3gtr2Bbf6PoD1TWXYW",
+            "VtxnCzVrj8_QXbZ0r_I15QAl",
+            "YZLBMWrJ8Ia7oeBNSOWWwVhc"
+          ]
+        }
+      }
+    }
+  ]
+}
