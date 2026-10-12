@@ -42,11 +42,7 @@ async function logout() {
 test.beforeAll(async ({ browser }) => {
   context = await browser.newContext();
   page = await context.newPage();
-  page.on("response", async response => {
-    if (response.url().endsWith("/session/") && response.request().method() === "GET" && response.ok()) {
-      lastSession = ((await response.json()) as { sid: string }).sid;
-    }
-  });
+
 });
 test.afterAll(async () => { await context.close(); });
 
@@ -60,7 +56,9 @@ test("hosted signup completes through the real browser peer and survives reload"
   const code = (await nextMail(before)).match(/(\d{3}) (\d{3})<\/span>/);
   expect(code).not.toBeNull();
   await page.locator('input[name="code"]').fill(`${code![1]}${code![2]}`);
+  const sessionResponse = page.waitForResponse(response => response.url().endsWith("/session/") && response.request().method() === "GET" && response.ok());
   await page.locator('button[name="action"][value="complete"]').click();
+  lastSession = ((await (await sessionResponse).json()) as { sid: string }).sid;
   await expect(page.getByRole("heading", { name: "You are signed in" })).toBeVisible();
   await expect(page.getByText(email, { exact: true })).toBeVisible();
   await page.reload();
@@ -71,7 +69,9 @@ test("step-up confirms the same person and replaces the browser session", async 
   const previous = lastSession;
   expect(previous).toBeDefined();
   await page.getByRole("button", { name: "Sign in again to continue" }).click();
+  const sessionResponse = page.waitForResponse(response => response.url().endsWith("/session/") && response.request().method() === "GET" && response.ok());
   await login(password);
+  lastSession = ((await (await sessionResponse).json()) as { sid: string }).sid;
   await expect(page.getByRole("heading", { name: "You are signed in" })).toBeVisible();
   await expect.poll(() => lastSession).not.toBe(previous);
   await expect(page.getByText(email, { exact: true })).toBeVisible();

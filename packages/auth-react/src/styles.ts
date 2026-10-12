@@ -38,7 +38,7 @@ const card = "0 0 0 1px var(--da-line),0 16px 40px -28px rgba(15,30,80,.3)";
 
 /** Every component's styles, scoped under `.didit-auth`. Rendered once by the provider. */
 export const stylesheet = `
-.didit-auth{${light};font-family:var(--didit-auth-font,inherit);font-size:16px;line-height:1.55;color:var(--da-text);text-align:left;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+.didit-auth{${light};font-family:var(--didit-auth-font,inherit);font-optical-sizing:none;font-size:16px;line-height:1.55;color:var(--da-text);text-align:left;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 .didit-auth[data-didit-theme=dark]{${dark}}
 @media (prefers-color-scheme:dark){.didit-auth[data-didit-theme=auto]{${dark}}}
 .didit-auth *,.didit-auth *::before,.didit-auth *::after{box-sizing:border-box}

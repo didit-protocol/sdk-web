@@ -156,12 +156,19 @@ export async function endSession(config: DiditAuthConfig, accessToken: string): 
 }
 
 export async function listGrants(config: DiditAuthConfig, accessToken: string): Promise<AgentGrant[]> {
-  const response = await call(config, "grants/?limit=100", { headers: bearer(accessToken) });
+  const grants: AgentGrant[] = [];
 
-  if (!response.ok) throw await errorOf(response);
-  const body = (await response.json()) as Json;
+  for (let offset = 0; ; offset += 100) {
+    const path = `grants/?limit=100${offset ? `&offset=${offset}` : ""}`;
+    const response = await call(config, path, { headers: bearer(accessToken) });
 
-  return (Array.isArray(body.results) ? (body.results as Json[]) : []).map(toGrant);
+    if (!response.ok) throw await errorOf(response);
+    const body = (await response.json()) as Json;
+    const rows = Array.isArray(body.results) ? body.results as Json[] : [];
+
+    grants.push(...rows.map(toGrant));
+    if (rows.length < 100 || grants.length >= Number(body.count)) return grants;
+  }
 }
 
 export async function revokeGrant(config: DiditAuthConfig, accessToken: string, grantId: string): Promise<void> {

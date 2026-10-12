@@ -307,7 +307,7 @@ async function page(request: NextRequest, config: DiditAuthConfig, options: Didi
   } catch (error) {
     // Didit could not be reached: public pages still render, protected ones fail rather than open.
     if (isProtected) throw error;
-    console.error("[didit-auth] Could not refresh the session.", error);
+    console.error("[didit-auth] Could not refresh the session.");
     resolved = { access: null, session: null, update: null };
   }
 
