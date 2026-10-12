@@ -248,6 +248,14 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     if (had) emit("SIGNED_OUT", null);
   }
 
+  // Every change of the stored tokens holds one lock across this origin's tabs (Web Locks API), so a
+  // refresh finishing in one tab cannot overwrite a sign-in or undo a sign-out made in another. The API
+  // resolves with the callback's settled value, which its DOM typing models as a nested promise.
+  function withTokenLock<T>(task: () => Promise<T>): Promise<T> {
+    const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+    return locks ? (locks.request(`${storageKey}:tokens`, task) as unknown as Promise<T>) : task();
+  }
+
   function refresh(stale: Tokens): Promise<Tokens | null> {
     const run = async (): Promise<Tokens | null> => {
       // Another tab may have rotated the tokens while this one waited for the lock. Presenting
@@ -269,13 +277,9 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
         return null;
       }
     };
-    const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
 
     if (!refreshing) {
-      // The Web Locks API serializes refreshes across this origin's tabs. It resolves
-      // with the callback's settled value, which its DOM typing models as a nested promise.
-      const task = locks ? (locks.request(`${storageKey}:refresh`, run) as unknown as Promise<Tokens | null>) : run();
-      refreshing = task.finally(() => {
+      refreshing = withTokenLock(run).finally(() => {
         refreshing = null;
       });
     }
@@ -333,8 +337,11 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
       await request("session/", { method: "DELETE", token: tokens.accessToken }).catch(() => undefined);
       throw new DiditAuthError("step_up_user_mismatch", "A different person completed the sign-in.");
     }
-    const previous = await readTokens();
-    await writeTokens(tokens);
+    const previous = await withTokenLock(async () => {
+      const previous = await readTokens();
+      await writeTokens(tokens);
+      return previous;
+    });
     cached = { session, sessionId: tokens.sessionId, at: Date.now() };
     attempt = null;
     if (previous && previous.sessionId !== tokens.sessionId) {
