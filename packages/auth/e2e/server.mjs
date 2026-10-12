@@ -1,8 +1,7 @@
 // Browser test server for @didit-protocol/auth.
 //
 // - http://localhost:4174 serves the built package (dist/), the fixture pages
-//   and @didit-protocol/signals (until that package lands, the fingerprint
-//   source it is built from, transpiled on request).
+//   and the built @didit-protocol/signals (npm run build builds both).
 // - http://127.0.0.1:4175 answers the runtime API with the exchanges recorded
 //   against the Didit auth service (src/__tests__/fixtures), applying the same
 //   CORS rules as that API, so a request the real API would
@@ -25,9 +24,10 @@ const ALLOWED_ORIGINS = [APP_ORIGIN];
 const ts = createRequire(`${REPOSITORY}/package.json`)("typescript");
 const TYPES = { ".html": "text/html; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".map": "application/json" };
 const TRANSPILED = {
-  "/signals.mjs": `${REPOSITORY}/src/fingerprint.ts`,
   "/seeded.mjs": `${PACKAGE}/src/__tests__/helpers/seeded-random.ts`
 };
+// The fixture pages' import map resolves @didit-protocol/signals here.
+const SIGNALS = { "/signals.mjs": `${REPOSITORY}/packages/signals/dist/didit-signals.esm.js` };
 
 function send(response, status, body, headers = {}) {
   response.writeHead(status, { "Cache-Control": "no-store", ...headers });
@@ -42,6 +42,7 @@ async function serveStatic(request, response) {
     });
     return send(response, 200, outputText, { "Content-Type": TYPES[".mjs"] });
   }
+  if (SIGNALS[pathname]) return send(response, 200, readFileSync(SIGNALS[pathname]), { "Content-Type": TYPES[".mjs"] });
   const file = resolve(PACKAGE, `.${pathname}`);
   if (!file.startsWith(`${PACKAGE}${sep}`) || !/^\/(dist|e2e\/fixtures)\//.test(pathname)) return send(response, 404, "Not found");
   try {
@@ -153,7 +154,7 @@ async function replay(request, response) {
 function proxy(upstream) {
   return (request, response) => {
     const pathname = new URL(request.url, "http://localhost:8766").pathname;
-    if (TRANSPILED[pathname] || /^\/(dist|e2e\/fixtures)\//.test(pathname)) return serveStatic(request, response);
+    if (TRANSPILED[pathname] || SIGNALS[pathname] || /^\/(dist|e2e\/fixtures)\//.test(pathname)) return serveStatic(request, response);
     const target = new URL(request.url, upstream);
     const outgoing = forward(target, { method: request.method, headers: { ...request.headers, host: "localhost:8766" } }, (answer) => {
       response.writeHead(answer.statusCode ?? 502, answer.headers);
