@@ -201,6 +201,8 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
   let attempt: Attempt | null = null;
   let enrollment: string | null = null;
   let stopSync: (() => void) | null = null;
+  // The stored tokens as this tab last wrote or reported them (undefined until then).
+  let observed: string | null | undefined;
 
   // Resolved on first use, so creating the client during server rendering touches no browser API.
   const storage = () => (tokenStore ??= resolveStorage(options.storage));
@@ -235,7 +237,8 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
   const readTokens = async () => parseTokens(await storage().getItem(storageKey));
 
   async function writeTokens(tokens: Tokens | null): Promise<void> {
-    if (tokens) await storage().setItem(storageKey, JSON.stringify(tokens));
+    observed = tokens ? JSON.stringify(tokens) : null;
+    if (observed) await storage().setItem(storageKey, observed);
     else await storage().removeItem(storageKey);
   }
 
@@ -246,6 +249,14 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     attempt = null;
     enrollment = null;
     if (had) emit("SIGNED_OUT", null);
+  }
+
+  // Every change of the stored tokens holds one lock across this origin's tabs (Web Locks API), so a
+  // refresh finishing in one tab cannot overwrite a sign-in or undo a sign-out made in another. The API
+  // resolves with the callback's settled value, which its DOM typing models as a nested promise.
+  function withTokenLock<T>(task: () => Promise<T>): Promise<T> {
+    const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+    return locks ? (locks.request(`${storageKey}:tokens`, task) as unknown as Promise<T>) : task();
   }
 
   function refresh(stale: Tokens): Promise<Tokens | null> {
@@ -269,13 +280,9 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
         return null;
       }
     };
-    const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
 
     if (!refreshing) {
-      // The Web Locks API serializes refreshes across this origin's tabs. It resolves
-      // with the callback's settled value, which its DOM typing models as a nested promise.
-      const task = locks ? (locks.request(`${storageKey}:refresh`, run) as unknown as Promise<Tokens | null>) : run();
-      refreshing = task.finally(() => {
+      refreshing = withTokenLock(run).finally(() => {
         refreshing = null;
       });
     }
@@ -333,8 +340,11 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
       await request("session/", { method: "DELETE", token: tokens.accessToken }).catch(() => undefined);
       throw new DiditAuthError("step_up_user_mismatch", "A different person completed the sign-in.");
     }
-    const previous = await readTokens();
-    await writeTokens(tokens);
+    const previous = await withTokenLock(async () => {
+      const previous = await readTokens();
+      await writeTokens(tokens);
+      return previous;
+    });
     cached = { session, sessionId: tokens.sessionId, at: Date.now() };
     attempt = null;
     if (previous && previous.sessionId !== tokens.sessionId) {
@@ -496,9 +506,15 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     return run;
   }
 
-  async function onOtherTab(oldValue: string | null, newValue: string | null): Promise<void> {
-    const before = parseTokens(oldValue);
-    const after = parseTokens(newValue);
+  async function onOtherTab(oldValue: string | null): Promise<void> {
+    // A storage event can arrive after later changes, including this tab's own: report the change from
+    // what this tab last knew to what is stored now, and nothing when that is no change at all.
+    const value = await storage().getItem(storageKey);
+    const previous = observed === undefined ? oldValue : observed;
+    observed = value;
+    if (value === previous) return;
+    const before = parseTokens(previous);
+    const after = parseTokens(value);
 
     if (!after) {
       cached = null;
@@ -535,7 +551,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
       listeners.add(listener);
       if (!stopSync && sharedAcrossTabs()) {
         const handler = (event: StorageEvent) => {
-          if (event.key === storageKey) void onOtherTab(event.oldValue, event.newValue);
+          if (event.key === storageKey) void onOtherTab(event.oldValue);
         };
         window.addEventListener("storage", handler);
         stopSync = () => window.removeEventListener("storage", handler);
@@ -550,10 +566,13 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     },
 
     async signOut() {
-      const tokens = await currentTokens().catch(() => null);
-      await signedOut();
+      const tokens = await withTokenLock(async () => {
+        const tokens = await readTokens();
+        await signedOut();
+        return tokens;
+      });
       // Best effort: the local sign-out stands even when Didit cannot be reached.
-      if (tokens) await request("session/", { method: "DELETE", token: tokens.accessToken }).catch(() => undefined);
+      if (tokens) await endSession(tokens).catch(() => undefined);
     },
 
     async stepUp(opts: StepUpOptions = {}) {

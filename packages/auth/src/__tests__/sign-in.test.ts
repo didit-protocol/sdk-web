@@ -89,6 +89,26 @@ describe("password sign-in, session, refresh and sign-out", () => {
     ]);
   });
 
+  it("signs out at once and still ends the session at Didit when the access token has expired", async () => {
+    const { api, auth, fixture } = setup("sign-out-expired");
+    await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
+    const events: DiditAuthEvent[] = [];
+    auth.onAuthStateChange((event) => events.push(event));
+    advanceClock(5 * 60_000);
+
+    await auth.signOut();
+
+    // The renewed access token only ends the session: it is never stored or reported.
+    expect(stored()).toBeNull();
+    expect(events).toEqual(["SIGNED_OUT"]);
+    expect(fixture.exchanges[5].request).toMatchObject({
+      method: "DELETE",
+      authorization: `Bearer ${responseOf(fixture, 4).access_token}`
+    });
+    expect(fixture.sessionRevoked).toBe(true);
+    api.verify();
+  });
+
   it("reports a wrong password and keeps nothing", async () => {
     const { api, auth } = setup("wrong-password");
 
@@ -205,28 +225,52 @@ describe("sessions that end elsewhere", () => {
 });
 
 describe("other tabs", () => {
-  function storageEvent(oldValue: string | null, newValue: string | null): void {
-    window.dispatchEvent(
-      new StorageEvent("storage", { key: `didit-auth:${APPLICATION_ID}`, oldValue, newValue, storageArea: localStorage })
-    );
+  const KEY = `didit-auth:${APPLICATION_ID}`;
+
+  // As a browser does: the shared storage holds the new value before the other tabs get the event.
+  function otherTabWrites(newValue: string | null): void {
+    const oldValue = localStorage.getItem(KEY);
+    if (newValue === null) localStorage.removeItem(KEY);
+    else localStorage.setItem(KEY, newValue);
+    window.dispatchEvent(new StorageEvent("storage", { key: KEY, oldValue, newValue, storageArea: localStorage }));
   }
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   it("follows sign-outs and refreshes made by another tab", async () => {
     const { api, auth } = setup("password-sign-in");
     await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
     const listener = jest.fn();
     const unsubscribe = auth.onAuthStateChange(listener);
-    const before = localStorage.getItem(`didit-auth:${APPLICATION_ID}`);
+    const before = localStorage.getItem(KEY);
     const rotated = JSON.stringify({ ...JSON.parse(before ?? "{}"), accessToken: "rotated", refreshToken: "rotated" });
 
-    storageEvent(before, rotated);
-    storageEvent(rotated, null);
-    await Promise.resolve();
+    otherTabWrites(rotated);
+    await settle();
+    otherTabWrites(null);
+    await settle();
 
     expect(listener.mock.calls.map(([event]) => event)).toEqual(["TOKEN_REFRESHED", "SIGNED_OUT"]);
     unsubscribe();
-    storageEvent(null, before);
+    otherTabWrites(before);
+    await settle();
     expect(listener).toHaveBeenCalledTimes(2);
+    api.verify(4);
+  });
+
+  it("ignores a change by another tab that this tab has replaced since", async () => {
+    const { api, auth } = setup("password-sign-in");
+    const listener = jest.fn();
+    auth.onAuthStateChange(listener);
+    const earlier = JSON.stringify({ accessToken: "earlier", refreshToken: "earlier", expiresAt: Date.now() + 300_000, sessionId: "earlier" });
+
+    await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
+    // Another tab signed in first, but its event reaches this tab after this tab's own sign-in replaced it.
+    window.dispatchEvent(new StorageEvent("storage", { key: KEY, oldValue: null, newValue: earlier, storageArea: localStorage }));
+    await settle();
+
+    expect(listener.mock.calls.map(([event]) => event)).toEqual(["SIGNED_IN"]);
+    expect(stored()?.sessionId).toBe("214de96d-95e1-47a2-8b0f-ccf3f9b1f170");
     api.verify(4);
   });
 });

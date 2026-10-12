@@ -62,7 +62,9 @@ await auth.signOut(); // ends the session at Didit too
 Access tokens last five minutes. `getToken()` refreshes them shortly before
 they expire. Refresh tokens rotate, and Didit revokes the whole session when a
 used one is presented again, so the SDK refreshes once for all the tabs of
-your origin (Web Locks) and the other tabs take the new tokens.
+your origin (Web Locks) and the other tabs take the new tokens. A sign-in or
+sign-out waits for a refresh another tab has in flight, so that refresh cannot
+overwrite the new session or sign the person back in.
 
 `getSession()` asks the API and caches the answer for 30 seconds; pass
 `{ force: true }` before a decision that must see a revocation immediately.

@@ -8,7 +8,8 @@ All notable changes to `@didit-protocol/auth` are documented in this file.
 
 - `createDiditAuth({ publishableKey })`: hosted sign-in with PKCE (`signIn`,
   `handleRedirectCallback`), `getSession`, `getToken`, `onAuthStateChange` and
-  `signOut`, with refreshes serialized across tabs.
+  `signOut`. Refreshes, sign-ins and sign-outs take turns across tabs, and
+  other tabs' changes are reported from the tokens stored now.
 - Headless methods: `password`, `emailCode`, `phone`, `passkeys`, `mfa`,
   `magicLink`, `social`, `stepUp` and `agents`. `magicLink` and `social` open
   the hosted page with every enabled method.
