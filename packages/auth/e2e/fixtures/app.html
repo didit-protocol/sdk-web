@@ -22,9 +22,11 @@
         createDiditAuth,
         DiditAuthError,
         events: [],
-        // Draws the same random values as the recording of `scenario`.
-        seed(scenario) {
+        // Draws the same random values as the recording of `scenario`, from `skip` bytes in: a second
+        // tab of that recording continues where the first one stopped.
+        seed(scenario, skip = 0) {
           crypto.getRandomValues = seededRandomValues(scenario);
+          crypto.getRandomValues(new Uint8Array(skip));
         },
         create(options) {
           window.auth = createDiditAuth(options);
