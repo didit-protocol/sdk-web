@@ -191,6 +191,7 @@ describe("submitEvent and flush against the recorded device lane", () => {
   it.each([
     ["a 503", respond(503, null)],
     ["a 429", respond(429, null)],
+    ["an unreadable rejection", respond(400, "<html>")],
     ["a 2xx without per-event results", respond(200, "<html>")]
   ])("retries after %s", async (_label, answer) => {
     fetchMock.mockResolvedValueOnce(answer).mockImplementationOnce(replay("timer"));
@@ -205,6 +206,8 @@ describe("submitEvent and flush against the recorded device lane", () => {
     ["unknown outcome", (body: RecordedBatch) => { body.results[0].outcome = "unknown"; }],
     ["missing index", (body: RecordedBatch) => { delete body.results[0].index; }],
     ["wrong index", (body: RecordedBatch) => { body.results[0].index = 8; }],
+    ["missing stored id", (body: RecordedBatch) => { delete body.results[0].event_uuid; }],
+    ["empty stored id", (body: RecordedBatch) => { body.results[0].event_uuid = ""; }],
     ["duplicate index", (body: RecordedBatch) => { body.results.push(body.results[0]); }]
   ])("keeps events pending after an acknowledgement with %s", async (_label, corrupt) => {
     const body = JSON.parse(JSON.stringify(recordedBody("timer")));

@@ -286,7 +286,7 @@ async function send(
       body: bodyJson
     });
     const body = await readJson(response);
-    if (isTransient(response.status)) return false;
+    if (isTransient(response.status) || !isRecord(body)) return false;
 
     if (!response.ok) {
       const error = classifyEventError(
@@ -306,8 +306,8 @@ async function send(
 
       if (matches.length !== 1 || !isRecord(answer)) return;
       if (answer.outcome === "accepted" || answer.outcome === "replayed") {
-        const eventResult: DiditEventResult = { eventId: entry.id, outcome: answer.outcome };
-        if (typeof answer.event_uuid === "string") eventResult.eventUuid = answer.event_uuid;
+        if (typeof answer.event_uuid !== "string" || !answer.event_uuid) return;
+        const eventResult: DiditEventResult = { eventId: entry.id, outcome: answer.outcome, eventUuid: answer.event_uuid };
         if (typeof answer.status === "string") eventResult.status = answer.status;
         if (typeof answer.score === "number" || answer.score === null) eventResult.score = answer.score;
         result.results.push(eventResult);
