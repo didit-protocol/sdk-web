@@ -89,6 +89,26 @@ describe("password sign-in, session, refresh and sign-out", () => {
     ]);
   });
 
+  it("signs out at once and still ends the session at Didit when the access token has expired", async () => {
+    const { api, auth, fixture } = setup("sign-out-expired");
+    await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
+    const events: DiditAuthEvent[] = [];
+    auth.onAuthStateChange((event) => events.push(event));
+    advanceClock(5 * 60_000);
+
+    await auth.signOut();
+
+    // The renewed access token only ends the session: it is never stored or reported.
+    expect(stored()).toBeNull();
+    expect(events).toEqual(["SIGNED_OUT"]);
+    expect(fixture.exchanges[5].request).toMatchObject({
+      method: "DELETE",
+      authorization: `Bearer ${responseOf(fixture, 4).access_token}`
+    });
+    expect(fixture.sessionRevoked).toBe(true);
+    api.verify();
+  });
+
   it("reports a wrong password and keeps nothing", async () => {
     const { api, auth } = setup("wrong-password");
 
