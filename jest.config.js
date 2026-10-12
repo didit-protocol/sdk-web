@@ -15,6 +15,8 @@ export default {
     ]
   },
   testMatch: ["**/__tests__/**/*.test.ts", "**/*.test.ts"],
+  // The auth packages and the example apps run their own suites.
+  testPathIgnorePatterns: ["/node_modules/", "<rootDir>/packages/", "<rootDir>/examples/"],
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
   collectCoverageFrom: ["src/**/*.ts", "!src/**/*.d.ts", "!src/__tests__/**"],
   coverageDirectory: "coverage",

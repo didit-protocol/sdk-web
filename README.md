@@ -12,6 +12,15 @@ A lightweight JavaScript/TypeScript SDK for embedding Didit identity verificatio
 - 📦 **Multiple Formats** - ESM, CommonJS, and UMD builds
 - 🔷 **TypeScript** - Full type definitions included
 
+## Authentication packages
+
+This repository also holds Didit Authentication for web apps:
+
+- [`@didit-protocol/auth-react`](packages/auth-react): React components and hooks.
+- [`@didit-protocol/auth-nextjs`](packages/auth-nextjs): the Next.js App Router integration, with server-side `auth()`.
+- [`examples/react`](examples/react): a browser app using the headless Authentication peer.
+- [`examples/nextjs`](examples/nextjs): an app with sign-up, sign-in, password reset, signing in again and connected agents.
+
 ## Installation
 
 ### NPM/Yarn

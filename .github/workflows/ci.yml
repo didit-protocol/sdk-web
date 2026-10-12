@@ -25,3 +25,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:build-version
       - run: npm run test:e2e
+      - run: npm run lint
+      - run: npm run build:auth
+      - run: npm run typecheck:auth
+      - run: npm run test:auth -- --runInBand
+      - run: npm run build -w @didit-protocol/example-auth-nextjs
