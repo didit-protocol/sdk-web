@@ -145,7 +145,7 @@ function AgentList({ applicationName, scopeLabels, agentDetails }: ConnectedAgen
                     {details?.publisherLabel ? <span>{details.publisherLabel}</span> : null}
                   </span>
                   {can ? <span className="didit-ca-d">{can}</span> : null}
-                  <span className="didit-ca-m">{!gone && details?.activityLabel ? `${details.activityLabel} · ` : ""}{meta}</span>
+                  <span className="didit-ca-m">{`${!gone && details?.activityLabel ? `${details.activityLabel} · ` : ""}${meta}`}</span>
                 </span>
                 {gone ? (
                   <span className="didit-status">{t.agentsRevoked}</span>

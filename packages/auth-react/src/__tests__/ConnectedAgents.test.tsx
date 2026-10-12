@@ -144,4 +144,15 @@ describe("<ConnectedAgents />", () => {
     expect(container.querySelector(".didit-ca")).toBeNull();
     expect(client.listAgents).not.toHaveBeenCalled();
   });
+  it("uses only the publisher and activity labels supplied by the application", async () => {
+    const { client } = testClient({ session, grants });
+    render(<DiditAuthProvider client={client}><ConnectedAgents agentDetails={{
+      [grants[0].agentId]: { publisherLabel: "by Example publisher", activityLabel: "Checked a balance" }
+    }} /></DiditAuthProvider>);
+    const region = await card();
+    expect(within(region).getByText("by Example publisher")).toBeTruthy();
+    expect(within(region).getByText("Checked a balance · Ends Oct 4")).toBeTruthy();
+    expect(within(region).getAllByText(/by Example publisher/)).toHaveLength(1);
+  });
+
 });
