@@ -69,7 +69,7 @@ test("step-up confirms the same person and replaces the browser session", async 
   const previous = lastSession;
   expect(previous).toBeDefined();
   await page.getByRole("button", { name: "Sign in again to continue" }).click();
-  await expect(page).toHaveURL(url => url.pathname.endsWith("/sign-in/") && url.origin === "http://localhost:8000");
+  await expect(page).toHaveURL(url => url.pathname.endsWith("/sign-in/") && url.searchParams.has("code_challenge"));
   const sessionResponse = page.waitForResponse(response => response.url().endsWith("/session/") && response.request().method() === "GET" && response.ok());
   await login(password);
   lastSession = ((await (await sessionResponse).json()) as { sid: string }).sid;
@@ -84,10 +84,15 @@ test("the real grants endpoint supplies the list and records revocation", async 
   execFileSync(command, [...args, email], { stdio: "inherit" });
   await page.reload();
   const card = page.getByRole("region", { name: "Connected agents" });
-  await card.getByRole("button", { name: /^Revoke:/ }).first().click();
+  const revoke = card.getByRole("button", { name: /^Revoke:/ }).first();
+  const agent = (await revoke.getAttribute("aria-label"))!.replace("Revoke: ", "");
+  await revoke.click();
   await expect(card.getByText("Revoked", { exact: true })).toBeVisible();
+  const listed = page.waitForResponse(response => response.url().includes("/grants/?") && response.ok());
   await page.reload();
-  await expect(card.getByText("Revoked", { exact: true })).toBeVisible();
+  const grants = (await (await listed).json()).results as { agent__name: string; revoked_at: string | null }[];
+  expect(grants.find(grant => grant.agent__name === agent)?.revoked_at).toBeTruthy();
+  await expect(card.getByRole("button", { name: `Revoke: ${agent}`, exact: true })).toHaveCount(0);
 });
 
 test("sign-out, forgot password and password sign-in use the real hosted flow", async () => {
