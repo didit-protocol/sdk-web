@@ -72,7 +72,6 @@ async function serveEventLane(request, response, pathname) {
 
   const body = JSON.parse(await readBody(request));
   const token = request.headers["x-monitoring-token"];
-  const ids = body.events.map((event) => event.event_id);
   const requests = received.get(lane[1]) ?? [];
   requests.push({ headers: request.headers, body });
   received.set(lane[1], requests);
@@ -80,12 +79,12 @@ async function serveEventLane(request, response, pathname) {
   const recording = Object.values(RECORDINGS).find(
     (scenario) =>
       scenario.token === token &&
-      JSON.stringify(scenario.request.events?.map((event) => event.event_id)) === JSON.stringify(ids)
+      JSON.stringify(scenario.request.events) === JSON.stringify(body.events)
   );
   if (recording) {
     sendJson(response, recording.response.status, recording.response.body);
   } else {
-    sendJson(response, 501, { detail: `No recording for ${token} and ${ids}` });
+    sendJson(response, 501, { detail: "No recording matches the request." });
   }
   return true;
 }
@@ -96,7 +95,7 @@ async function serve(request, response) {
     try {
       if (await serveEventLane(request, response, pathname)) return;
     } catch (error) {
-      sendJson(response, 500, { detail: String(error) });
+      sendJson(response, 500, { detail: "Event fixture request failed." });
       return;
     }
   }

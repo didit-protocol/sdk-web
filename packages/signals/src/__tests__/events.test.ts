@@ -52,6 +52,7 @@ describe("submitEvent and flush against the recorded device lane", () => {
   afterEach(() => {
     resetEventsForTesting();
     jest.useRealTimers();
+    jest.restoreAllMocks();
     setVisibility("visible");
     // @ts-expect-error cleanup of the test-injected global
     delete globalThis.fetch;
@@ -230,7 +231,7 @@ describe("submitEvent and flush against the recorded device lane", () => {
     submitEvent({ monitoringToken: "valid", event: { category: "custom", actionType: "big", payload: { text: "語".repeat(18000) } } });
     window.dispatchEvent(new Event("pagehide"));
     await settle();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.length).toBe(0);
     userAgent.mockRestore();
   });
 
@@ -399,7 +400,7 @@ describe("submitEvent and flush against the recorded device lane", () => {
     send("deposit-2", "payment", "deposit_initiated");
     send("deposit-3", "payment", "deposit_initiated");
     send("deposit-4", "payment", "deposit_initiated");
-    void flush();
+    flush().catch(() => undefined);
     await settle();
 
     expect(onError.mock.calls.map(([error]) => [error.type, ...error.eventIds])).toEqual([

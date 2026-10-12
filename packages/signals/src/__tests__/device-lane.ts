@@ -69,20 +69,20 @@ export function respond(status: number, body: unknown): Response {
   return { ok: status >= 200 && status < 300, status, json: async () => body } as Response;
 }
 
-/** Answers each request with the recording whose token and event ids it carries. */
+/** Answers each request with the recording whose token and full events it carries. */
 export function replay(...names: ScenarioName[]): (url: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
   return async (url, init) => {
     const headers = (init?.headers ?? {}) as Record<string, string>;
-    const sentIds = JSON.parse(String(init?.body)).events.map((event: RecordedEvent) => event.event_id);
+    const sentEvents = JSON.parse(String(init?.body)).events;
     const match = names
       .map((name) => scenario(name))
       .find(
         (recorded) =>
           recorded.token === headers["X-Monitoring-Token"] &&
-          JSON.stringify(recorded.request.events.map((event) => event.event_id)) === JSON.stringify(sentIds)
+          JSON.stringify(recorded.request.events) === JSON.stringify(sentEvents)
       );
     expect(String(url)).toMatch(/\/v1\/events\/batch\/$/);
-    if (!match) throw new Error(`No recording for token ${headers["X-Monitoring-Token"]} and events ${sentIds}`);
+    if (!match) throw new Error("No recording matches the request.");
     return respond(match.response.status, match.response.body);
   };
 }

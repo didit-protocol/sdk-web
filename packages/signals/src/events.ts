@@ -3,6 +3,7 @@ import type {
   DiditEventErrorType,
   DiditEventFlushResult,
   DiditEventResult,
+  DeviceFingerprintPayload,
   DiditEventsConfiguration,
   SubmitEventOptions
 } from "./types";
@@ -16,8 +17,7 @@ const MAX_BATCH_EVENTS = 500;
 const MAX_RETRY_DELAY_MS = 60000;
 // Browsers cap the bodies of every keepalive request a page has in flight at
 // 64 KiB together; the allowance covers the envelope and the fingerprint.
-const KEEPALIVE_BUDGET_BYTES = 60000;
-const REQUEST_ALLOWANCE_BYTES = 4096;
+const KEEPALIVE_BUDGET_BYTES = 64 * 1024;
 
 // The server's backpressure contract (monitoring_event_schemas.py): these are
 // never dropped, and the low-value ones go first when the queue is full.
@@ -85,17 +85,15 @@ let failures = 0;
 let flushing = 0;
 let chain: Promise<unknown> = Promise.resolve();
 let listening = false;
+let exiting = false;
+let keepaliveBytes = 0;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function compact(record: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(record)) {
-    if (value !== undefined) result[key] = value;
-  }
-  return result;
+  return Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
 }
 
 function browserTimeZone(): string | undefined {
@@ -163,7 +161,7 @@ function schedule(delayMs: number): void {
   if (timer !== undefined) return;
   timer = setTimeout(() => {
     timer = undefined;
-    void flush();
+    flush().catch(() => undefined);
   }, delayMs);
 }
 
@@ -174,7 +172,7 @@ function clearTimer(): void {
 
 function scheduleWaiting(): void {
   if (flushing || !waiting().length) return;
-  schedule(failures ? Math.min(settings.flushIntervalMs * 2 ** failures, MAX_RETRY_DELAY_MS) : settings.flushIntervalMs);
+  schedule(failures ? Math.min(Math.max(1000, settings.flushIntervalMs) * 2 ** failures, MAX_RETRY_DELAY_MS) : settings.flushIntervalMs);
 }
 
 function enqueue(entry: QueuedEvent): void {
@@ -199,14 +197,14 @@ function enqueue(entry: QueuedEvent): void {
 }
 
 /** The next waiting events that share a token and endpoint, oldest first, within an optional byte budget. */
-function nextBatch(budgetBytes = Infinity): QueuedEvent[] {
+function nextBatch(budgetBytes = Infinity, envelopeBytes = 0): QueuedEvent[] {
   const batch: QueuedEvent[] = [];
-  let bytes = REQUEST_ALLOWANCE_BYTES;
+  let bytes = envelopeBytes;
   for (const entry of queue) {
     if (batch.length === settings.batchSize) break;
-    if (entry.sending || bytes + entry.bytes > budgetBytes) continue;
+    if (entry.sending || bytes + entry.bytes + (batch.length ? 1 : 0) > budgetBytes) continue;
     if (batch.length && (entry.token !== batch[0].token || entry.url !== batch[0].url)) continue;
-    bytes += entry.bytes;
+    bytes += entry.bytes + (batch.length ? 1 : 0);
     batch.push(entry);
   }
   return batch;
@@ -251,8 +249,21 @@ async function readJson(response: Response): Promise<unknown> {
  * events stay queued with the same ids, so a batch the server already stored
  * comes back as "replayed" instead of being stored twice.
  */
-async function send(batch: QueuedEvent[], result: DiditEventFlushResult, keepalive = false): Promise<boolean> {
-  for (const entry of batch) entry.sending = true;
+function byteLength(json: string): number {
+  return encodeURIComponent(json).replace(/%[\dA-F]{2}/g, "-").length;
+}
+
+function batchBody(batch: QueuedEvent[], fingerprint: DeviceFingerprintPayload | null): string {
+  const fingerprintJson = fingerprint ? `,"fingerprint_v2":${JSON.stringify(fingerprint)}` : "";
+
+  return `{"events":[${batch.map((entry) => entry.json).join(",")}]${fingerprintJson}}`;
+}
+
+async function send(
+  batch: QueuedEvent[], result: DiditEventFlushResult, fingerprint: DeviceFingerprintPayload | null, keepalive = false
+): Promise<boolean> {
+  const bodyJson = batchBody(batch, fingerprint);
+  const reservedBytes = keepalive ? byteLength(bodyJson) : 0;
   const settled = new Set<QueuedEvent>();
   const errors: DiditEventError[] = [];
   const reject = (entry: QueuedEvent, error: DiditEventError): void => {
@@ -260,9 +271,9 @@ async function send(batch: QueuedEvent[], result: DiditEventFlushResult, keepali
     result.rejectedCount++;
     settled.add(entry);
   };
+  for (const entry of batch) entry.sending = true;
+  keepaliveBytes += reservedBytes;
   try {
-    const fingerprint = await getDeviceFingerprintPayload().catch(() => null);
-    const fingerprintJson = fingerprint ? `,"fingerprint_v2":${JSON.stringify(fingerprint)}` : "";
     const response = await fetch(batch[0].url, {
       method: "POST",
       keepalive,
@@ -271,7 +282,7 @@ async function send(batch: QueuedEvent[], result: DiditEventFlushResult, keepali
         "X-Monitoring-Token": batch[0].token,
         ...buildFingerprintHeaders(fingerprint)
       },
-      body: `{"events":[${batch.map((entry) => entry.json).join(",")}]${fingerprintJson}}`
+      body: bodyJson
     });
     const body = await readJson(response);
     if (isTransient(response.status)) return false;
@@ -289,8 +300,10 @@ async function send(batch: QueuedEvent[], result: DiditEventFlushResult, keepali
 
     const answers = isRecord(body) && Array.isArray(body.results) ? body.results : [];
     batch.forEach((entry, index) => {
-      const answer = answers.find((item) => isRecord(item) && item.index === index) ?? answers[index];
-      if (!isRecord(answer)) return;
+      const matches = answers.filter((item) => isRecord(item) && item.index === index);
+      const answer = matches[0];
+
+      if (matches.length !== 1 || !isRecord(answer)) return;
       if (answer.outcome === "accepted" || answer.outcome === "replayed") {
         const eventResult: DiditEventResult = { eventId: entry.id, outcome: answer.outcome };
         if (typeof answer.event_uuid === "string") eventResult.eventUuid = answer.event_uuid;
@@ -299,7 +312,7 @@ async function send(batch: QueuedEvent[], result: DiditEventFlushResult, keepali
         result.results.push(eventResult);
         result[answer.outcome === "accepted" ? "acceptedCount" : "replayedCount"]++;
         settled.add(entry);
-      } else {
+      } else if (answer.outcome === "rejected" && isRecord(answer.errors)) {
         const error = new DiditEventError("validation", "Didit rejected the event; see errors for the details.", {
           status: response.status,
           eventIds: [entry.id],
@@ -314,6 +327,7 @@ async function send(batch: QueuedEvent[], result: DiditEventFlushResult, keepali
   } catch {
     return false;
   } finally {
+    keepaliveBytes -= reservedBytes;
     queue = queue.filter((entry) => !settled.has(entry));
     for (const entry of batch) entry.sending = false;
     failures = settled.size === batch.length ? 0 : failures + 1;
@@ -327,11 +341,13 @@ function emptyResult(): DiditEventFlushResult {
 }
 
 async function drain(): Promise<DiditEventFlushResult> {
-  clearTimer();
   const result = emptyResult();
+  const fingerprint = await getDeviceFingerprintPayload().catch(() => null);
+
+  clearTimer();
   let batch: QueuedEvent[];
   while ((batch = nextBatch()).length) {
-    if (!(await send(batch, result))) break;
+    if (!(await send(batch, result, fingerprint))) break;
   }
   result.pendingCount = queue.length;
   return result;
@@ -346,16 +362,27 @@ async function drain(): Promise<DiditEventFlushResult> {
  * headers. The batches go out in parallel: there is no time left to wait for
  * one answer before sending the next.
  */
-function sendOnExit(): void {
+async function drainOnExit(): Promise<void> {
+  if (exiting) return;
+  exiting = true;
   clearTimer();
-  let budget = KEEPALIVE_BUDGET_BYTES;
-  let batch: QueuedEvent[];
-  while ((batch = nextBatch(budget)).length) {
-    budget -= batch.reduce((bytes, entry) => bytes + entry.bytes, REQUEST_ALLOWANCE_BYTES);
-    void send(batch, emptyResult(), true);
+  try {
+    const fingerprint = await getDeviceFingerprintPayload().catch(() => null);
+    const envelopeBytes = byteLength(batchBody([], fingerprint));
+    let batch: QueuedEvent[];
+
+    while ((batch = nextBatch(KEEPALIVE_BUDGET_BYTES - keepaliveBytes, envelopeBytes)).length) {
+      send(batch, emptyResult(), fingerprint, true).catch(() => undefined);
+    }
+  } finally {
+    exiting = false;
+    // What did not fit goes out on the normal timer if the page comes back.
+    scheduleWaiting();
   }
-  // What did not fit goes out on the normal timer if the page comes back.
-  scheduleWaiting();
+}
+
+function sendOnExit(): void {
+  drainOnExit().catch(() => undefined);
 }
 
 function onVisibilityChange(): void {
@@ -415,7 +442,7 @@ export function submitEvent(options: SubmitEventOptions): string {
     id: eventId,
     json,
     // UTF-8 length; JSON.stringify never leaves a lone surrogate for encodeURIComponent to reject.
-    bytes: encodeURIComponent(json).replace(/%[\dA-F]{2}/g, "-").length,
+    bytes: byteLength(json),
     token,
     url: `${(options.baseUrl ?? settings.baseUrl).replace(/\/+$/, "")}${BATCH_PATH}`,
     priority: NEVER_DROPPED.test(kind) ? PRIORITY_NEVER_DROPPED : LOW_VALUE.test(kind) ? 0 : 1,
@@ -424,9 +451,9 @@ export function submitEvent(options: SubmitEventOptions): string {
 
   listen();
   // Collected now so the batch sent while the page closes does not have to wait for it.
-  void getDeviceFingerprintPayload().catch(() => null);
+  getDeviceFingerprintPayload().catch(() => null);
   if (!flushing && !failures && waiting().length >= settings.batchSize) {
-    void flush();
+    flush().catch(() => undefined);
   } else {
     scheduleWaiting();
   }
@@ -463,4 +490,6 @@ export function resetEventsForTesting(): void {
   flushing = 0;
   chain = Promise.resolve();
   listening = false;
+  exiting = false;
+  keepaliveBytes = 0;
 }
