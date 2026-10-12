@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 
 import { createDiditAuth } from "../client";
 import type { DiditAuthEvent } from "../types";
-import { loadFixture, publishableKeyFor, replay } from "./helpers/replay";
+import { advanceClock, loadFixture, publishableKeyFor, replay } from "./helpers/replay";
 
 const APPLICATION_ID = "b83c95f9-93bd-4bed-a94f-f4b354a446db";
 const PASSWORD = "Correct-horse-battery-91";
@@ -132,6 +132,32 @@ describe("step-up", () => {
       path: "session/",
       authorization: `Bearer ${before?.accessToken}`
     });
+    api.verify();
+  });
+
+  it("ends the replaced session even when its access token expired while the person was on the hosted page", async () => {
+    const { fixture, api, auth } = setup("step-up-expired");
+
+    await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
+    const before = tokens();
+    await auth.stepUp();
+    advanceClock(5 * 60_000);
+
+    const { session } = await auth.handleRedirectCallback(fixture.callbackUrl as string);
+
+    expect(session.userId).toBe(fixture.result);
+    expect(tokens()?.sessionId).toBe(fixture.sessionAfter);
+    // The API only ends a session for a live access token: the replaced one is renewed, then ended with the renewal.
+    const [renewal, end] = fixture.exchanges.slice(-2);
+    expect(renewal.request.body).toEqual({ grant_type: "refresh_token", refresh_token: before?.refreshToken });
+    expect(end.request).toEqual({
+      method: "DELETE",
+      path: "session/",
+      authorization: `Bearer ${(renewal.response.body as { access_token: string }).access_token}`
+    });
+    expect(end.response.status).toBe(204);
+    expect(fixture.sessionBefore).toBe(before?.sessionId);
+    expect(fixture.replacedSessionRevoked).toBe(true);
     api.verify();
   });
 
