@@ -32,5 +32,6 @@ export type {
 } from "./types";
 export { DiditTransactionError, DEFAULT_TRANSACTION_BASE_URL } from "./transactions";
 export { SDK_VERSION } from "./constants";
+export * from "@didit-protocol/signals";
 
 export { DiditSdk as default } from "./DiditSdk";
