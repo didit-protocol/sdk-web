@@ -10,7 +10,7 @@ All notable changes to `@didit-protocol/sdk-web` will be documented in this file
 
 ### Changed
 - The device fingerprint moved into the new `@didit-protocol/signals` package, now a dependency. Transaction submissions send the same fingerprint as before.
-- The ES module and CommonJS builds import `@didit-protocol/signals` instead of bundling it, so an app that also uses it shares one event queue. Bundlers resolve it as usual; a page that loads `dist/didit-sdk.esm.js` directly without a bundler needs an import map entry for `@didit-protocol/signals`. The script-tag builds still bundle everything into one file.
+- npm ES module and CommonJS imports share `@didit-protocol/signals`. Existing standalone `dist/didit-sdk.esm.js` and script-tag URLs remain self-contained. The CommonJS package entry uses a `.cjs` extension for Node compatibility.
 
 ## [0.4.0] - 2026-09-19
 

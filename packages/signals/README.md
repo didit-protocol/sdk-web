@@ -4,7 +4,7 @@ Didit device signals and end-user event monitoring for the browser, in under 5 K
 
 - **`submitEvent`** sends sign-ups, logins, failed logins, logouts and any other end-user event to Didit's [event monitoring](https://docs.didit.me/transaction-monitoring/events), tied to the same person as their verifications and transactions.
 - **Device signals**: the didit-fp-v2 device fingerprint (persistent device id plus a composite hash of stable browser signals) is attached to every batch.
-- Works alone or together with the other Didit SDKs: [`@didit-protocol/sdk-web`](https://www.npmjs.com/package/@didit-protocol/sdk-web) depends on this package and re-exports it, so an app that uses both shares one event queue.
+- Works alone or together with the other Didit SDKs: [`@didit-protocol/sdk-web`](https://www.npmjs.com/package/@didit-protocol/sdk-web) depends on this package and re-exports it, so an app that uses both shares one event queue per module format. Standalone CDN and script-tag builds each carry their own queue.
 
 ## Installation
 
@@ -56,13 +56,13 @@ The person an event belongs to always comes from the token: Didit overwrites any
 |------|-----|
 | 25 events are waiting | One `POST /v1/events/batch/` right away |
 | 5 seconds after an event was queued | Everything that is waiting |
-| The page is hidden or closed | Everything that is waiting, with `fetch` and `keepalive` so the request outlives the page |
+| The page is hidden or closed | Waiting events that fit the page-exit budget, with `fetch` and `keepalive` so the request outlives the page |
 | You call `flush()` | Everything that is waiting; resolves with each event's outcome |
 
 - Every request carries the `X-Monitoring-Token` header and the device fingerprint (`fingerprint_v2` in the body plus the `X-Didit-PID` and `X-Didit-FP-Hash` headers).
 - Each event keeps the token it was submitted with; events with different tokens never share a request, so a sign-out and a new sign-in on the same page never mix people.
 - At page exit, browsers allow 64 KiB of `keepalive` requests per page; what does not fit stays queued and is sent if the page comes back. `sendBeacon` is not used: it cannot carry the token header.
-- On a network error, timeout (408), rate limit (429), server error (5xx) or an unreadable answer, the same events are sent again after 10, 20 and 40 seconds, then every minute. They are re-sent byte for byte, so an event Didit already stored comes back as `replayed` instead of being stored twice.
+- On a network error, HTTP timeout (408), rate limit (429), server error (5xx) or an unreadable answer, the same events are sent again after 10, 20 and 40 seconds, then every minute. They are re-sent byte for byte, so an event Didit already stored comes back as `replayed` instead of being stored twice.
 - A refusal is final and is reported through `onError` and in the `flush()` results:
 
 | `error.type` | Meaning |
@@ -129,12 +129,14 @@ npm run test:size              # fails above 5 KB minified and gzipped
 npm run test:e2e               # Chromium, Firefox and WebKit
 ```
 
-The unit and browser tests replay real answers of the Didit verification API to `POST /v1/events/batch/` (`src/__tests__/fixtures/device-lane-recordings.json`). To run the browser check against a live API instead:
+The unit and browser tests replay real answers of the Didit verification API to `POST /v1/events/batch/` (`src/__tests__/fixtures/device-lane-recordings.json`). To run the browser check against a live API instead (direct cross-origin requests, including CORS and Origin-bound token checks):
 
 ```bash
 EVENTS_UPSTREAM=<API base URL> EVENTS_MONITORING_TOKEN=<token from POST /v3/events/sdk-token/> \
   npx playwright test e2e/events-live.spec.mjs --project=chromium
 ```
+
+The API must allow `X-Monitoring-Token`, `Content-Type` and the fingerprint headers in its CORS policy before browser delivery can work. An Origin-bound token must allow the fixture origin `http://127.0.0.1:4173`. These tests do not establish staging or production readiness.
 
 ## License
 

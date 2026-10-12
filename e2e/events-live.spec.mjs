@@ -1,12 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-// Against a real Didit verification API, through the fixture server so the
-// browser stays same-origin:
+// Against a real Didit verification API directly from the browser. This
+// exercises preflight and Origin-bound credentials as well as ingestion:
 //
 //   EVENTS_UPSTREAM=<API base URL> EVENTS_MONITORING_TOKEN=<token from POST /v3/events/sdk-token/> \
 //     npx playwright test e2e/events-live.spec.mjs --project=chromium
 //
-// The token needs `auth` in its categories (or none) and at least 6 uses.
+// The token needs `auth` in its categories (or none), at least 6 uses, and
+// must permit the fixture origin http://127.0.0.1:4173 when Origin-bound.
 const { EVENTS_UPSTREAM, EVENTS_MONITORING_TOKEN } = process.env;
 
 test.skip(!EVENTS_UPSTREAM || !EVENTS_MONITORING_TOKEN, "needs EVENTS_UPSTREAM and EVENTS_MONITORING_TOKEN");
@@ -20,8 +21,8 @@ test("stores sign-up, login and logout events, and a resend is a replay", async 
 
   const send = () =>
     page.evaluate(
-      async ({ monitoringToken, run, occurredAt }) => {
-        window.events.configureEvents({ baseUrl: "/e2e/live" });
+      async ({ monitoringToken, run, occurredAt, baseUrl }) => {
+        window.events.configureEvents({ baseUrl });
         for (const actionType of ["signup", "login", "logout"]) {
           window.events.submitEvent({
             monitoringToken,
@@ -31,7 +32,7 @@ test("stores sign-up, login and logout events, and a resend is a replay", async 
         const { results, ...counts } = await window.events.flush();
         return { ...counts, outcomes: results.map((result) => result.outcome) };
       },
-      { monitoringToken: EVENTS_MONITORING_TOKEN, run, occurredAt }
+      { monitoringToken: EVENTS_MONITORING_TOKEN, run, occurredAt, baseUrl: EVENTS_UPSTREAM }
     );
 
   expect(await send()).toEqual({

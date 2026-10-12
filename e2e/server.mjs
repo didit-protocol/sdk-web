@@ -46,26 +46,12 @@ async function readBody(request) {
  * The device lane, POST /e2e/lane/<test id>/v1/events/batch/: answers with the
  * real recorded answer for exactly this token and these events, or 501 so a
  * test can never pass on an answer that was not recorded for its request.
- * With EVENTS_UPSTREAM set, /e2e/live/v1/events/batch/ forwards to that Didit
- * verification API instead (same origin for the browser, so no CORS).
  */
 async function serveEventLane(request, response, pathname) {
   const lane = /^\/e2e\/lane\/([\w-]+)\/v1\/events\/batch\/$/.exec(pathname);
   const receivedMatch = /^\/e2e\/lane\/([\w-]+)\/received$/.exec(pathname);
   if (receivedMatch && request.method === "GET") {
     sendJson(response, 200, received.get(receivedMatch[1]) ?? []);
-    return true;
-  }
-  if (pathname === "/e2e/live/v1/events/batch/" && request.method === "POST" && process.env.EVENTS_UPSTREAM) {
-    const upstream = await fetch(`${process.env.EVENTS_UPSTREAM.replace(/\/+$/, "")}/v1/events/batch/`, {
-      method: "POST",
-      headers: Object.fromEntries(
-        Object.entries(request.headers).filter(([name]) => /^(content-type|user-agent|x-monitoring-token|x-didit-)/.test(name))
-      ),
-      body: await readBody(request)
-    });
-    response.writeHead(upstream.status, { "Content-Type": "application/json" });
-    response.end(await upstream.text());
     return true;
   }
   if (!lane || request.method !== "POST") return false;
@@ -91,7 +77,7 @@ async function serveEventLane(request, response, pathname) {
 
 async function serve(request, response) {
   const { pathname } = new URL(request.url ?? "/", `http://${HOST}:${PORT}`);
-  if (pathname.startsWith("/e2e/lane/") || pathname.startsWith("/e2e/live/")) {
+  if (pathname.startsWith("/e2e/lane/")) {
     try {
       if (await serveEventLane(request, response, pathname)) return;
     } catch (error) {

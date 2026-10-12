@@ -43,7 +43,8 @@ async function assertBuiltVersion(root, expectedVersion) {
   const dist = resolve(root, "dist");
   const esmUrl = `${pathToFileURL(join(dist, "didit-sdk.esm.js")).href}?version=${expectedVersion}`;
   const esm = await import(esmUrl);
-  const commonJsPath = join(dist, "didit-sdk.cjs.js");
+  const packageEsm = await import(`${pathToFileURL(join(dist, "didit-sdk.module.js")).href}?version=${expectedVersion}`);
+  const commonJsPath = join(dist, "didit-sdk.cjs");
   const commonJs = evaluateCommonJs(await readFile(commonJsPath, "utf8"), commonJsPath);
   const umd = evaluateUmd(await readFile(join(dist, "didit-sdk.umd.js"), "utf8"));
   const minifiedUmd = evaluateUmd(await readFile(join(dist, "didit-sdk.umd.min.js"), "utf8"));
@@ -53,7 +54,8 @@ async function assertBuiltVersion(root, expectedVersion) {
   assert.equal(commonJs.SDK_VERSION, expectedVersion);
   assert.equal(umd.SDK_VERSION, expectedVersion);
   assert.equal(minifiedUmd.SDK_VERSION, expectedVersion);
-  for (const build of [esm, commonJs, umd, minifiedUmd]) {
+  for (const build of [esm, packageEsm, commonJs, umd, minifiedUmd]) {
+    assert.equal(build.SDK_VERSION, expectedVersion);
     assert.equal(typeof build.submitEvent, "function", "A build does not re-export submitEvent from @didit-protocol/signals");
     assert.equal(typeof build.DiditSdk.shared.submitEvent, "function", "A build is missing DiditSdk.shared.submitEvent");
   }
