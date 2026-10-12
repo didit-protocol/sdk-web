@@ -33,6 +33,25 @@ async function openApp(page, { url = APP, scenario, create = true } = {}) {
 
 const deviceHeaders = (entry) => Object.keys(entry.headers ?? {}).filter((name) => name.startsWith("x-didit-"));
 
+const storedTokens = (tab) => tab.evaluate((key) => JSON.parse(localStorage.getItem(key)), TOKENS);
+
+// Moves the tab's clock past its access token's expiry and starts a refresh that stays in flight, as on
+// a slow network, until the returned route is continued. The tab then holds the token lock.
+async function startSlowRefresh(tab) {
+  let arrived;
+  const held = new Promise((resolve) => (arrived = resolve));
+  await tab.route(`${API_BASE}/token/`, (route) => arrived(route));
+  await tab.evaluate(() => {
+    window.clockOffset = 5 * 60_000;
+    window.refreshed = window.auth.getToken();
+  });
+  const route = await held;
+  await tab.unroute(`${API_BASE}/token/`);
+  // The tokens the refresh brings back are then fresh for both tabs.
+  await tab.evaluate(() => void (window.clockOffset = 0));
+  return route;
+}
+
 test("signs in on the hosted page and completes on the redirect page", async ({ page, request }) => {
   const recorded = fixture("redirect-sign-in");
   await loadRecording(request, "redirect-sign-in");
@@ -107,6 +126,89 @@ test("two tabs near expiry refresh the session once", async ({ context, page, re
   for (const tab of [page, second]) {
     await expect.poll(() => tab.evaluate(() => window.didit.events.map(([event]) => event).at(-1))).toBe("TOKEN_REFRESHED");
   }
+});
+
+test("a sign-out waits for another tab's refresh, so the refreshed tokens cannot sign the person back in", async ({
+  context,
+  page,
+  request
+}) => {
+  const recorded = fixture("password-sign-in");
+  const refreshed = recorded.exchanges[5].response.body;
+  await loadRecording(request, "password-sign-in");
+  await openApp(page, { scenario: "password-sign-in" });
+  await page.evaluate((password) => window.auth.password.signIn({ email: "person@example.com", password }), PASSWORD);
+  const other = await context.newPage();
+  await openApp(other);
+
+  const refresh = await startSlowRefresh(other);
+  await page.evaluate(() => void (window.signingOut = window.auth.signOut()));
+  await page.waitForTimeout(300);
+  // Still waiting for the other tab: signing out now would let its refresh write the session back.
+  expect((await storedTokens(page)).sessionId).toBe(refreshed.session_id);
+
+  await refresh.continue();
+  await page.evaluate(() => window.signingOut);
+  expect(await other.evaluate(() => window.refreshed)).toBe(refreshed.access_token);
+
+  for (const tab of [page, other]) {
+    expect(await storedTokens(tab)).toBeNull();
+    expect(await tab.evaluate(() => window.auth.getSession())).toBeNull();
+    await expect.poll(() => tab.evaluate(() => window.didit.events.at(-1))).toEqual(["SIGNED_OUT", null]);
+  }
+  // The session ends at Didit with the refreshed access token: the replaced one no longer works there.
+  const seen = await requestsSeen(request);
+  expect(seen.filter((entry) => entry.method === "DELETE").map((entry) => entry.headers.authorization)).toEqual([
+    `Bearer ${refreshed.access_token}`
+  ]);
+  expect(seen.filter((entry) => entry.body?.grant_type === "refresh_token")).toHaveLength(1);
+  expect(seen.filter((entry) => entry.mismatch)).toEqual([]);
+});
+
+test("a sign-in completing during another tab's refresh keeps the new session and ends the old one", async ({
+  context,
+  page,
+  request
+}) => {
+  const recorded = fixture("step-up-expired");
+  const { access_token: newToken, session_id: newSession } = recorded.exchanges[5].response.body;
+  const replaced = recorded.exchanges[7].response.body;
+  await loadRecording(request, "step-up-expired");
+  await openApp(page, { scenario: "step-up-expired" });
+  await page.evaluate((password) => window.auth.password.signIn({ email: "person@example.com", password }), PASSWORD);
+  const other = await context.newPage();
+  await openApp(other);
+
+  // This tab steps up on the hosted page and comes back with a code.
+  await page.evaluate(() => void window.auth.stepUp());
+  await page.waitForURL(/[?&]code=/);
+  expect(page.url()).toBe(recorded.callbackUrl);
+  await openApp(page, { url: page.url() });
+
+  const refresh = await startSlowRefresh(other);
+  await page.evaluate(() => void (window.completing = window.auth.handleRedirectCallback()));
+  await expect
+    .poll(async () => (await requestsSeen(request)).some((entry) => entry.headers?.authorization === `Bearer ${newToken}`))
+    .toBe(true);
+  await page.waitForTimeout(300);
+  // The new tokens wait for the other tab's refresh, which would otherwise overwrite them.
+  expect((await storedTokens(page)).sessionId).toBe(recorded.sessionBefore);
+
+  await refresh.continue();
+  expect(await page.evaluate(async () => (await window.completing).session.sessionId)).toBe(newSession);
+  expect(await other.evaluate(() => window.refreshed)).toBe(replaced.access_token);
+
+  for (const tab of [page, other]) {
+    expect(await storedTokens(tab)).toMatchObject({ accessToken: newToken, sessionId: newSession });
+    await expect.poll(() => tab.evaluate(() => window.didit.events.at(-1))).toEqual(["SIGNED_IN", "person@example.com"]);
+  }
+  // The replaced session ends at Didit with the access token the other tab's refresh brought back.
+  const seen = await requestsSeen(request);
+  expect(seen.filter((entry) => entry.method === "DELETE").map((entry) => entry.headers.authorization)).toEqual([
+    `Bearer ${replaced.access_token}`
+  ]);
+  expect(seen.filter((entry) => entry.body?.grant_type === "refresh_token")).toHaveLength(1);
+  expect(seen.filter((entry) => entry.mismatch)).toEqual([]);
 });
 
 test("sends device signals when the page and the API share an origin", async ({ page, request }) => {

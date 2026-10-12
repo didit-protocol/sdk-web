@@ -557,10 +557,13 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     },
 
     async signOut() {
-      const tokens = await currentTokens().catch(() => null);
-      await signedOut();
+      const tokens = await withTokenLock(async () => {
+        const tokens = await readTokens();
+        await signedOut();
+        return tokens;
+      });
       // Best effort: the local sign-out stands even when Didit cannot be reached.
-      if (tokens) await request("session/", { method: "DELETE", token: tokens.accessToken }).catch(() => undefined);
+      if (tokens) await endSession(tokens).catch(() => undefined);
     },
 
     async stepUp(opts: StepUpOptions = {}) {
