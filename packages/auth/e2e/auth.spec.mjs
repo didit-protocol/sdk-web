@@ -73,7 +73,8 @@ test("completes in another tab, as an emailed magic link does, and the first tab
     window.auth.onAuthStateChange((event, session) => window.didit.events.push([event, session && session.email]));
     return window.auth.signIn();
   }, PUBLISHABLE_KEY);
-  expect(await page.evaluate(() => window.opened)).toBe(recorded.signInUrl.replace("http://127.0.0.1:8765", RECORDED_API).replace("&language=en", "&language=en"));
+  // The same address the recording opened, on this test's API host.
+  expect(await page.evaluate(() => window.opened)).toBe(recorded.signInUrl.replace("http://127.0.0.1:8765", RECORDED_API));
 
   const link = await context.newPage();
   await openApp(link, { url: recorded.callbackUrl });
@@ -100,7 +101,7 @@ test("two tabs near expiry refresh the session once", async ({ context, page, re
   // A second refresh would present a consumed refresh token, and the API would revoke the session.
   expect(tokens).toEqual([recorded.exchanges[5].response.body.access_token, recorded.exchanges[5].response.body.access_token]);
   const seen = await requestsSeen(request);
-  expect(seen.filter((entry) => entry.path === "token/")).toHaveLength(2);
+  expect(seen.filter((entry) => entry.body?.grant_type === "refresh_token")).toHaveLength(1);
   expect(seen.filter((entry) => entry.mismatch)).toEqual([]);
   for (const tab of [page, second]) {
     await expect.poll(() => tab.evaluate(() => window.didit.events.map(([event]) => event).at(-1))).toBe("TOKEN_REFRESHED");

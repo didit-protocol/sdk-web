@@ -129,7 +129,7 @@ async function replay(request, response) {
   const path = match[1] + url.search;
   const body = await readBody(request);
   const sent = canonical({ method: request.method, path, authorization: request.headers.authorization, body });
-  const entry = { method: request.method, path, headers: { ...request.headers } };
+  const entry = { method: request.method, path, headers: { ...request.headers }, body };
   journal.push(entry);
 
   for (const exchange of pool.flatMap((fixture) => fixture.exchanges)) {
