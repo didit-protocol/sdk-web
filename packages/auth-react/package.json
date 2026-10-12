@@ -1,0 +1,65 @@
+{
+  "name": "@didit-protocol/auth-react",
+  "version": "0.1.0",
+  "description": "React components and hooks for Didit Authentication",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./provider": {
+      "types": "./dist/provider.d.ts",
+      "default": "./dist/provider.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "test": "jest",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "keywords": [
+    "didit",
+    "authentication",
+    "react",
+    "passkeys",
+    "sign-in"
+  ],
+  "author": "Didit",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/didit-protocol/sdk-web.git",
+    "directory": "packages/auth-react"
+  },
+  "homepage": "https://docs.didit.me",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@didit-protocol/auth": ">=0.1.0",
+    "react": "^18.2.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@didit-protocol/auth": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  }
+}
