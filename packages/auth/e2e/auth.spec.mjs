@@ -87,7 +87,6 @@ test("completes in another tab, as an emailed magic link does, and the first tab
 });
 
 test("two tabs near expiry refresh the session once", async ({ context, page, request }) => {
-  await context.addInitScript(() => Object.defineProperty(Navigator.prototype, "locks", { get: () => undefined }));
   const recorded = fixture("password-sign-in");
   await loadRecording(request, "password-sign-in");
   await openApp(page, { scenario: "password-sign-in" });
