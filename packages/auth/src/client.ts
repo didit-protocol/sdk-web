@@ -366,7 +366,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     pending[state] = { verifier, redirectUri, returnTo: opts.returnTo ?? null, stepUpUser, createdAt: Date.now() };
     await writePending(pending);
     for (const [name, value] of Object.entries(query)) if (value) url.searchParams.set(name, value);
-    location.assign(url.href);
+    await (options.navigate ? options.navigate(url.href) : location.assign(url.href));
   }
 
   async function handleRedirectCallback(url?: string) {

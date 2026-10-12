@@ -30,6 +30,11 @@ export interface DiditAuthOptions {
    * origins; "off" never does.
    */
   deviceSignals?: DeviceSignalsOption;
+  /**
+   * Opens the hosted page. Defaults to `location.assign`; pass your router or
+   * an in-app browser opener instead.
+   */
+  navigate?: (url: string) => void | Promise<void>;
   /** A fetch implementation, for runtimes without a global one. */
   fetch?: typeof fetch;
 }
