@@ -26,9 +26,7 @@ function injectPackageVersion(version) {
   };
 }
 
-// The ESM and CommonJS builds import @didit-protocol/signals, so an app that
-// also uses it (directly or through another Didit SDK) shares one event queue.
-// The script-tag builds bundle it: a <script> has nothing to import from.
+// Package imports share signals; existing browser URLs remain self-contained.
 const external = ['@didit-protocol/signals'];
 
 const banner = `/**
@@ -38,12 +36,12 @@ const banner = `/**
  */`;
 
 export default [
-  // ESM build
+  // Package ESM build
   {
     input: 'src/index.ts',
     external,
     output: {
-      file: 'dist/didit-sdk.esm.js',
+      file: 'dist/didit-sdk.module.js',
       format: 'esm',
       banner,
       sourcemap: true,
@@ -57,17 +55,27 @@ export default [
       }),
     ],
   },
+  // Standalone ESM build, including existing CDN imports without an import map.
+  {
+    input: 'src/index.ts',
+    output: { file: 'dist/didit-sdk.esm.js', format: 'esm', banner, sourcemap: true },
+    plugins: [
+      injectPackageVersion(packageJson.version),
+      resolve(),
+      typescript({ tsconfig: './tsconfig.json', declaration: false }),
+    ],
+  },
   // CommonJS build
   {
     input: 'src/index.ts',
     external,
-    output: {
-      file: 'dist/didit-sdk.cjs.js',
+    output: ['dist/didit-sdk.cjs', 'dist/didit-sdk.cjs.js'].map((file) => ({
+      file,
       format: 'cjs',
       banner,
       sourcemap: true,
       exports: 'named',
-    },
+    })),
     plugins: [
       injectPackageVersion(packageJson.version),
       resolve(),
