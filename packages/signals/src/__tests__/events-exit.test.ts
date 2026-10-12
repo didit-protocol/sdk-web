@@ -119,9 +119,14 @@ describe("event delivery while the native fingerprint hash is pending", () => {
     expect(second.body.fingerprint_v2?.compositeHash).toBeTruthy();
   });
 
-  it("counts available Unicode fingerprint bytes against the shared keepalive budget", () => {
+  it("counts available Unicode fingerprint bytes against the shared keepalive budget", async () => {
+    await releaseHash();
+    await fingerprint;
+    resetDeviceFingerprintForTesting();
+    jest.spyOn(navigator, "userAgent", "get").mockReturnValue("語".repeat(8000));
+    fingerprint = getDeviceFingerprintPayload();
     configureEvents({ batchSize: 500 });
-    submitEvent({ monitoringToken: "valid", event: { category: "custom", actionType: "large", payload: { text: "語".repeat(22000) } } });
+    submitEvent({ monitoringToken: "valid", event: { category: "custom", actionType: "large", payload: { text: "語".repeat(18000) } } });
     window.dispatchEvent(new Event("pagehide"));
     expect(fetchMock).not.toHaveBeenCalled();
     // Do not let cleanup retry this deliberately oversized, unrecorded event.
