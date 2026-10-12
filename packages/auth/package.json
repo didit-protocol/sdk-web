@@ -1,0 +1,62 @@
+{
+  "name": "@didit-protocol/auth",
+  "version": "0.1.0",
+  "description": "Didit Authentication for web applications: hosted and headless sign-in, sessions and server-side token verification",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "require": "./dist/server.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "rollup -c",
+    "size": "node scripts/size.mjs",
+    "test": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js",
+    "test:e2e": "npm run build && playwright test --project=chromium --project=firefox --project=webkit",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "@didit-protocol/signals": "^0.1.0"
+  },
+  "keywords": [
+    "didit",
+    "authentication",
+    "auth",
+    "oauth",
+    "pkce",
+    "passkeys",
+    "jwt",
+    "sdk"
+  ],
+  "author": "Didit",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/didit-protocol/sdk-web.git",
+    "directory": "packages/auth"
+  },
+  "homepage": "https://docs.didit.me",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
