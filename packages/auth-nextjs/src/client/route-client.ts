@@ -12,13 +12,19 @@ export interface RouteClientOptions {
   /** The session the server rendered with; omit it to ask the proxy on load. */
   initialSession?: DiditSession | null;
   basePath?: string;
+  /** How to leave the page for the hosted sign-in. Defaults to `window.location.assign`. */
+  navigate?: (url: string) => void;
 }
 
 /**
  * The browser side of the Next.js integration. Tokens stay in httpOnly
  * cookies; the browser only calls this app's own `/auth/*` routes.
  */
-export function createRouteClient({ initialSession, basePath = BASE_PATH }: RouteClientOptions = {}): RouteAuthClient {
+export function createRouteClient({
+  initialSession,
+  basePath = BASE_PATH,
+  navigate = (url) => window.location.assign(url)
+}: RouteClientOptions = {}): RouteAuthClient {
   const store = createAuthStore(initialSession === undefined ? { status: "loading", session: null } : snapshotOf(initialSession));
   let loaded = initialSession !== undefined;
 
@@ -33,7 +39,7 @@ export function createRouteClient({ initialSession, basePath = BASE_PATH }: Rout
     options?.redirectUrl ?? `${window.location.pathname}${window.location.search}${window.location.hash}`;
 
   const go = (route: string, redirectUrl: string) => {
-    window.location.assign(`${basePath}/${route}?redirect_url=${encodeURIComponent(redirectUrl)}`);
+    navigate(`${basePath}/${route}?redirect_url=${encodeURIComponent(redirectUrl)}`);
     return Promise.resolve();
   };
 
@@ -64,7 +70,7 @@ export function createRouteClient({ initialSession, basePath = BASE_PATH }: Rout
     async signOut(options) {
       await call("sign-out", { method: "POST" }).catch(() => undefined);
       store.set(snapshotOf(null));
-      window.location.assign(options?.redirectUrl ?? "/");
+      navigate(options?.redirectUrl ?? "/");
     },
     async getToken() {
       const response = await call("token");
