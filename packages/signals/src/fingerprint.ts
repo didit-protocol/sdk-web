@@ -26,6 +26,7 @@ interface PersistentIdResult {
 
 let memoryPersistentId: string | null = null;
 let cachedPayload: DeviceFingerprintPayload | null = null;
+let pendingPayload: DeviceFingerprintPayload | null = null;
 let cachedPayloadPromise: Promise<DeviceFingerprintPayload> | null = null;
 
 function bytesToBase64Url(bytes: Uint8Array): string {
@@ -302,9 +303,7 @@ async function buildPayload(): Promise<DeviceFingerprintPayload> {
     navigator: navigatorSignals,
     webview: { kind: detectWebViewKind(navigatorSignals.userAgent) }
   };
-  const compositeHash = await computeCompositeHash(canonicalizeSignals(signals));
-
-  return {
+  const payload: DeviceFingerprintPayload = {
     version: 2,
     schema: "didit-fp-v2",
     platform: "web",
@@ -314,8 +313,13 @@ async function buildPayload(): Promise<DeviceFingerprintPayload> {
     persistentIdWasCreated: persistent.wasCreated,
     signals,
     bot: detectBot(signals),
-    compositeHash
+    compositeHash: ""
   };
+
+  // Keep all synchronously collected context available during the native hash.
+  // An empty hash is omitted from headers, never replaced with a different identity.
+  pendingPayload = payload;
+  return { ...payload, compositeHash: await computeCompositeHash(canonicalizeSignals(signals)) };
 }
 
 function isBrowserEnvironment(): boolean {
@@ -347,6 +351,11 @@ export async function getDeviceFingerprintPayload(): Promise<DeviceFingerprintPa
   return cachedPayloadPromise;
 }
 
+/** Internal exit snapshot: never waits for WebCrypto or changes the cached payload. */
+export function getAvailableDeviceFingerprintPayload(): DeviceFingerprintPayload | null {
+  return cachedPayload ?? pendingPayload;
+}
+
 export function buildFingerprintHeaders(payload: DeviceFingerprintPayload | null): Record<string, string> {
   if (!payload) return {};
   const headers: Record<string, string> = { "X-Didit-FP-V2": "1" };
@@ -359,6 +368,7 @@ export function buildFingerprintHeaders(payload: DeviceFingerprintPayload | null
 
 export function resetDeviceFingerprintForTesting(): void {
   cachedPayload = null;
+  pendingPayload = null;
   cachedPayloadPromise = null;
   memoryPersistentId = null;
 }

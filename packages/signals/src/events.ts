@@ -8,7 +8,7 @@ import type {
   SubmitEventOptions
 } from "./types";
 
-import { buildFingerprintHeaders, getDeviceFingerprintPayload, randomBase64Url } from "./fingerprint";
+import { buildFingerprintHeaders, getAvailableDeviceFingerprintPayload, getDeviceFingerprintPayload, randomBase64Url } from "./fingerprint";
 
 export const DEFAULT_EVENTS_BASE_URL = "https://verification.didit.me";
 
@@ -368,7 +368,9 @@ async function drainOnExit(): Promise<void> {
   exiting = true;
   clearTimer();
   try {
-    const fingerprint = await getDeviceFingerprintPayload().catch(() => null);
+    // Start fetch inside the lifecycle handler. Awaiting even an in-progress
+    // hash can leave the request unissued when this document is discarded.
+    const fingerprint = getAvailableDeviceFingerprintPayload();
     const envelopeBytes = byteLength(batchBody([], fingerprint));
     let batch: QueuedEvent[];
 
@@ -451,7 +453,7 @@ export function submitEvent(options: SubmitEventOptions): string {
   });
 
   listen();
-  // Collected now so the batch sent while the page closes does not have to wait for it.
+  // Collect synchronous context now; exits can use it while the hash is pending.
   getDeviceFingerprintPayload().catch(() => null);
   if (!flushing && !failures && waiting().length >= settings.batchSize) {
     flush().catch(() => undefined);
