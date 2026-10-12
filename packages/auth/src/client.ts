@@ -253,7 +253,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
   // session, or end a replaced session with a rotated access token. So each holder of the lock also
   // commits the tokens to IndexedDB, and the next holder reads them from there.
   function committed(): CommittedValue | null {
-    if (lockedStore === undefined) lockedStore = committedValue(storageKey);
+    if (lockedStore === undefined) lockedStore = sharedAcrossTabs() ? committedValue(storageKey) : null;
     return lockedStore;
   }
 
