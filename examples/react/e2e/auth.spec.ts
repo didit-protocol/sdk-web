@@ -69,6 +69,7 @@ test("step-up confirms the same person and replaces the browser session", async 
   const previous = lastSession;
   expect(previous).toBeDefined();
   await page.getByRole("button", { name: "Sign in again to continue" }).click();
+  await expect(page).toHaveURL(url => url.pathname.endsWith("/sign-in/") && url.origin === "http://localhost:8000");
   const sessionResponse = page.waitForResponse(response => response.url().endsWith("/session/") && response.request().method() === "GET" && response.ok());
   await login(password);
   lastSession = ((await (await sessionResponse).json()) as { sid: string }).sid;
