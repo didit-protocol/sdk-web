@@ -17,6 +17,8 @@ export default {
     ]
   },
   testMatch: ["**/__tests__/**/*.test.ts", "**/*.test.ts"],
+  // Packages under packages/ run their own Jest configuration.
+  testPathIgnorePatterns: ["/node_modules/", "<rootDir>/packages/"],
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
   collectCoverageFrom: [
     "src/**/*.ts",
