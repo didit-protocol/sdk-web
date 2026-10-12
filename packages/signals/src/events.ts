@@ -412,7 +412,8 @@ export function submitEvent(options: SubmitEventOptions): string {
   enqueue({
     id: eventId,
     json,
-    bytes: new TextEncoder().encode(json).length,
+    // UTF-8 length; JSON.stringify never leaves a lone surrogate for encodeURIComponent to reject.
+    bytes: encodeURIComponent(json).replace(/%[\dA-F]{2}/g, "-").length,
     token,
     url: `${(options.baseUrl ?? settings.baseUrl).replace(/\/+$/, "")}${BATCH_PATH}`,
     priority: NEVER_DROPPED.test(kind) ? PRIORITY_NEVER_DROPPED : LOW_VALUE.test(kind) ? 0 : 1,
