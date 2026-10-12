@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Verification flow fixture</title>
+    <link rel="stylesheet" href="colors_and_type.css">
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+      }
+
+      body {
+        min-height: 100%;
+        margin: 0;
+        background: var(--white);
+        color: var(--black);
+      }
+
+      :root[data-theme="dark"] body {
+        background: var(--black);
+        color: var(--c-text);
+      }
+
+      main {
+        width: min(100%, 500px);
+        min-height: 980px;
+        padding: var(--space-xl) var(--space-lg);
+      }
+
+      .eyebrow {
+        margin: 0 0 var(--space-sm);
+        color: var(--brand);
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 32px;
+        font-weight: 500;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+      }
+
+      .accent {
+        color: var(--brand);
+      }
+
+      .lede {
+        margin: var(--space-md) 0 var(--space-xl);
+        color: var(--mid-high);
+        font-size: 16px;
+        line-height: 1.55;
+      }
+
+      :root[data-theme="dark"] .lede {
+        color: var(--mid);
+      }
+
+      .progress {
+        height: 6px;
+        margin-bottom: var(--space-xl);
+        overflow: hidden;
+        border-radius: var(--radius-full);
+        background: var(--brand-soft);
+      }
+
+      .progress span {
+        display: block;
+        width: 50%;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--brand);
+      }
+
+      .didit-card {
+        display: grid;
+        grid-template-columns: 32px 1fr;
+        gap: var(--space-md);
+        margin-bottom: var(--space-sm);
+        padding: var(--space-md);
+        border: 1px solid var(--mid);
+        border-radius: var(--radius-xs);
+        background: var(--white);
+      }
+
+      :root[data-theme="dark"] .didit-card {
+        background: var(--black);
+      }
+
+      .step {
+        display: grid;
+        width: 32px;
+        height: 32px;
+        place-items: center;
+        border-radius: var(--radius-full);
+        background: var(--brand-soft);
+        color: var(--brand);
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      h2 {
+        margin: 0 0 var(--space-xs);
+        font-size: 17px;
+        font-weight: 500;
+      }
+
+      .didit-card p {
+        margin: 0;
+        color: var(--mid-high);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      :root[data-theme="dark"] .didit-card p {
+        color: var(--mid);
+      }
+
+      .privacy {
+        margin: var(--space-xl) 0 260px;
+        color: var(--mid-high);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .didit-btn {
+        width: 100%;
+        border: 0;
+        border-radius: var(--radius-full);
+        padding: 12px 20px;
+        background: var(--brand);
+        color: var(--white);
+        font: 500 15px/1 var(--font-sans);
+        cursor: pointer;
+        transition: opacity var(--motion-base) var(--ease-out);
+      }
+
+      .didit-btn:hover {
+        opacity: 0.88;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Identity verification</p>
+      <h1>Verify your <span class="accent">identity</span></h1>
+      <p class="lede">Complete three short checks. You can review each step before continuing.</p>
+      <div class="progress" aria-label="Verification progress"><span></span></div>
+      <section class="didit-card">
+        <span class="step">1</span>
+        <div><h2>Identity document</h2><p>Use a valid government-issued document.</p></div>
+      </section>
+      <section class="didit-card">
+        <span class="step">2</span>
+        <div><h2>Face verification</h2><p>Position your face clearly inside the frame.</p></div>
+      </section>
+      <section class="didit-card">
+        <span class="step">3</span>
+        <div><h2>Review</h2><p>Confirm your details before submitting.</p></div>
+      </section>
+      <p class="privacy">Your information is encrypted and used only to complete this verification.</p>
+      <button class="didit-btn" type="button">Continue verification</button>
+    </main>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const theme = params.get("theme") === "dark" ? "dark" : "light";
+
+      document.documentElement.dataset.theme = theme;
+      document.querySelector(".didit-btn").addEventListener("click", () => {
+        document.body.dataset.continued = "true";
+      });
+    </script>
+  </body>
+</html>
