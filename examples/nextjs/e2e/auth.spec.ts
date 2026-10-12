@@ -69,7 +69,7 @@ test.afterAll(async () => {
 
 test("a protected page sends a signed-out visitor to the hosted sign-in", async () => {
   await page.goto("/account");
-  await expect(page).toHaveURL(/\/sign-in\/\?redirect_uri=/);
+  await expect(page).toHaveURL((url) => url.pathname.endsWith("/sign-in/") && url.searchParams.has("redirect_uri"));
   const hosted = new URL(page.url());
 
   expect(hosted.searchParams.get("code_challenge_method")).toBe("S256");
