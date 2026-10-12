@@ -106,8 +106,12 @@ await auth.password.requestReset({ email });
 
 // Magic links and social providers run on the hosted page
 await auth.magicLink.signIn();
-await auth.social.signIn({ provider: "google" });
+await auth.social.signIn();
 ```
+
+`social.signIn()` opens the hosted page with every provider the application
+enabled; it cannot open on one chosen provider yet, so a "Continue with Google"
+button leads to the full list of sign-in methods.
 
 ### MFA for a signed-in person
 
@@ -139,7 +143,9 @@ await auth.stepUp({ method: "passkey" });  // on the Didit sign-in domain
 ```
 
 A step-up completed by someone else rejects with `step_up_user_mismatch` and
-keeps the original session.
+keeps the original session. A completed one ends the session it replaces at
+Didit too, renewing that session's access token first when it expired while
+the person was on the hosted page.
 
 ### AI agents
 
@@ -175,8 +181,11 @@ claims.act;          // present when an AI agent acts for them: check claims.act
 `verifyToken` accepts only ES256 tokens signed by one of the issuer's
 published keys (found through its OpenID discovery document), issued by your
 application (`iss`), for your application (`aud`) and not expired (5 seconds of
-clock tolerance). Keys are cached for ten minutes; a token signed with a key
-the server has not seen yet reloads them, at most once every 30 seconds. Pass
+clock tolerance). The discovery document and the keys are cached for ten
+minutes; a token signed with a key the server has not seen yet reloads the
+keys, at most once every 30 seconds. Concurrent requests share one load, and
+while the issuer is unreachable the last good keys keep working and it is
+asked again at most once every 5 seconds. Pass
 `issuer`, `audience` or `jwksUri` to override what the publishable key
 implies. It runs on Node.js 20+ and edge runtimes with WebCrypto.
 

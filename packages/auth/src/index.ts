@@ -16,7 +16,6 @@ export type {
   DiditRedirectResult,
   DiditSession,
   DiditSignInResult,
-  DiditSocialProvider,
   SignInRedirectOptions,
   StepUpOptions
 } from "./types";

@@ -72,18 +72,19 @@ export function assertPasskeysAvailable(rpId?: string): void {
   }
 }
 
+// What a failed WebAuthn call means for the person, by the DOMException it throws.
+const CEREMONY_ERRORS = new Map([
+  ["NotAllowedError", "passkey_cancelled"],
+  ["AbortError", "passkey_cancelled"],
+  ["InvalidStateError", "credential_exists"]
+]);
+
 export async function runCeremony(run: () => Promise<Credential | null>): Promise<PublicKeyCredential> {
   let credential: Credential | null;
   try {
     credential = await run();
   } catch (error) {
-    const name = (error as { name?: string })?.name;
-    const code =
-      name === "NotAllowedError" || name === "AbortError"
-        ? "passkey_cancelled"
-        : name === "InvalidStateError"
-          ? "credential_exists"
-          : "passkey_unavailable";
+    const code = CEREMONY_ERRORS.get((error as { name?: string })?.name ?? "") ?? "passkey_unavailable";
     throw new DiditAuthError(code, error instanceof Error ? error.message : undefined);
   }
   if (!credential) throw new DiditAuthError("passkey_cancelled");

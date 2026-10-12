@@ -4,8 +4,6 @@ import type { DiditAuthStorageOption } from "./storage";
 /** Languages of the hosted pages and of the emails and messages Didit sends. */
 export type DiditAuthLanguage = "en" | "es" | "fr" | "de" | "ja";
 
-export type DiditSocialProvider = "google" | "microsoft" | "apple" | "github";
-
 export interface DiditAuthOptions {
   /** The application's publishable key (`pk_live_...` or `pk_test_...`). */
   publishableKey: string;
@@ -160,9 +158,13 @@ export interface DiditAuth {
   magicLink: {
     signIn(options?: SignInRedirectOptions): Promise<void>;
   };
-  /** Social sign-in runs on the hosted page with the application's own provider credentials. */
+  /**
+   * Social sign-in runs on the hosted page with the application's own provider
+   * credentials. The page lists every provider the application enabled: it
+   * cannot open on one chosen provider yet.
+   */
   social: {
-    signIn(input: { provider: DiditSocialProvider } & SignInRedirectOptions): Promise<void>;
+    signIn(options?: SignInRedirectOptions): Promise<void>;
   };
   passkeys: {
     signIn(): Promise<DiditSignInResult>;

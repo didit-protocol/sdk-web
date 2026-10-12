@@ -42,23 +42,24 @@ export interface DiditTokenClaims {
   [claim: string]: unknown;
 }
 
-interface KeySet {
-  keys: Map<string, CryptoKey>;
+/** Something loaded from the issuer: the discovered key address, or the key set itself. */
+interface Cached<T> {
+  value?: T;
   loadedAt: number;
   retryAt: number;
   pending?: Promise<void>;
 }
 
-// Keys are reloaded after ten minutes, or sooner when a token names a key this
-// process has not seen (rotation), at most once per cooldown so unknown key ids
-// cannot make every request hit the issuer.
+// Both are reloaded after ten minutes, and keys sooner when a token names a key
+// this process has not seen (rotation). Loads happen at most once per cooldown,
+// so neither unknown key ids nor an unreachable issuer can make every request hit it.
 const KEYS_TTL_MS = 10 * 60_000;
 const COOLDOWN_AFTER_LOAD_MS = 30_000;
 const COOLDOWN_AFTER_FAILURE_MS = 5_000;
 const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 
-const keySets = new Map<string, KeySet>();
-const discovered = new Map<string, { jwksUri: string; loadedAt: number }>();
+const discovered = new Map<string, Cached<string>>();
+const keySets = new Map<string, Cached<Map<string, CryptoKey>>>();
 
 function invalid(message: string): DiditAuthError {
   return new DiditAuthError("invalid_token", message, { status: 401 });
@@ -83,75 +84,85 @@ async function fetchJson(url: string, fetchImpl: typeof fetch): Promise<Record<s
   }
 }
 
-async function jwksUriFor(issuer: string, fetchImpl: typeof fetch): Promise<string> {
-  const known = discovered.get(issuer);
-  if (known && Date.now() - known.loadedAt < KEYS_TTL_MS) return known.jwksUri;
-  try {
+function cacheEntry<T>(cache: Map<string, Cached<T>>, id: string): Cached<T> {
+  let entry = cache.get(id);
+  if (!entry) cache.set(id, (entry = { loadedAt: 0, retryAt: 0 }));
+  return entry;
+}
+
+// Concurrent callers share one load. Until a cooldown ends nobody reaches the issuer again:
+// they get the last good value, which is kept while the issuer is unreachable, or an error.
+async function cachedLoad<T>(entry: Cached<T>, due: boolean, load: () => Promise<T>): Promise<T> {
+  if (due && Date.now() >= entry.retryAt) {
+    entry.pending ??= load()
+      .then(
+        (value) => {
+          entry.value = value;
+          entry.loadedAt = Date.now();
+          entry.retryAt = entry.loadedAt + COOLDOWN_AFTER_LOAD_MS;
+        },
+        (error) => {
+          entry.retryAt = Date.now() + COOLDOWN_AFTER_FAILURE_MS;
+          throw error;
+        }
+      )
+      .finally(() => {
+        entry.pending = undefined;
+      });
+    try {
+      await entry.pending;
+    } catch (error) {
+      if (entry.value === undefined) throw error;
+    }
+  }
+  if (entry.value === undefined) throw new DiditAuthError("jwks_unavailable", "The issuer's signing keys are not available.");
+  return entry.value;
+}
+
+function jwksUriFor(issuer: string, fetchImpl: typeof fetch): Promise<string> {
+  const entry = cacheEntry(discovered, issuer);
+
+  return cachedLoad(entry, Date.now() - entry.loadedAt >= KEYS_TTL_MS, async () => {
     const document = await fetchJson(`${issuer.replace(/\/+$/, "")}/.well-known/openid-configuration`, fetchImpl);
     if (document.issuer !== issuer || !trustedUrl(document.jwks_uri)) {
       throw new DiditAuthError("jwks_unavailable", "The discovery document does not belong to this issuer.");
     }
-    discovered.set(issuer, { jwksUri: document.jwks_uri, loadedAt: Date.now() });
     return document.jwks_uri;
-  } catch (error) {
-    if (known) return known.jwksUri;
-    throw error;
-  }
+  });
 }
 
-async function loadKeys(jwksUri: string, fetchImpl: typeof fetch, set: KeySet): Promise<void> {
-  try {
-    const jwks = await fetchJson(jwksUri, fetchImpl);
-    const keys = new Map<string, CryptoKey>();
+async function importKeys(jwksUri: string, fetchImpl: typeof fetch): Promise<Map<string, CryptoKey>> {
+  const jwks = await fetchJson(jwksUri, fetchImpl);
+  const keys = new Map<string, CryptoKey>();
 
-    for (const jwk of Array.isArray(jwks.keys) ? jwks.keys : []) {
-      if (
-        jwk?.kty !== "EC" ||
-        jwk.crv !== "P-256" ||
-        typeof jwk.kid !== "string" ||
-        typeof jwk.x !== "string" ||
-        typeof jwk.y !== "string" ||
-        (jwk.alg !== undefined && jwk.alg !== "ES256") ||
-        (jwk.use !== undefined && jwk.use !== "sig")
-      ) {
-        continue;
-      }
-      try {
-        // Only the public coordinates: never import anything else a key set may carry.
-        const publicJwk = { kty: "EC", crv: "P-256", x: jwk.x, y: jwk.y };
-        keys.set(jwk.kid, await crypto.subtle.importKey("jwk", publicJwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]));
-      } catch {
-        // A malformed key is skipped; tokens it signed fail as signed by an unknown key.
-      }
+  for (const jwk of Array.isArray(jwks.keys) ? jwks.keys : []) {
+    if (
+      jwk?.kty !== "EC" ||
+      jwk.crv !== "P-256" ||
+      typeof jwk.kid !== "string" ||
+      typeof jwk.x !== "string" ||
+      typeof jwk.y !== "string" ||
+      (jwk.alg !== undefined && jwk.alg !== "ES256") ||
+      (jwk.use !== undefined && jwk.use !== "sig")
+    ) {
+      continue;
     }
-    set.keys = keys;
-    set.loadedAt = Date.now();
-    set.retryAt = set.loadedAt + COOLDOWN_AFTER_LOAD_MS;
-  } catch (error) {
-    set.retryAt = Date.now() + COOLDOWN_AFTER_FAILURE_MS;
-    throw error;
+    try {
+      // Only the public coordinates: never import anything else a key set may carry.
+      const publicJwk = { kty: "EC", crv: "P-256", x: jwk.x, y: jwk.y };
+      keys.set(jwk.kid, await crypto.subtle.importKey("jwk", publicJwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]));
+    } catch {
+      // A malformed key is skipped; tokens it signed fail as signed by an unknown key.
+    }
   }
+  return keys;
 }
 
 async function signingKey(jwksUri: string, kid: string, fetchImpl: typeof fetch): Promise<CryptoKey | undefined> {
-  let set = keySets.get(jwksUri);
-  if (!set) keySets.set(jwksUri, (set = { keys: new Map(), loadedAt: 0, retryAt: 0 }));
-  const current = set;
-  const stale = Date.now() - current.loadedAt >= KEYS_TTL_MS;
+  const entry = cacheEntry(keySets, jwksUri);
+  const due = Date.now() - entry.loadedAt >= KEYS_TTL_MS || !entry.value?.has(kid);
 
-  if ((stale || !current.keys.has(kid)) && Date.now() >= current.retryAt) {
-    current.pending ??= loadKeys(jwksUri, fetchImpl, current).finally(() => {
-      current.pending = undefined;
-    });
-    try {
-      await current.pending;
-    } catch (error) {
-      // Keep serving the last good keys while the issuer is unreachable.
-      if (!current.loadedAt) throw error;
-    }
-  }
-  if (!current.loadedAt) throw new DiditAuthError("jwks_unavailable", "The issuer's signing keys are not available.");
-  return current.keys.get(kid);
+  return (await cachedLoad(entry, due, () => importKeys(jwksUri, fetchImpl))).get(kid);
 }
 
 /**

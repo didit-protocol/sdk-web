@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 
 import { createDiditAuth } from "../client";
 import type { DiditAuthEvent } from "../types";
-import { loadFixture, publishableKeyFor, replay } from "./helpers/replay";
+import { advanceClock, loadFixture, publishableKeyFor, replay } from "./helpers/replay";
 
 const APPLICATION_ID = "b83c95f9-93bd-4bed-a94f-f4b354a446db";
 const PASSWORD = "Correct-horse-battery-91";
@@ -89,17 +89,26 @@ describe("hosted sign-in", () => {
     api.verify(0);
   });
 
-  it("opens the same hosted page for magic links and social providers", async () => {
-    const { auth, navigate } = setup("redirect-sign-in");
+  it("opens the hosted page with every method for magic links and social providers", async () => {
+    const { fixture, auth, navigate } = setup("redirect-sign-in");
 
     await auth.magicLink.signIn();
-    await auth.social.signIn({ provider: "github", language: "es" });
-    await expect(auth.social.signIn({ provider: "myspace" as "github" })).rejects.toMatchObject({
-      code: "invalid_request"
-    });
+    await auth.social.signIn({ language: "es" });
+    // @ts-expect-error The hosted page cannot open on one chosen provider yet.
+    await auth.social.signIn({ provider: "google" });
 
     const [magic, social] = navigate.mock.calls.map(([url]) => new URL(url));
-    expect(magic.pathname).toMatch(/\/sign-in\/$/);
+    for (const opened of [magic, social]) {
+      expect(opened.origin + opened.pathname).toBe(`${fixture.apiBase}/sign-in/`);
+      // The hosted page refuses parameters it does not know, so nothing beyond the authorization is sent.
+      expect([...opened.searchParams.keys()].sort()).toEqual([
+        "code_challenge",
+        "code_challenge_method",
+        "language",
+        "redirect_uri",
+        "state"
+      ]);
+    }
     expect(social.searchParams.get("language")).toBe("es");
   });
 });
@@ -123,6 +132,32 @@ describe("step-up", () => {
       path: "session/",
       authorization: `Bearer ${before?.accessToken}`
     });
+    api.verify();
+  });
+
+  it("ends the replaced session even when its access token expired while the person was on the hosted page", async () => {
+    const { fixture, api, auth } = setup("step-up-expired");
+
+    await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
+    const before = tokens();
+    await auth.stepUp();
+    advanceClock(5 * 60_000);
+
+    const { session } = await auth.handleRedirectCallback(fixture.callbackUrl as string);
+
+    expect(session.userId).toBe(fixture.result);
+    expect(tokens()?.sessionId).toBe(fixture.sessionAfter);
+    // The API only ends a session for a live access token: the replaced one is renewed, then ended with the renewal.
+    const [renewal, end] = fixture.exchanges.slice(-2);
+    expect(renewal.request.body).toEqual({ grant_type: "refresh_token", refresh_token: before?.refreshToken });
+    expect(end.request).toEqual({
+      method: "DELETE",
+      path: "session/",
+      authorization: `Bearer ${(renewal.response.body as { access_token: string }).access_token}`
+    });
+    expect(end.response.status).toBe(204);
+    expect(fixture.sessionBefore).toBe(before?.sessionId);
+    expect(fixture.replacedSessionRevoked).toBe(true);
     api.verify();
   });
 

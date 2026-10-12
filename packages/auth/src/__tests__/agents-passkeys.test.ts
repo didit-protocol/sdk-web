@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 
 import { createDiditAuth } from "../client";
 import { toBase64Url } from "../encoding";
-import { assertPasskeysAvailable, creationOptions, credentialJSON, requestOptions } from "../webauthn";
+import { assertPasskeysAvailable, creationOptions, credentialJSON, requestOptions, runCeremony } from "../webauthn";
 import { loadFixture, publishableKeyFor, replay } from "./helpers/replay";
 
 const PASSWORD = "Correct-horse-battery-91";
@@ -138,5 +138,21 @@ describe("passkeys", () => {
       clientExtensionResults: { credProps: { rk: true } },
       response: { clientDataJSON: "Aw", attestationObject: "Bw", transports: ["internal"] }
     });
+  });
+
+  it("names why a ceremony failed from the browser's error", async () => {
+    const failures: [unknown, string][] = [
+      [new DOMException("The person closed the prompt.", "NotAllowedError"), "passkey_cancelled"],
+      [new DOMException("The ceremony was aborted.", "AbortError"), "passkey_cancelled"],
+      [new DOMException("This passkey is already registered.", "InvalidStateError"), "credential_exists"],
+      [new DOMException("No authenticator.", "NotSupportedError"), "passkey_unavailable"],
+      [new DOMException("Not inherited from the prototype.", "constructor"), "passkey_unavailable"],
+      ["not an error", "passkey_unavailable"]
+    ];
+
+    for (const [thrown, code] of failures) {
+      await expect(runCeremony(() => Promise.reject(thrown))).rejects.toMatchObject({ code });
+    }
+    await expect(runCeremony(() => Promise.resolve(null))).rejects.toMatchObject({ code: "passkey_cancelled" });
   });
 });
