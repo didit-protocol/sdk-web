@@ -10,20 +10,13 @@ export interface DiditAuthStorage {
 
 export type DiditAuthStorageOption = "local" | "session" | "memory" | DiditAuthStorage;
 
-/** The synchronous part of the Web Storage API, which also lists its keys. */
-export type SyncStorage = Pick<Storage, "getItem" | "setItem" | "removeItem" | "key" | "length">;
-
-export function memoryStorage(): SyncStorage {
+export function memoryStorage(): DiditAuthStorage {
   const items = new Map<string, string>();
 
   return {
     getItem: (key) => items.get(key) ?? null,
     setItem: (key, value) => void items.set(key, value),
-    removeItem: (key) => void items.delete(key),
-    key: (index) => [...items.keys()][index] ?? null,
-    get length() {
-      return items.size;
-    }
+    removeItem: (key) => void items.delete(key)
   };
 }
 
