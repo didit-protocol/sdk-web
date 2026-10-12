@@ -35,10 +35,11 @@ export interface DiditTokenClaims {
   vendor_data?: string;
   /** How the session was created. */
   amr?: string[];
-  org?: { id: string; role: string };
+  /** The person's organization when customer organizations are on, otherwise null. */
+  org?: { id: string; role: string } | null;
   verified?: Record<string, unknown>;
-  /** Present when an AI agent acts for the person. */
-  act?: { agent_id?: string; agent?: string; scopes?: string[]; [claim: string]: unknown };
+  /** The AI agent acting for the person (`sub` is the agent id), or null when the person signed in. */
+  act?: { sub: string; agent: string; scopes: string[] } | null;
   [claim: string]: unknown;
 }
 
@@ -57,6 +58,8 @@ const KEYS_TTL_MS = 10 * 60_000;
 const COOLDOWN_AFTER_LOAD_MS = 30_000;
 const COOLDOWN_AFTER_FAILURE_MS = 5_000;
 const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+// RFC 9068 section 4: an access token is typed "at+jwt", or the full media type.
+const ACCESS_TOKEN_TYPES = ["at+jwt", "application/at+jwt"];
 
 const discovered = new Map<string, Cached<string>>();
 const keySets = new Map<string, Cached<Map<string, CryptoKey>>>();
@@ -167,7 +170,8 @@ async function signingKey(jwksUri: string, kid: string, fetchImpl: typeof fetch)
 
 /**
  * Verifies a Didit access token on your server: an ES256 signature by one of
- * the issuer's published keys, the issuer, the audience, expiry and not-before.
+ * the issuer's published keys, the access token type (`at+jwt`, so ID tokens
+ * are refused), the issuer, the audience, expiry and not-before.
  * Resolves to the token's claims; rejects with a DiditAuthError otherwise.
  *
  * Tokens stay valid until they expire (five minutes). For actions that must
@@ -200,6 +204,8 @@ export async function verifyToken(token: string, options: VerifyTokenOptions = {
   if (header?.alg !== "ES256" || typeof header.kid !== "string" || header.crit !== undefined) {
     throw invalid("The token is not signed with ES256 by a known key.");
   }
+  // The issuer signs ID tokens ("JWT") with the same keys, issuer and audience: only access tokens pass.
+  if (!ACCESS_TOKEN_TYPES.includes(header.typ as string)) throw invalid("The token is not an access token.");
   if (signature.length !== 64 || !claims || typeof claims !== "object" || Array.isArray(claims)) {
     throw invalid("The token is malformed.");
   }
