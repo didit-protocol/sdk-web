@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { cp, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -20,10 +21,11 @@ function runBuild(cwd) {
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 }
 
-function evaluateCommonJs(code) {
+function evaluateCommonJs(code, path) {
   const module = { exports: {} };
 
-  runInNewContext(code, { exports: module.exports, module, console, URL });
+  // The CommonJS build requires @didit-protocol/signals from node_modules, like an app's bundler would.
+  runInNewContext(code, { exports: module.exports, module, require: createRequire(path), console, URL });
 
   return module.exports;
 }
@@ -41,7 +43,8 @@ async function assertBuiltVersion(root, expectedVersion) {
   const dist = resolve(root, "dist");
   const esmUrl = `${pathToFileURL(join(dist, "didit-sdk.esm.js")).href}?version=${expectedVersion}`;
   const esm = await import(esmUrl);
-  const commonJs = evaluateCommonJs(await readFile(join(dist, "didit-sdk.cjs.js"), "utf8"));
+  const commonJsPath = join(dist, "didit-sdk.cjs.js");
+  const commonJs = evaluateCommonJs(await readFile(commonJsPath, "utf8"), commonJsPath);
   const umd = evaluateUmd(await readFile(join(dist, "didit-sdk.umd.js"), "utf8"));
   const minifiedUmd = evaluateUmd(await readFile(join(dist, "didit-sdk.umd.min.js"), "utf8"));
   const declarations = await readFile(join(dist, "index.d.ts"), "utf8");
@@ -50,6 +53,10 @@ async function assertBuiltVersion(root, expectedVersion) {
   assert.equal(commonJs.SDK_VERSION, expectedVersion);
   assert.equal(umd.SDK_VERSION, expectedVersion);
   assert.equal(minifiedUmd.SDK_VERSION, expectedVersion);
+  for (const build of [esm, commonJs, umd, minifiedUmd]) {
+    assert.equal(typeof build.submitEvent, "function", "A build does not re-export submitEvent from @didit-protocol/signals");
+    assert.equal(typeof build.DiditSdk.shared.submitEvent, "function", "A build is missing DiditSdk.shared.submitEvent");
+  }
   assert.equal(
     declarations.includes(`declare const SDK_VERSION = "${expectedVersion}";`),
     true,
