@@ -238,26 +238,19 @@ describe("other tabs", () => {
     api.verify(4);
   });
 
-  it("reports nothing for another tab's change that arrives after this tab signed out", async () => {
-    const { api, auth, fixture } = setup("password-sign-in");
-    await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
-    advanceClock(5 * 60_000);
-    await auth.getToken();
+  it("ignores a change by another tab that this tab has replaced since", async () => {
+    const { api, auth } = setup("password-sign-in");
     const listener = jest.fn();
     auth.onAuthStateChange(listener);
-    const before = localStorage.getItem(KEY);
-    const rotated = JSON.stringify({ ...JSON.parse(before ?? "{}"), accessToken: "rotated", refreshToken: "rotated" });
+    const earlier = JSON.stringify({ accessToken: "earlier", refreshToken: "earlier", expiresAt: Date.now() + 300_000, sessionId: "earlier" });
 
-    // The other tab refreshed first, but its event reaches this tab only after this tab's sign-out.
-    localStorage.setItem(KEY, rotated);
-    await auth.getSession({ force: true });
-    await auth.signOut();
-    window.dispatchEvent(new StorageEvent("storage", { key: KEY, oldValue: before, newValue: rotated, storageArea: localStorage }));
+    await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
+    // Another tab signed in first, but its event reaches this tab after this tab's own sign-in replaced it.
+    window.dispatchEvent(new StorageEvent("storage", { key: KEY, oldValue: null, newValue: earlier, storageArea: localStorage }));
     await settle();
 
-    expect(listener.mock.calls.map(([event]) => event)).toEqual(["SIGNED_OUT"]);
-    expect(stored()).toBeNull();
-    expect(fixture.exchanges[7].request.method).toBe("DELETE");
-    api.verify(7);
+    expect(listener.mock.calls.map(([event]) => event)).toEqual(["SIGNED_IN"]);
+    expect(stored()?.sessionId).toBe("214de96d-95e1-47a2-8b0f-ccf3f9b1f170");
+    api.verify(4);
   });
 });
