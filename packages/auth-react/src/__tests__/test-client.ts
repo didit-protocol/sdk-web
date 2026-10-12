@@ -22,7 +22,7 @@ export const grants: AgentGrant[] = [
   {
     id: "00000000-0000-4000-8000-000000000004",
     agentId: "00000000-0000-4000-8000-000000000005",
-    agentName: "Nova",
+    agentName: "Agent One",
     scopes: ["balance:read", "settings:write", "payouts:request"],
     expiresAt: "2099-10-04T12:00:00Z",
     revokedAt: null
@@ -30,7 +30,7 @@ export const grants: AgentGrant[] = [
   {
     id: "00000000-0000-4000-8000-000000000006",
     agentId: "00000000-0000-4000-8000-000000000007",
-    agentName: "Ledger Buddy",
+    agentName: "Agent Two",
     scopes: ["payouts:read"],
     expiresAt: "2099-10-19T12:00:00Z",
     revokedAt: null

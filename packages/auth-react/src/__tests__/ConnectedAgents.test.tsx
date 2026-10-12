@@ -34,16 +34,16 @@ describe("<ConnectedAgents />", () => {
       ]
     });
 
-    renderAgents(client, { applicationName: "Aurora Play", labels: scopeLabels });
+    renderAgents(client, { applicationName: "Example app", labels: scopeLabels });
     const region = await card();
     const rows = within(region).getAllByRole("listitem");
 
-    expect(within(region).getByText("AI agents you allowed to act for you in Aurora Play.")).toBeTruthy();
+    expect(within(region).getByText("AI agents you allowed to act for you in Example app.")).toBeTruthy();
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toBe(
-      "NNovaSees your balance and payouts, changes your settings, and requests payouts (it asks you each time).Ends Oct 4Revoke"
+      "AAgent OneSees your balance and payouts, changes your settings, and requests payouts (it asks you each time).Ends Oct 4Revoke"
     );
-    expect(rows[1].textContent).toBe("LLedger BuddySees your payouts. Read only.Ends Oct 19Revoke");
+    expect(rows[1].textContent).toBe("AAgent TwoSees your payouts. Read only.Ends Oct 19Revoke");
     expect(within(region).getByRole("img", { name: "Didit" })).toBeTruthy();
     expect(region.textContent).toContain("Powered by");
   });
@@ -54,8 +54,8 @@ describe("<ConnectedAgents />", () => {
     renderAgents(client, { labels: scopeLabels });
     const region = await card();
 
-    fireEvent.click(within(region).getByRole("button", { name: "Revoke: Nova" }));
-    await within(region).findByText("Nova's session ended everywhere. It can't act for you until you approve it again.");
+    fireEvent.click(within(region).getByRole("button", { name: "Revoke: Agent One" }));
+    await within(region).findByText("Agent One's session ended everywhere. It can't act for you until you approve it again.");
     const nova = within(region).getAllByRole("listitem")[0];
 
     expect(client.revokeAgent).toHaveBeenCalledWith(grants[0].id);
@@ -63,7 +63,7 @@ describe("<ConnectedAgents />", () => {
     expect(within(nova).getByText("Revoked just now")).toBeTruthy();
     expect(within(nova).getByText("Revoked").className).toBe("didit-status");
     expect(within(nova).queryByRole("button")).toBeNull();
-    expect(within(region).getByRole("button", { name: "Revoke: Ledger Buddy" })).toBeTruthy();
+    expect(within(region).getByRole("button", { name: "Revoke: Agent Two" })).toBeTruthy();
   });
 
   it("keeps the agent and says so when revoking fails", async () => {
@@ -72,11 +72,11 @@ describe("<ConnectedAgents />", () => {
     renderAgents(client);
     const region = await card();
 
-    fireEvent.click(within(region).getByRole("button", { name: "Revoke: Ledger Buddy" }));
-    const notice = await within(region).findByText("We could not revoke Ledger Buddy. Try again.");
+    fireEvent.click(within(region).getByRole("button", { name: "Revoke: Agent Two" }));
+    const notice = await within(region).findByText("We could not revoke Agent Two. Try again.");
 
     expect(notice.className).toContain("is-error");
-    expect(within(region).getByRole("button", { name: "Revoke: Ledger Buddy" })).toBeTruthy();
+    expect(within(region).getByRole("button", { name: "Revoke: Agent Two" })).toBeTruthy();
   });
 
   it("disables every Revoke button while one revocation is in flight", async () => {
@@ -87,7 +87,7 @@ describe("<ConnectedAgents />", () => {
     renderAgents(client);
     const region = await card();
 
-    fireEvent.click(within(region).getByRole("button", { name: "Revoke: Nova" }));
+    fireEvent.click(within(region).getByRole("button", { name: "Revoke: Agent One" }));
     within(region)
       .getAllByRole("button")
       .forEach((button) => expect((button as HTMLButtonElement).disabled).toBe(true));
@@ -117,12 +117,12 @@ describe("<ConnectedAgents />", () => {
   it("speaks the person's language", async () => {
     const { client } = testClient({ session, grants });
 
-    renderAgents(client, { locale: "es", applicationName: "Aurora Play" });
+    renderAgents(client, { locale: "es", applicationName: "Example app" });
     const region = await screen.findByRole("region", { name: "Agentes conectados" });
 
     await within(region).findByText("Termina el 4 oct");
-    fireEvent.click(within(region).getByRole("button", { name: "Revocar: Nova" }));
-    await within(region).findByText("La sesión de Nova terminó en todas partes. No puede actuar por ti hasta que vuelvas a aprobarlo.");
+    fireEvent.click(within(region).getByRole("button", { name: "Revocar: Agent One" }));
+    await within(region).findByText("La sesión de Agent One terminó en todas partes. No puede actuar por ti hasta que vuelvas a aprobarlo.");
     expect(region.textContent).toContain("Con la tecnología de");
   });
 

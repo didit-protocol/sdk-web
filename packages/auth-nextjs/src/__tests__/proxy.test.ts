@@ -263,7 +263,7 @@ describe("the browser routes", () => {
     );
     const listed = await (await proxy(request("/auth/agents", { cookies: signedIn, headers: fromApp }))).json();
 
-    expect(listed.agents.map((grant: { agentName: string }) => grant.agentName)).toEqual(["Nova", "Ledger Buddy"]);
+    expect(listed.agents.map((grant: { agentName: string }) => grant.agentName)).toEqual(["Agent One", "Agent Two"]);
     expect((await proxy(request(`/auth/agents/${grantId}`, { method: "DELETE", cookies: signedIn, headers: fromApp }))).status).toBe(204);
     expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(["GET session/", "GET grants/?limit=100", `DELETE grants/${grantId}/`]);
   });

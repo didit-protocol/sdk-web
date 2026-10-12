@@ -90,7 +90,7 @@ describe("runtime API", () => {
     expect(grants[0]).toEqual({
       id: recorded.grants.body.results[0].id,
       agentId: recorded.grants.body.results[0].agent_id,
-      agentName: "Nova",
+      agentName: "Agent One",
       scopes: ["balance:read", "settings:write", "payouts:request"],
       expiresAt: recorded.grants.body.results[0].expires_at,
       revokedAt: null

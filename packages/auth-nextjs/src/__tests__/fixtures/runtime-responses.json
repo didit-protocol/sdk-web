@@ -64,7 +64,7 @@
         {
           "id": "00000000-0000-4000-8000-000000000004",
           "agent_id": "00000000-0000-4000-8000-000000000005",
-          "agent__name": "Nova",
+          "agent__name": "Agent One",
           "scopes": [
             "balance:read",
             "settings:write",
@@ -76,7 +76,7 @@
         {
           "id": "00000000-0000-4000-8000-000000000006",
           "agent_id": "00000000-0000-4000-8000-000000000007",
-          "agent__name": "Ledger Buddy",
+          "agent__name": "Agent Two",
           "scopes": [
             "payouts:read"
           ],
