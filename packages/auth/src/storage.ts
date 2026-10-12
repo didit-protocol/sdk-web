@@ -59,29 +59,48 @@ export interface CommittedValue {
 export function committedValue(key: string): CommittedValue {
   let database: Promise<IDBDatabase> | null = null;
 
-  function run<T>(mode: IDBTransactionMode, use: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-    database ??= new Promise((resolve, reject) => {
+  // Open the database again on the next use, unless that already happened.
+  function forget(connection: Promise<IDBDatabase>): void {
+    if (database === connection) database = null;
+  }
+
+  function connect(): Promise<IDBDatabase> {
+    const connection = new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open("didit-auth", 1);
       request.onupgradeneeded = () => request.result.createObjectStore("values");
       request.onsuccess = () => {
+        const db = request.result;
         // Never hold up a later version of this database.
-        request.result.onversionchange = () => {
-          request.result.close();
-          database = null;
+        db.onversionchange = () => {
+          db.close();
+          forget(connection);
         };
-        resolve(request.result);
+        // The browser closed it, as WebKit does when its storage process goes away.
+        db.onclose = () => forget(connection);
+        resolve(db);
       };
       request.onerror = () => reject(request.error);
     });
-    return database.then(
-      (db) =>
-        new Promise<T>((resolve, reject) => {
-          const transaction = db.transaction("values", mode);
-          const request = use(transaction.objectStore("values"));
-          transaction.oncomplete = () => resolve(request.result);
-          transaction.onabort = () => reject(transaction.error);
-        })
-    );
+    return connection;
+  }
+
+  function run<T>(mode: IDBTransactionMode, use: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+    const connection = (database ??= connect());
+    return connection
+      .then(
+        (db) =>
+          new Promise<T>((resolve, reject) => {
+            const transaction = db.transaction("values", mode);
+            const request = use(transaction.objectStore("values"));
+            transaction.oncomplete = () => resolve(request.result);
+            transaction.onabort = () => reject(transaction.error);
+          })
+      )
+      .catch((error: unknown) => {
+        // The open may have failed only for now, or the connection broke without a close event.
+        forget(connection);
+        throw error;
+      });
   }
 
   return {
