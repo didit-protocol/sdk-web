@@ -298,6 +298,24 @@ describe("submitEvent and flush against the recorded device lane", () => {
     expect(bodies.reduce((bytes, body) => bytes + body.length, 0)).toBeLessThanOrEqual(64 * 1024);
   });
 
+  it("sends what did not fit at page exit on the normal timer when the page comes back", async () => {
+    jest.useFakeTimers();
+    fetchMock.mockImplementation(replay("timer"));
+
+    submitEvent({
+      monitoringToken: "valid",
+      event: { eventId: "too-big", category: "custom", actionType: "big", payload: { blob: "x".repeat(70000) } }
+    });
+    window.dispatchEvent(new Event("pagehide"));
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fetchMock.mockReturnValue(new Promise<Response>(() => undefined));
+    await jest.advanceTimersByTimeAsync(5000);
+    expect(sentRequests(fetchMock)[0].body.events.map((event) => event.event_id)).toEqual(["too-big"]);
+    expect(sentRequests(fetchMock)[0].init.keepalive).toBe(false);
+  });
+
   it("never puts events submitted with different tokens in the same request", async () => {
     fetchMock.mockImplementation(replay("accepted", "scoped"));
     const valid = recordedEvents("accepted");

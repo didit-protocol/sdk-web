@@ -354,6 +354,8 @@ function sendOnExit(): void {
     budget -= batch.reduce((bytes, entry) => bytes + entry.bytes, REQUEST_ALLOWANCE_BYTES);
     void send(batch, emptyResult(), true);
   }
+  // What did not fit goes out on the normal timer if the page comes back.
+  scheduleWaiting();
 }
 
 function onVisibilityChange(): void {
