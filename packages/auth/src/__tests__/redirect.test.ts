@@ -89,17 +89,26 @@ describe("hosted sign-in", () => {
     api.verify(0);
   });
 
-  it("opens the same hosted page for magic links and social providers", async () => {
-    const { auth, navigate } = setup("redirect-sign-in");
+  it("opens the hosted page with every method for magic links and social providers", async () => {
+    const { fixture, auth, navigate } = setup("redirect-sign-in");
 
     await auth.magicLink.signIn();
-    await auth.social.signIn({ provider: "github", language: "es" });
-    await expect(auth.social.signIn({ provider: "myspace" as "github" })).rejects.toMatchObject({
-      code: "invalid_request"
-    });
+    await auth.social.signIn({ language: "es" });
+    // @ts-expect-error The hosted page cannot open on one chosen provider yet.
+    await auth.social.signIn({ provider: "google" });
 
     const [magic, social] = navigate.mock.calls.map(([url]) => new URL(url));
-    expect(magic.pathname).toMatch(/\/sign-in\/$/);
+    for (const opened of [magic, social]) {
+      expect(opened.origin + opened.pathname).toBe(`${fixture.apiBase}/sign-in/`);
+      // The hosted page refuses parameters it does not know, so nothing beyond the authorization is sent.
+      expect([...opened.searchParams.keys()].sort()).toEqual([
+        "code_challenge",
+        "code_challenge_method",
+        "language",
+        "redirect_uri",
+        "state"
+      ]);
+    }
     expect(social.searchParams.get("language")).toBe("es");
   });
 });
