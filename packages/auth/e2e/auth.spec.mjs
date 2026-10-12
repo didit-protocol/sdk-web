@@ -39,14 +39,14 @@ const storedTokens = (tab) => tab.evaluate((key) => JSON.parse(localStorage.getI
 // a slow network, until the returned route is continued. The tab then holds the token lock.
 async function startSlowRefresh(tab) {
   let arrived;
-  const held = new Promise((resolve) => (arrived = resolve));
-  await tab.route(`${API_BASE}/token/`, (route) => arrived(route));
+  let held = null;
+  const first = new Promise((resolve) => (arrived = resolve));
+  await tab.route(`${API_BASE}/token/`, (route) => (held ? route.continue() : arrived((held = route))));
   await tab.evaluate(() => {
     window.clockOffset = 5 * 60_000;
     window.refreshed = window.auth.getToken();
   });
-  const route = await held;
-  await tab.unroute(`${API_BASE}/token/`);
+  const route = await first;
   // The tokens the refresh brings back are then fresh for both tabs.
   await tab.evaluate(() => void (window.clockOffset = 0));
   return route;
