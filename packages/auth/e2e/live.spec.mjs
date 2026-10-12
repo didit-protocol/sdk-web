@@ -88,6 +88,11 @@ for (const order of [
   test(`two tabs sign in on the real hosted page at the same moment (tab ${order[0] + 1} completes first)`, async ({ context, page, request }) => {
     const people = ["browser-person@example.com", "second-browser-person@example.com"];
     const tabs = [page, await context.newPage()];
+    // A browser that has seen the hosted page before, here through a sign-in it abandoned. (The hosted page
+    // sets its CSRF cookie on the first visit, so two first visits at the same moment replace each other's.)
+    await openApp(page);
+    await page.evaluate(() => void window.auth.signIn());
+    await page.waitForURL(`${API_BASE}/sign-in/**`);
     for (const tab of tabs) await openApp(tab);
 
     // Both tabs leave for the hosted page at once, as tabs a browser restores together do when signed out.
