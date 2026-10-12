@@ -65,7 +65,7 @@ function randomBytes(length: number): Uint8Array {
   return fallback;
 }
 
-function randomBase64Url(byteLength: number): string {
+export function randomBase64Url(byteLength: number): string {
   return bytesToBase64Url(randomBytes(byteLength));
 }
 

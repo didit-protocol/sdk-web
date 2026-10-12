@@ -4,7 +4,9 @@ export default {
   testEnvironment: "jsdom",
   extensionsToTreatAsEsm: [".ts"],
   moduleNameMapper: {
-    "^(\\.{1,2}/.*)\\.js$": "$1"
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+    // sdk-web's tests run against the signals source, not a stale build.
+    "^@didit-protocol/signals$": "<rootDir>/packages/signals/src/index.ts"
   },
   transform: {
     "^.+\\.tsx?$": [
@@ -15,10 +17,20 @@ export default {
     ]
   },
   testMatch: ["**/__tests__/**/*.test.ts", "**/*.test.ts"],
+<<<<<<< HEAD
   // The auth packages and the example apps run their own suites.
   testPathIgnorePatterns: ["/node_modules/", "<rootDir>/packages/", "<rootDir>/examples/"],
+=======
+  // Packages under packages/ run their own Jest configuration.
+  testPathIgnorePatterns: ["/node_modules/", "<rootDir>/packages/"],
+>>>>>>> origin/master
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
-  collectCoverageFrom: ["src/**/*.ts", "!src/**/*.d.ts", "!src/__tests__/**"],
+  collectCoverageFrom: [
+    "src/**/*.ts",
+    "packages/*/src/**/*.ts",
+    "!**/*.d.ts",
+    "!**/__tests__/**"
+  ],
   coverageDirectory: "coverage",
   verbose: true
 };

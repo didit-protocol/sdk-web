@@ -24,6 +24,28 @@ jobs:
       - run: npm test -- --runInBand
       - run: npm run typecheck
       - run: npm run test:build-version
+      - run: npm run test:size
+      - run: npm run test:packages
+      - run: npm run test:e2e
+
+  auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: packages/auth
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+        working-directory: .
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm test -- --runInBand
+      - run: npm run typecheck
+      - run: npm run size
       - run: npm run test:e2e
       - run: npm run lint
       - run: npm run build:auth

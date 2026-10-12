@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Didit Auth test page</title>
+    <script type="importmap">
+      { "imports": { "@didit-protocol/signals": "/signals.mjs" } }
+    </script>
+    <script>
+      // Tests move this page's clock forward to reach the access token's expiry.
+      const realNow = Date.now.bind(Date);
+      Date.now = () => realNow() + (window.clockOffset || 0);
+    </script>
+  </head>
+  <body>
+    <script type="module">
+      import { createDiditAuth, DiditAuthError } from "/dist/index.mjs";
+      import { seededRandomValues } from "/seeded.mjs";
+
+      // The page under test: the published build, driven by the specs through window.didit.
+      window.didit = {
+        createDiditAuth,
+        DiditAuthError,
+        events: [],
+        // Draws the same random values as the recording of `scenario`.
+        seed(scenario) {
+          crypto.getRandomValues = seededRandomValues(scenario);
+        },
+        create(options) {
+          window.auth = createDiditAuth(options);
+          window.auth.onAuthStateChange((event, session) => window.didit.events.push([event, session && session.email]));
+          return true;
+        }
+      };
+      document.body.dataset.ready = "true";
+    </script>
+  </body>
+</html>
