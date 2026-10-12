@@ -23,7 +23,9 @@ beforeEach(() => {
   localStorage.clear();
   history.replaceState(null, "", "/e2e/fixtures/app.html");
 });
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 describe("hosted sign-in", () => {
   it("opens the hosted page with PKCE and completes on the redirect page", async () => {

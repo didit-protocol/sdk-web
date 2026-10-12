@@ -15,7 +15,9 @@ function setup(name: string) {
 }
 
 beforeEach(() => localStorage.clear());
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 describe("agents", () => {
   it("lists, approves, denies and revokes agent access for the signed-in person", async () => {

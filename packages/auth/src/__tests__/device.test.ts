@@ -18,7 +18,9 @@ async function headersSent(deviceSignals: DeviceSignalsOption | undefined, apiBa
 }
 
 beforeEach(() => localStorage.clear());
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 describe("device signals on auth requests", () => {
   it("sends the persistent device id and fingerprint hash when the API shares the page's origin", async () => {

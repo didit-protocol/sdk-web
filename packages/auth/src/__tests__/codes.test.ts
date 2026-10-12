@@ -14,7 +14,9 @@ function setup(name: string, options: Partial<DiditAuthOptions> = {}) {
 }
 
 beforeEach(() => localStorage.clear());
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 describe("email codes", () => {
   it("signs in with the emailed code after a wrong attempt", async () => {
