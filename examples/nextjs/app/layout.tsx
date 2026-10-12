@@ -5,27 +5,30 @@ import type { ReactNode } from "react";
 import { DiditAuth, SignedIn, SignedOut, UserButton } from "@didit-protocol/auth-nextjs";
 
 import "./globals.css";
+import { pageCopy } from "./copy";
 
 export const metadata: Metadata = { title: "Didit Authentication example" };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const { locale, t } = await pageCopy();
+
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body>
-        <DiditAuth>
+        <DiditAuth locale={locale}>
           <header className="top">
             <Link href="/" className="brand">
-              Example app
+              {t.app}
             </Link>
             <nav>
               <SignedIn>
-                <Link href="/account">Account</Link>
+                <Link href="/account">{t.account}</Link>
                 <UserButton />
               </SignedIn>
               <SignedOut>
-                <Link href="/sign-in">Sign in</Link>
+                <Link href="/sign-in">{t.signIn}</Link>
                 <Link href="/sign-up" className="button primary">
-                  Create account
+                  {t.signUp}
                 </Link>
               </SignedOut>
             </nav>

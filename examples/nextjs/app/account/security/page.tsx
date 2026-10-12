@@ -1,25 +1,27 @@
 import { auth } from "@didit-protocol/auth-nextjs/server";
 
+import { pageCopy } from "../../copy";
+
 import { StepUpButton } from "./StepUpButton";
 
 export default async function Security() {
   const session = await auth.protect();
+  const { t } = await pageCopy();
 
   return (
     <section>
-      <h1>Confirm it is you</h1>
+      <h1>{t.confirm}</h1>
       <p className="lead">
-        Before a sensitive change, such as a payout or a new bank account, ask the person to sign in again. They come
-        back to this page with a new session.
+        {t.confirmCopy}
       </p>
       <dl className="facts">
-        <dt>Signed in with</dt>
+        <dt>{t.methods}</dt>
         <dd data-testid="methods">{session.methods.join(", ")}</dd>
-        <dt>Two-step verification</dt>
-        <dd>{session.mfaVerified ? "Verified in this session" : "Not used in this session"}</dd>
+        <dt>{t.mfa}</dt>
+        <dd>{session.mfaVerified ? t.mfaYes : t.mfaNo}</dd>
       </dl>
       <div className="actions">
-        <StepUpButton />
+        <StepUpButton label={t.stepUp} errorLabel={t.failed} />
       </div>
     </section>
   );

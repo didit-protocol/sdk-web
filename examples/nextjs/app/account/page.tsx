@@ -2,38 +2,39 @@ import Link from "next/link";
 
 import { auth } from "@didit-protocol/auth-nextjs/server";
 
-const DAY = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" });
+import { pageCopy } from "../copy";
 
 export default async function Account() {
   // The proxy already sends signed-out visitors of /account to sign in;
   // protect() also refuses a session Didit has revoked since.
   const session = await auth.protect();
   const { user } = session;
+  const { locale, t } = await pageCopy();
+  const day = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
 
   return (
     <section>
-      <h1>Your account</h1>
-      <p className="lead">Everything below comes from your Didit session, read on the server.</p>
+      <h1>{t.account}</h1>
       <dl className="facts">
-        <dt>Email</dt>
+        <dt>{t.email}</dt>
         <dd data-testid="email">
-          {user.email ?? "None"} {user.email ? (user.emailVerified ? "(verified)" : "(not verified)") : null}
+          {user.email ?? t.none} {user.email ? (user.emailVerified ? t.verified : t.unverified) : null}
         </dd>
-        <dt>Phone</dt>
-        <dd>{user.phone ?? "None"}</dd>
-        <dt>Signed in with</dt>
+        <dt>{t.phone}</dt>
+        <dd>{user.phone ?? t.none}</dd>
+        <dt>{t.methods}</dt>
         <dd data-testid="methods">{session.methods.join(", ")}</dd>
-        <dt>Two-step verification</dt>
-        <dd>{session.mfaVerified ? "Verified in this session" : "Not used in this session"}</dd>
-        <dt>Session ends</dt>
-        <dd>{DAY.format(new Date(session.expiresAt))}</dd>
+        <dt>{t.mfa}</dt>
+        <dd>{session.mfaVerified ? t.mfaYes : t.mfaNo}</dd>
+        <dt>{t.ends}</dt>
+        <dd>{day.format(new Date(session.expiresAt))}</dd>
       </dl>
       <div className="actions">
         <Link href="/account/security" className="button">
-          Confirm it is you
+          {t.confirm}
         </Link>
         <Link href="/account/agents" className="button">
-          Connected agents
+          {t.agents}
         </Link>
       </div>
     </section>
