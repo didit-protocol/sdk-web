@@ -90,14 +90,20 @@ test("closing a page while hashing is pending delivers the queued events", async
 
   await opener.goto("/e2e/fixtures/host.html");
   const popup = context.waitForEvent("page");
-  await opener.evaluate(() => window.open("/e2e/fixtures/events.html"));
+  await opener.evaluate(() => { window.exitPage = window.open("/e2e/fixtures/events.html"); });
   const page = await popup;
   await prepare(page, lane, "esm", "pending");
   const closed = page.waitForEvent("close");
   await page.evaluate(({ events, token }) => {
-    events.forEach((event) => window.events.submitEvent({ monitoringToken: token, event }));
-    window.close();
+    addEventListener("message", (message) => {
+      if (message.data !== "leave") return;
+      events.forEach((event) => window.events.submitEvent({ monitoringToken: token, event }));
+      window.close();
+    }, { once: true });
   }, { events, token: recording.token });
+  // Trigger from the surviving opener so automation does not await a reply
+  // from the browsing context that this action deliberately destroys.
+  await opener.evaluate(() => window.exitPage.postMessage("leave", location.origin));
   await closed;
 
   await expect.poll(async () => (await received(request, lane)).length, { timeout: 1000 }).toBe(1);
