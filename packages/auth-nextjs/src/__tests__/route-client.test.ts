@@ -131,3 +131,10 @@ it("keeps the signed-in state and allows retry when sign-out is rejected", async
   expect(client.getSnapshot().status).toBe("signed-in");
   expect(navigate).not.toHaveBeenCalled();
 });
+
+it("updates claims even when the server session id and expiry are unchanged", () => {
+  const client = createRouteClient({ initialSession: session });
+
+  client.setSession({ ...session, user: { ...session.user, emailVerified: false } });
+  expect(client.getSnapshot().session?.user.emailVerified).toBe(false);
+});

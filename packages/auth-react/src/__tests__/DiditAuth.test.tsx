@@ -46,7 +46,7 @@ describe("<DiditAuth publishableKey>", () => {
       </DiditAuth>
     );
     await screen.findByText("signed in");
-    expect(createDiditAuth).toHaveBeenCalledWith({ publishableKey: "pk_test_example", redirectUri: undefined, language: "en" });
+    expect(createDiditAuth).toHaveBeenCalledWith({ publishableKey: "pk_test_example", redirectUri: undefined, language: undefined });
     expect(window.location.pathname + window.location.search).toBe("/account");
   });
 

@@ -38,11 +38,21 @@ Use your Sandbox application's key while you build.
 
 | Component | What it does |
 | --- | --- |
-| `<DiditAuth publishableKey>` | Provides the session to everything below it. Optional `appearance`, `locale`, `nonce`, `frontendApi`, `redirectUri`. |
+| `<DiditAuth publishableKey>` | Provides the session to everything below it. Optional `appearance`, `locale`, `nonce`, `redirectUri`. |
 | `<SignIn />`, `<SignUp />` | Open your Didit sign-in page. Someone already signed in goes straight on to `redirectUrl` (default: the page's `redirect_url`, then `/`). `fallback` renders meanwhile. |
 | `<SignedIn>`, `<SignedOut>` | Render their children only when someone is, or is not, signed in. Neither renders while the session is still loading. |
 | `<UserButton />` | The person's avatar with a menu to sign out. `afterSignOutUrl` defaults to `/`. |
 | `<ConnectedAgents />` | The AI agents the person allowed to act for them, each with a Revoke button. Revoking ends the agent's access everywhere at once. `applicationName` names your app in the subtitle; `scopeLabels` describes each permission in words, keyed by the scope names you configured. |
+
+The hosted runtime currently opens its method chooser for both `SignIn` and
+`SignUp`; Create account on that page starts registration. Neither component
+sends an unsupported screen parameter. The publishable key follows the
+headless peer's format and must resolve to your application's runtime API.
+
+`ConnectedAgents` can also take `agentDetails`, keyed by agent id, with
+localized `publisherLabel` and `activityLabel` from your application's own
+catalog and audit log. These fields are optional because the grants endpoint
+does not return them; the component never fabricates publisher or activity data.
 
 ## Hooks
 

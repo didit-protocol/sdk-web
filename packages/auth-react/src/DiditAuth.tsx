@@ -16,7 +16,7 @@ export interface DiditAuthProps extends Omit<DiditAuthProviderProps, "client"> {
 /** Signs people in with your Didit Authentication application, in the browser. */
 export function DiditAuth({ publishableKey, redirectUri, locale, ...provider }: DiditAuthProps) {
   const client = useMemo(
-    () => createCoreAuthClient({ publishableKey, redirectUri, language: resolveLocale(locale) }),
+    () => createCoreAuthClient({ publishableKey, redirectUri, language: locale ? resolveLocale(locale) : undefined }),
     [publishableKey, redirectUri, locale]
   );
 

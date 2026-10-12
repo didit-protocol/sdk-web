@@ -1,11 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { DiditAuthProvider } from "../context";
 import { UserButton, initialsOf } from "../UserButton";
 import { session, testClient } from "./test-client";
 
 describe("<UserButton />", () => {
-  it("opens a menu with the person's email and signs out from it", () => {
+  it("opens a menu with the person's email and signs out from it", async () => {
     const { client } = testClient({ session });
 
     render(
@@ -25,6 +25,7 @@ describe("<UserButton />", () => {
     expect(document.activeElement).toBe(signOut);
     fireEvent.click(signOut);
     expect(client.signOut).toHaveBeenCalledWith({ redirectUrl: "/goodbye" });
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
   });
 
   it("closes on Escape and on a click outside, returning focus to the avatar", () => {
@@ -66,4 +67,15 @@ describe("<UserButton />", () => {
   ])("makes initials from %p / %p", (email, phone, expected) => {
     expect(initialsOf({ ...session.user, email, phone })).toBe(expected);
   });
+});
+
+it("keeps the menu open with a retryable sign-out error", async () => {
+  const { client } = testClient({ session });
+
+  client.signOut.mockRejectedValue(new Error("offline"));
+  render(<DiditAuthProvider client={client} locale="en"><UserButton /></DiditAuthProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Account" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
+  await screen.findByRole("alert");
+  expect((screen.getByRole("menuitem", { name: "Sign out" }) as HTMLButtonElement).disabled).toBe(false);
 });

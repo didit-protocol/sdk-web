@@ -51,7 +51,7 @@ export function createRouteClient({
     setSession(session) {
       const current = store.get().session;
 
-      if (current?.id === session?.id && current?.expiresAt === session?.expiresAt && store.get().status !== "loading") return;
+      if (JSON.stringify(current) === JSON.stringify(session) && store.get().status !== "loading") return;
       store.set(snapshotOf(session));
     },
     async load() {
