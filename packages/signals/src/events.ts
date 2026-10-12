@@ -178,29 +178,24 @@ function scheduleWaiting(): void {
 }
 
 function enqueue(entry: QueuedEvent): void {
+  let victim: QueuedEvent | undefined;
   if (queue.length >= settings.maxQueueSize) {
-    // Oldest waiting event of the lowest priority, unless the new one ranks lower still.
-    let victim: QueuedEvent = entry;
+    // The oldest waiting event of the lowest priority goes, or the new one when it ranks lower still.
     for (const queued of waiting()) {
-      if (queued.priority <= victim.priority && (victim === entry ? queued.priority <= entry.priority : false)) {
-        victim = queued;
-        break;
-      }
+      if (!victim || queued.priority < victim.priority) victim = queued;
     }
-    for (const queued of waiting()) {
-      if (queued.priority < victim.priority) victim = queued;
-    }
-    if (victim.priority < PRIORITY_NEVER_DROPPED) {
-      if (victim !== entry) queue = queue.filter((queued) => queued !== victim);
-      report(
-        new DiditEventError("dropped", "The event queue is full, so the event was dropped before it was sent.", {
-          eventIds: [victim.id]
-        })
-      );
-      if (victim === entry) return;
-    }
+    if (!victim || entry.priority < victim.priority) victim = entry;
+    if (victim.priority === PRIORITY_NEVER_DROPPED) victim = undefined;
   }
-  queue.push(entry);
+  if (victim && victim !== entry) queue.splice(queue.indexOf(victim), 1);
+  if (victim !== entry) queue.push(entry);
+  if (victim) {
+    report(
+      new DiditEventError("dropped", "The event queue is full, so the event was dropped before it was sent.", {
+        eventIds: [victim.id]
+      })
+    );
+  }
 }
 
 /** The next waiting events that share a token and endpoint, oldest first, within an optional byte budget. */
@@ -259,7 +254,12 @@ async function readJson(response: Response): Promise<unknown> {
 async function send(batch: QueuedEvent[], result: DiditEventFlushResult, keepalive = false): Promise<boolean> {
   for (const entry of batch) entry.sending = true;
   const settled = new Set<QueuedEvent>();
-  let delivered = false;
+  const errors: DiditEventError[] = [];
+  const reject = (entry: QueuedEvent, error: DiditEventError): void => {
+    result.results.push({ eventId: entry.id, outcome: "rejected", error });
+    result.rejectedCount++;
+    settled.add(entry);
+  };
   try {
     const fingerprint = await getDeviceFingerprintPayload().catch(() => null);
     const fingerprintJson = fingerprint ? `,"fingerprint_v2":${JSON.stringify(fingerprint)}` : "";
@@ -282,50 +282,43 @@ async function send(batch: QueuedEvent[], result: DiditEventFlushResult, keepali
         body,
         batch.map((entry) => entry.id)
       );
-      for (const entry of batch) {
-        result.results.push({ eventId: entry.id, outcome: "rejected", error });
-        settled.add(entry);
-      }
-      result.rejectedCount += batch.length;
-      report(error);
-      delivered = true;
+      for (const entry of batch) reject(entry, error);
+      errors.push(error);
       return true;
     }
 
-    const answers = isRecord(body) && Array.isArray(body.results) ? body.results : null;
-    if (!answers) return false;
+    const answers = isRecord(body) && Array.isArray(body.results) ? body.results : [];
     batch.forEach((entry, index) => {
       const answer = answers.find((item) => isRecord(item) && item.index === index) ?? answers[index];
       if (!isRecord(answer)) return;
-      const outcome = answer.outcome;
-      if (outcome === "accepted" || outcome === "replayed") {
-        const eventResult: DiditEventResult = { eventId: entry.id, outcome };
+      if (answer.outcome === "accepted" || answer.outcome === "replayed") {
+        const eventResult: DiditEventResult = { eventId: entry.id, outcome: answer.outcome };
         if (typeof answer.event_uuid === "string") eventResult.eventUuid = answer.event_uuid;
         if (typeof answer.status === "string") eventResult.status = answer.status;
         if (typeof answer.score === "number" || answer.score === null) eventResult.score = answer.score;
         result.results.push(eventResult);
-        result[outcome === "accepted" ? "acceptedCount" : "replayedCount"]++;
+        result[answer.outcome === "accepted" ? "acceptedCount" : "replayedCount"]++;
+        settled.add(entry);
       } else {
         const error = new DiditEventError("validation", "Didit rejected the event; see errors for the details.", {
           status: response.status,
           eventIds: [entry.id],
           errors: answer.errors
         });
-        result.results.push({ eventId: entry.id, outcome: "rejected", error });
-        result.rejectedCount++;
-        report(error);
+        reject(entry, error);
+        errors.push(error);
       }
-      settled.add(entry);
     });
-    delivered = true;
-    return true;
+    // An answer that does not cover every event is retried like a network error.
+    return settled.size === batch.length;
   } catch {
     return false;
   } finally {
     queue = queue.filter((entry) => !settled.has(entry));
     for (const entry of batch) entry.sending = false;
-    failures = delivered ? 0 : failures + 1;
+    failures = settled.size === batch.length ? 0 : failures + 1;
     if (keepalive) scheduleWaiting();
+    errors.forEach(report);
   }
 }
 
