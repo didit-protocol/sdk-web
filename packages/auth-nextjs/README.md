@@ -14,7 +14,6 @@ npm install @didit-protocol/auth-nextjs
 
 ```bash
 # .env.local
-DIDIT_PUBLISHABLE_KEY=pk_test_...
 # The Frontend API shown in Authentication > Developers in the Didit console.
 DIDIT_FRONTEND_API=https://your-app.sandbox.auth.didit.me
 # Register this exact address as a redirect address of the application.
@@ -55,8 +54,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 export { SignIn as default } from "@didit-protocol/auth-nextjs";
 ```
 
-`<SignUp />` works the same way on `app/sign-up/page.tsx`. Both send someone
-already signed in straight on to `redirect_url`.
+`<SignUp />` works the same way on `app/sign-up/page.tsx`. Both open the hosted method chooser, where Create account starts registration,
+and send someone already signed in straight on to `redirect_url`.
 
 ## Read the session on the server
 
@@ -112,3 +111,15 @@ rotates the refresh token first, so pages render with a valid session.
   server instances can still race on a refresh at the same moment; the session
   then ends and the person signs in again.
 - `http` is accepted for `localhost` only.
+
+- Step-up requires an existing session and binds the callback to that same
+  person. A different identity is refused and its new session is revoked.
+- Sign-out reports an upstream failure and retains the browser session so the
+  person can retry. It does not report success before revocation succeeds.
+- Session and refresh caches are isolated by Frontend API. Cached sessions
+  never outlive their expiry. Access tokens may be opaque or JWT-shaped;
+  authorization still uses the runtime session endpoint, not unverified claims.
+
+English, Spanish, French, German and Japanese copy follows `Accept-Language`.
+Connected agents are paginated through the runtime API; optional publisher and
+activity labels come from your own application, as described in the React package.

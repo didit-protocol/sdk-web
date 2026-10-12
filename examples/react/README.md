@@ -19,3 +19,14 @@ The hosted page also handles password reset. The React peer keeps tokens in
 browser storage; choose the Next.js example for httpOnly server sessions.
 The headless peer and its signals dependency must be installed before building
 this example; the wrappers can be built independently through `build:auth`.
+
+## End-to-end tests
+
+Build the wrappers and install their headless peer, then run `npx playwright test`
+from this directory with `VITE_DIDIT_PUBLISHABLE_KEY` and `E2E_MAILBOX` set.
+`E2E_MAILBOX` is a JSON Lines email-delivery sink containing `{ to, subject, html }`.
+The tests use real hosted signup, password reset, login, step-up and sign-out.
+`E2E_SEED_GRANTS` is an optional fixture command receiving the synthetic email
+as its last argument; set it to exercise real grant revocation too.
+`E2E_CHROMIUM` can point to a locally installed Chromium executable.
+The test runner owns and stops the Vite server it starts.

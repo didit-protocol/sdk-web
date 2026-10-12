@@ -65,7 +65,8 @@ const { user } = useUser(); // { id, email, emailVerified, phone, vendorData, ve
 - `stepUp()` asks the person to sign in again before a sensitive action and
   brings them back to the current page.
 - `user.vendorData` is your own id for the person, shared with Didit identity
-  verification and transaction monitoring.
+  verification and transaction monitoring when the runtime supplies `vendor_data`;
+  it remains `null` on runtimes that do not expose that field yet.
 
 ## Appearance
 
@@ -79,7 +80,7 @@ accent and font, with `appearance`:
 The same can be set in CSS with `--didit-auth-brand`, `--didit-auth-brand-dark`
 and `--didit-auth-font`. Components use the surrounding page's font by default.
 `nonce` adds a Content Security Policy nonce to the one `<style>` element the
-provider renders.
+provider renders. The embedded wordmark also requires `img-src data:`.
 
 ## Languages
 
