@@ -32,15 +32,11 @@
     "clean": "rm -rf dist packages/signals/dist",
     "prepublishOnly": "npm run clean && npm run build",
     "test:size": "npm run test:size -w @didit-protocol/signals",
-<<<<<<< HEAD
-    "test:packages": "node scripts/verify-packages.mjs",
+    "test:packages": "npm run build -w @didit-protocol/auth && node scripts/verify-packages.mjs",
     "build:auth": "npm run build -w @didit-protocol/signals -w @didit-protocol/auth -w @didit-protocol/auth-react -w @didit-protocol/auth-nextjs",
     "test:auth": "npm run test -w @didit-protocol/auth-react -w @didit-protocol/auth-nextjs",
     "typecheck:auth": "npm run typecheck -w @didit-protocol/auth-react -w @didit-protocol/auth-nextjs",
     "lint": "eslint packages/auth-react/src packages/auth-nextjs/src examples/nextjs examples/react examples/shared"
-=======
-    "test:packages": "npm run build -w @didit-protocol/auth && node scripts/verify-packages.mjs"
->>>>>>> origin/master
   },
   "keywords": [
     "didit",
