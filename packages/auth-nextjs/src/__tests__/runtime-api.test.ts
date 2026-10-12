@@ -119,4 +119,18 @@ describe("runtime API", () => {
     expect(calls).toHaveLength(2);
   });
 
+  it("refuses an incomplete successful session response", () => {
+    for (const field of ["sid", "sub", "expires_at"]) {
+      const body: Record<string, unknown> = { ...recorded.session.body };
+      delete body[field];
+      expect(() => toSession(body)).toThrow(DiditAuthApiError);
+    }
+  });
+
+  it("does not turn an unexpected successful response into token cookies", async () => {
+    // Replay a real response of the wrong shape to model an upstream routing failure.
+    replay({ method: "POST", path: "token/", response: recorded.session });
+    await expect(refreshTokens(config, "token")).rejects.toMatchObject({ status: 502, code: "invalid_response" });
+  });
+
 });

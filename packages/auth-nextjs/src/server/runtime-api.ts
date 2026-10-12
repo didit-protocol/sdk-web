@@ -57,11 +57,17 @@ function bearer(token: string): HeadersInit {
 }
 
 function toTokens(body: Json): TokenSet {
+  if (typeof body.access_token !== "string" || !/^[A-Za-z0-9_.-]{1,3800}$/.test(body.access_token) ||
+      typeof body.refresh_token !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(body.refresh_token) ||
+      typeof body.expires_in !== "number" || !Number.isFinite(body.expires_in) || body.expires_in <= 0 ||
+      typeof body.session_id !== "string" || !body.session_id) {
+    throw new DiditAuthApiError(502, "invalid_response");
+  }
   return {
-    accessToken: String(body.access_token),
-    refreshToken: String(body.refresh_token),
-    expiresIn: Number(body.expires_in) || 0,
-    sessionId: String(body.session_id)
+    accessToken: body.access_token,
+    refreshToken: body.refresh_token,
+    expiresIn: body.expires_in,
+    sessionId: body.session_id
   };
 }
 
@@ -69,6 +75,10 @@ const text = (value: unknown): string | null => (typeof value === "string" && va
 
 /** Maps `GET session/` to the session the components and `auth()` share. */
 export function toSession(body: Json): DiditSession {
+  if (typeof body.sid !== "string" || !body.sid || typeof body.sub !== "string" || !body.sub ||
+      typeof body.expires_at !== "string" || !Number.isFinite(Date.parse(body.expires_at))) {
+    throw new DiditAuthApiError(502, "invalid_response");
+  }
   const organizations = Array.isArray(body.organizations) ? (body.organizations as Json[]) : [];
   const verified = body.verified_identity;
 
