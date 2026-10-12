@@ -145,7 +145,7 @@ test("a sign-out waits for another tab's refresh, so the refreshed tokens cannot
   await page.evaluate(() => void (window.signingOut = window.auth.signOut()));
   await page.waitForTimeout(300);
   // Still waiting for the other tab: signing out now would let its refresh write the session back.
-  expect((await storedTokens(page)).sessionId).toBe(refreshed.session_id);
+  expect(await storedTokens(page)).toMatchObject({ sessionId: refreshed.session_id });
 
   await refresh.continue();
   await page.evaluate(() => window.signingOut);
@@ -192,7 +192,7 @@ test("a sign-in completing during another tab's refresh keeps the new session an
     .toBe(true);
   await page.waitForTimeout(300);
   // The new tokens wait for the other tab's refresh, which would otherwise overwrite them.
-  expect((await storedTokens(page)).sessionId).toBe(recorded.sessionBefore);
+  expect(await storedTokens(page)).toMatchObject({ sessionId: recorded.sessionBefore });
 
   await refresh.continue();
   expect(await page.evaluate(async () => (await window.completing).session.sessionId)).toBe(newSession);
