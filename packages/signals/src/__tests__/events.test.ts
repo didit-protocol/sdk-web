@@ -9,7 +9,7 @@ import {
   submitEvent
 } from "../events";
 import { resetDeviceFingerprintForTesting } from "../fingerprint";
-import type { DiditEvent } from "../types";
+import type { DiditEvent, DiditEventErrorType } from "../types";
 import {
   recordedBody,
   recordedEvents,
@@ -133,14 +133,14 @@ describe("submitEvent and flush against the recorded device lane", () => {
     });
   });
 
-  it.each([
+  it.each<[ScenarioName, DiditEventErrorType, unknown]>([
     ["invalid_token", "invalid_token", "Invalid monitoring token."],
     ["expired_token", "expired_token", "Monitoring token has expired."],
     ["used_up", "invalid_token", "Monitoring token exceeded its maximum number of uses."],
     ["revoked", "invalid_token", "Monitoring token has been revoked."],
     ["origin_bound", "invalid_token", "Monitoring token is not valid for this origin."],
     ["monitoring_disabled", "monitoring_disabled", expect.stringContaining("Event monitoring is not enabled")]
-  ] as const)("drops the whole batch when the service refuses it (%s)", async (name, type, message) => {
+  ])("drops the whole batch when the service refuses it (%s)", async (name, type, message) => {
     fetchMock.mockImplementation(replay(name));
 
     const ids = submitRecorded(name);
