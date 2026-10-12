@@ -95,10 +95,10 @@ function hostedSignIn(url) {
   // The hosted page signs the person in and redirects back with the code. The
   // recording holds that redirect; it is replayed only for the exact sign-in
   // address the SDK opened during the recording.
-  for (const fixture of pool) {
-    if (!fixture.signInUrl) continue;
-    const recorded = new URL(fixture.signInUrl).searchParams;
-    if (canonical(Object.fromEntries(recorded)) === canonical(Object.fromEntries(url.searchParams))) return fixture.callbackUrl;
+  for (const { signInUrl, callbackUrl } of pool.flatMap((fixture) => fixture.signIns ?? [fixture])) {
+    if (!signInUrl) continue;
+    const recorded = new URL(signInUrl).searchParams;
+    if (canonical(Object.fromEntries(recorded)) === canonical(Object.fromEntries(url.searchParams))) return callbackUrl;
   }
   return null;
 }

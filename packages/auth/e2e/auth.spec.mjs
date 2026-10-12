@@ -19,15 +19,15 @@ async function requestsSeen(request) {
   return (await request.get(`${RECORDED_API}/__replay/report`)).json();
 }
 
-async function openApp(page, { url = APP, scenario, create = true } = {}) {
+async function openApp(page, { url = APP, scenario, skip = 0, create = true } = {}) {
   await page.goto(url);
   await page.waitForSelector("body[data-ready='true']", { state: "attached" });
   await page.evaluate(
-    ({ scenario, create, key }) => {
-      if (scenario) window.didit.seed(scenario);
+    ({ scenario, skip, create, key }) => {
+      if (scenario) window.didit.seed(scenario, skip);
       if (create) window.didit.create({ publishableKey: key });
     },
-    { scenario, create, key: PUBLISHABLE_KEY }
+    { scenario, skip, create, key: PUBLISHABLE_KEY }
   );
 }
 
@@ -104,6 +104,61 @@ test("completes in another tab, as an emailed magic link does, and the first tab
   await expect.poll(() => page.evaluate(() => window.didit.events)).toEqual([["SIGNED_IN", "person@example.com"]]);
   expect((await requestsSeen(request)).filter((entry) => entry.mismatch)).toEqual([]);
 });
+
+// Holds the tab's PKCE challenge until the returned function runs, so the tab stays between starting a
+// hosted sign-in and saving it while another tab does the same. Without the hold, two tabs started at the
+// same moment usually overlap there too, but not every time.
+async function holdChallenge(tab) {
+  await tab.evaluate(() => {
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    const held = new Promise((resolve) => (window.releaseChallenge = resolve));
+    crypto.subtle.digest = async (...args) => {
+      const result = await digest(...args);
+      await held;
+      return result;
+    };
+  });
+  return () => tab.evaluate(() => window.releaseChallenge());
+}
+
+for (const scenario of ["redirect-two-tabs", "redirect-two-tabs-reversed"]) {
+  test(`two tabs starting the hosted sign-in at the same moment both complete (${scenario})`, async ({ context, page, request }) => {
+    const recorded = fixture(scenario);
+    const [first, second] = recorded.completionOrder;
+    const accessToken = (index) => recorded.exchanges[index].response.body.access_token;
+    await loadRecording(request, scenario);
+    const tabs = [page, await context.newPage()];
+    await openApp(tabs[0], { scenario });
+    await openApp(tabs[1], { scenario, skip: 48 });
+
+    const release = await holdChallenge(tabs[0]);
+    await tabs[0].evaluate(() => void window.auth.signIn());
+    await tabs[1].evaluate(() => void window.auth.signIn());
+    await tabs[1].waitForURL(/[?&]code=/);
+    await release();
+    await tabs[0].waitForURL(/[?&]code=/);
+    // Each hosted page sent its own person back to the tab that opened it.
+    expect(tabs.map((tab) => tab.url())).toEqual(recorded.signIns.map((signIn) => signIn.callbackUrl));
+
+    for (const index of [first, second]) {
+      await openApp(tabs[index], { url: tabs[index].url() });
+      const session = await tabs[index].evaluate(async () => (await window.auth.handleRedirectCallback()).session);
+      expect(session).toMatchObject({ email: recorded.signIns[index].email, sessionId: recorded.signIns[index].sessionId });
+    }
+
+    // The tabs share the session completed last; the one it replaced ends at Didit.
+    for (const tab of tabs) {
+      expect(await storedTokens(tab)).toMatchObject({ accessToken: accessToken(2), sessionId: recorded.signIns[second].sessionId });
+    }
+    await expect.poll(() => tabs[first].evaluate(() => window.didit.events.at(-1))).toEqual(["SIGNED_IN", recorded.signIns[second].email]);
+    const seen = await requestsSeen(request);
+    expect(seen.filter((entry) => entry.mismatch)).toEqual([]);
+    expect(seen.filter((entry) => entry.body?.grant_type === "authorization_code")).toHaveLength(2);
+    expect(seen.filter((entry) => entry.method === "DELETE").map((entry) => entry.headers.authorization)).toEqual([
+      `Bearer ${accessToken(0)}`
+    ]);
+  });
+}
 
 test("two tabs near expiry refresh the session once", async ({ context, page, request }) => {
   const recorded = fixture("password-sign-in");
