@@ -82,9 +82,9 @@ describe("submitEvent and flush against the recorded device lane", () => {
     expect(ids).toEqual(["rec-signup-1", "rec-login-1", "rec-login-failed-1"]);
     expect(result).toMatchObject({ acceptedCount: 3, replayedCount: 0, rejectedCount: 0, pendingCount: 0 });
     expect(result.results).toEqual([
-      { eventId: "rec-signup-1", outcome: "accepted", eventUuid: "f35f90f9-b95d-4be1-af47-40fa4f20e94d", status: "ACCEPTED", score: 0 },
-      { eventId: "rec-login-1", outcome: "accepted", eventUuid: "b8412edc-cad7-41d9-8d50-197b17d55bc0", status: "ACCEPTED", score: 0 },
-      { eventId: "rec-login-failed-1", outcome: "accepted", eventUuid: "99f79a44-9601-44a5-9e79-835360d795d3", status: "ACCEPTED", score: 0 }
+      { eventId: "rec-signup-1", outcome: "accepted", eventUuid: "00000000-0000-4000-8000-000000000001", status: "ACCEPTED", score: 0 },
+      { eventId: "rec-login-1", outcome: "accepted", eventUuid: "00000000-0000-4000-8000-000000000002", status: "ACCEPTED", score: 0 },
+      { eventId: "rec-login-failed-1", outcome: "accepted", eventUuid: "00000000-0000-4000-8000-000000000003", status: "ACCEPTED", score: 0 }
     ]);
     expect(onError).not.toHaveBeenCalled();
   });
