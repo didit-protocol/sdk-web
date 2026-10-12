@@ -26,6 +26,11 @@ function submitRecorded(name: ScenarioName, token = scenario(name).token): strin
   return recordedEvents(name).map((event) => submitEvent({ monitoringToken: token, event }));
 }
 
+/** Lets queued promise jobs and zero-delay timers run (real timers only). */
+async function settle(): Promise<void> {
+  for (let round = 0; round < 20; round++) await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function setVisibility(state: DocumentVisibilityState): void {
   Object.defineProperty(document, "visibilityState", { value: state, configurable: true });
 }
@@ -243,26 +248,38 @@ describe("submitEvent and flush against the recorded device lane", () => {
     fetchMock.mockImplementation(replay("exit"));
 
     submitRecorded("exit");
-    await Promise.resolve();
     setVisibility("hidden");
     document.dispatchEvent(new Event("visibilitychange"));
     window.dispatchEvent(new Event("pagehide"));
-    await flush();
+    await settle();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(sentRequests(fetchMock)[0].init.keepalive).toBe(true);
     expect(sentRequests(fetchMock)[0].body.events.map((event) => event.event_id)).toEqual(["rec-exit-1", "rec-exit-2"]);
+    expect(await flush()).toMatchObject({ pendingCount: 0 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("sends with keepalive on pagehide", async () => {
+  it("sends with keepalive on pagehide and settles the answer if the page stays", async () => {
     fetchMock.mockImplementation(replay("exit"));
 
     submitRecorded("exit");
     window.dispatchEvent(new Event("pagehide"));
-    const result = await flush();
+    await settle();
 
     expect(sentRequests(fetchMock)[0].init.keepalive).toBe(true);
-    expect(result.pendingCount).toBe(0);
+    expect(await flush()).toMatchObject({ pendingCount: 0 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not send on a visibility change back to visible", async () => {
+    fetchMock.mockImplementation(replay("exit"));
+
+    submitRecorded("exit");
+    document.dispatchEvent(new Event("visibilitychange"));
+    await settle();
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("keeps what is sent at page exit inside the browser's 64 KiB keepalive budget", async () => {
@@ -273,8 +290,7 @@ describe("submitEvent and flush against the recorded device lane", () => {
       submitEvent({ monitoringToken: "valid", event: { category: "custom", actionType: "big", payload: { blob } } });
     }
     window.dispatchEvent(new Event("pagehide"));
-    await Promise.resolve();
-    await Promise.resolve();
+    await settle();
 
     const bodies = fetchMock.mock.calls.map(([, init]) => String(init?.body));
     const sentEvents = bodies.reduce((count, body) => count + JSON.parse(body).events.length, 0);
@@ -315,8 +331,7 @@ describe("submitEvent and flush against the recorded device lane", () => {
     send("deposit-3", "payment", "deposit_initiated");
     send("deposit-4", "payment", "deposit_initiated");
     void flush();
-    await Promise.resolve();
-    await Promise.resolve();
+    await settle();
 
     expect(onError.mock.calls.map(([error]) => [error.type, ...error.eventIds])).toEqual([
       ["dropped", "page-1"],
@@ -341,10 +356,12 @@ describe("submitEvent and flush against the recorded device lane", () => {
     fetchMock.mockImplementation(replay("partial", "timer"));
 
     submitRecorded("partial");
+    const withRejections = await flush();
     submitRecorded("timer");
-    const result = await flush();
+    const next = await flush();
 
-    expect(result).toMatchObject({ acceptedCount: 2, rejectedCount: 2, pendingCount: 0 });
+    expect(withRejections).toMatchObject({ acceptedCount: 1, rejectedCount: 2, pendingCount: 0 });
+    expect(next).toMatchObject({ acceptedCount: 1, pendingCount: 0 });
   });
 
   it("resolves an empty flush without a request", async () => {
