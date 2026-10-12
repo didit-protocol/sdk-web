@@ -19,15 +19,15 @@ async function requestsSeen(request) {
   return (await request.get(`${RECORDED_API}/__replay/report`)).json();
 }
 
-async function openApp(page, { url = APP, scenario, options = {} } = {}) {
+async function openApp(page, { url = APP, scenario, create = true } = {}) {
   await page.goto(url);
   await page.waitForSelector("body[data-ready='true']", { state: "attached" });
   await page.evaluate(
-    ({ scenario, options, key }) => {
+    ({ scenario, create, key }) => {
       if (scenario) window.didit.seed(scenario);
-      window.didit.create({ publishableKey: key, ...options });
+      if (create) window.didit.create({ publishableKey: key });
     },
-    { scenario, options, key: PUBLISHABLE_KEY }
+    { scenario, create, key: PUBLISHABLE_KEY }
   );
 }
 
@@ -67,8 +67,9 @@ test("signs in on the hosted page and completes on the redirect page", async ({ 
 test("completes in another tab, as an emailed magic link does, and the first tab follows", async ({ context, page, request }) => {
   const recorded = fixture("redirect-sign-in");
   await loadRecording(request, "redirect-sign-in");
-  await openApp(page, { scenario: "redirect-sign-in" });
+  await openApp(page, { scenario: "redirect-sign-in", create: false });
   await page.evaluate((key) => {
+    // The person asked for a link and waits on this tab: nothing navigates.
     window.auth = window.didit.createDiditAuth({ publishableKey: key, navigate: (url) => void (window.opened = url) });
     window.auth.onAuthStateChange((event, session) => window.didit.events.push([event, session && session.email]));
     return window.auth.signIn();
@@ -86,6 +87,7 @@ test("completes in another tab, as an emailed magic link does, and the first tab
 });
 
 test("two tabs near expiry refresh the session once", async ({ context, page, request }) => {
+  await context.addInitScript(() => Object.defineProperty(Navigator.prototype, "locks", { get: () => undefined }));
   const recorded = fixture("password-sign-in");
   await loadRecording(request, "password-sign-in");
   await openApp(page, { scenario: "password-sign-in" });
