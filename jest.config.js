@@ -17,13 +17,8 @@ export default {
     ]
   },
   testMatch: ["**/__tests__/**/*.test.ts", "**/*.test.ts"],
-<<<<<<< HEAD
-  // The auth packages and the example apps run their own suites.
+  // Packages under packages/ run their own Jest configuration; the example apps run their own suites.
   testPathIgnorePatterns: ["/node_modules/", "<rootDir>/packages/", "<rootDir>/examples/"],
-=======
-  // Packages under packages/ run their own Jest configuration.
-  testPathIgnorePatterns: ["/node_modules/", "<rootDir>/packages/"],
->>>>>>> origin/master
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
   collectCoverageFrom: [
     "src/**/*.ts",
