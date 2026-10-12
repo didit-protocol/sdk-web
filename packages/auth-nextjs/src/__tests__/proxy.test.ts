@@ -69,7 +69,7 @@ describe("starting a sign-in", () => {
   it("uses __Host- cookies and Secure over https", async () => {
     replay();
     const secure = diditAuthProxy({}, { DIDIT_FRONTEND_API: "https://auth.example.com", DIDIT_REDIRECT_URI: "https://app.example.com/auth/callback" });
-    const response = await secure(new NextRequest("https://app.example.com/auth/step-up"));
+    const response = await secure(new NextRequest("https://app.example.com/auth/sign-in"));
     const state = new URL(response.headers.get("location")!).searchParams.get("state")!;
 
     expect(response.cookies.get(`__Host-didit_tx.${state.slice(0, 16)}`)).toMatchObject({ secure: true, httpOnly: true, path: "/" });
@@ -317,5 +317,41 @@ describe("signing out", () => {
     expect(response.status).toBe(403);
     expect(calls).toHaveLength(0);
     expect((await proxy(request("/auth/sign-out", { cookies: signedIn }))).status).toBe(405);
+  });
+});
+
+describe("step-up identity binding", () => {
+  it("requires a current session", async () => {
+    const { calls } = replay();
+    const response = await proxy(request("/auth/step-up"));
+
+    expect(response.status).toBe(401);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("revokes a different identity's new session and preserves the original", async () => {
+    replay({ method: "GET", path: "session/", response: recorded.session });
+    const start = await proxy(request("/auth/step-up", { cookies: signedIn }));
+    const state = new URL(start.headers.get("location")!).searchParams.get("state")!;
+    const name = `didit_tx.${state.slice(0, 16)}`;
+    // Exercise the comparison without inventing another runtime response.
+    const parts = start.cookies.get(name)!.value.split(":");
+
+    expect(decodeURIComponent(parts[3])).toBe(recorded.session.body.sub);
+    parts[3] = "different-expected-identity";
+    const { calls, remaining } = replay(
+      { method: "POST", path: "token/", response: recorded.tokenIssued },
+      { method: "GET", path: "session/", response: recorded.session },
+      { method: "DELETE", path: "session/", response: recorded.sessionEnded }
+    );
+    const response = await proxy(request(`/auth/callback?code=c&state=${state}`, {
+      cookies: { ...signedIn, [name]: parts.join(":") }
+    }));
+
+    expect(response.status).toBe(400);
+    expect(response.cookies.get("didit_at")).toBeUndefined();
+    expect(response.cookies.get(name)?.maxAge).toBe(0);
+    expect(calls[2].headers.get("authorization")).toBe(`Bearer ${issued.access_token}`);
+    expect(remaining()).toEqual([]);
   });
 });

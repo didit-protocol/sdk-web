@@ -98,7 +98,7 @@ describe("cookies", () => {
 
   it("ignores an oversized access cookie", () => {
     const names = cookieNames({ secure: false });
-    const read = readSessionCookies(names, (name) => (name === names.access ? "x".repeat(129) : undefined));
+    const read = readSessionCookies(names, (name) => (name === names.access ? "x".repeat(3801) : undefined));
 
     expect(read).toEqual({ access: null, refresh: null });
   });
@@ -130,3 +130,16 @@ describe("negotiateLocale", () => {
     expect(negotiateLocale(null)).toBe("en");
   });
 });
+
+it("accepts a JWT-sized access cookie without trusting its claims", () => {
+  const names = cookieNames({ secure: false });
+  const token = `header.${"a".repeat(900)}.signature`;
+
+  expect(readSessionCookies(names, (name) => name === names.access ? token : undefined).access).toBe(token);
+});
+
+it.each(["https://user:password@api.example", "https://api.example?token=secret", "https://api.example#fragment"])(
+  "refuses ambiguous configured URLs: %s", (url) => {
+    expect(() => resolveConfig({ ...ENV, DIDIT_FRONTEND_API: url })).toThrow(DiditAuthConfigError);
+  }
+);

@@ -1,4 +1,4 @@
-// The headless core ships as its own package; this stands in for its documented contract.
+// The peer seam uses the published headless API, including flat sessions and event names.
 const core = {
   handleRedirectCallback: jest.fn(),
   getSession: jest.fn(),
@@ -20,13 +20,24 @@ import { DiditAuth } from "../DiditAuth";
 import { createCoreAuthClient } from "../core";
 import { session } from "./test-client";
 
-beforeEach(() => jest.clearAllMocks());
+const coreSession = {
+  ...session.user, userId: session.user.id, sessionId: session.id,
+  methods: session.methods, mfaVerified: session.mfaVerified, expiresAt: session.expiresAt
+};
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  window.history.replaceState(null, "", "/");
+  core.getSession.mockResolvedValue(coreSession);
+});
+
+afterEach(() => jest.restoreAllMocks());
 
 describe("<DiditAuth publishableKey>", () => {
   it("creates the browser core with the key and completes a returning sign-in", async () => {
     window.history.replaceState(null, "", "/callback?code=c&state=s");
-    core.handleRedirectCallback.mockResolvedValue({ returnTo: "/account" });
-    core.getSession.mockResolvedValue(session);
+    core.handleRedirectCallback.mockResolvedValue({ returnTo: "/account", session: coreSession });
+    core.getSession.mockResolvedValue(coreSession);
 
     render(
       <DiditAuth publishableKey="pk_test_example">
@@ -35,12 +46,13 @@ describe("<DiditAuth publishableKey>", () => {
       </DiditAuth>
     );
     await screen.findByText("signed in");
-    expect(createDiditAuth).toHaveBeenCalledWith({ publishableKey: "pk_test_example", frontendApi: undefined, redirectUri: undefined });
+    expect(createDiditAuth).toHaveBeenCalledWith({ publishableKey: "pk_test_example", redirectUri: undefined, language: "en" });
     expect(window.location.pathname + window.location.search).toBe("/account");
   });
 
   it("reads as signed out when the session cannot be restored", async () => {
     jest.spyOn(console, "error").mockImplementation(() => undefined);
+    window.history.replaceState(null, "", "/callback?code=c&state=s");
     core.handleRedirectCallback.mockRejectedValue(new Error("state mismatch"));
 
     render(
@@ -60,7 +72,7 @@ describe("createCoreAuthClient", () => {
     await client.signUp({ redirectUrl: "/b" });
     await client.stepUp({ redirectUrl: "/c" });
     await client.revokeAgent("grant");
-    expect(core.signIn.mock.calls).toEqual([[{ returnTo: "/a", screen: "sign-in" }], [{ returnTo: "/b", screen: "sign-up" }]]);
+    expect(core.signIn.mock.calls).toEqual([[{ returnTo: "/a" }], [{ returnTo: "/b" }]]);
     expect(core.stepUp).toHaveBeenCalledWith({ returnTo: "/c" });
     expect(core.agents.revoke).toHaveBeenCalledWith("grant");
     await expect(client.getToken()).resolves.toBe("token");
@@ -68,11 +80,30 @@ describe("createCoreAuthClient", () => {
 
   it("follows the core's auth state changes", async () => {
     const client = createCoreAuthClient({ publishableKey: "pk_test_example" });
-    const listener = core.onAuthStateChange.mock.calls[0][0] as (value: unknown) => void;
+    await client.load();
+    const listener = core.onAuthStateChange.mock.calls[0][0] as (event: string, value: unknown) => void;
 
-    listener(session);
+    listener("SIGNED_IN", coreSession);
     await waitFor(() => expect(client.getSnapshot()).toEqual({ status: "signed-in", session }));
-    listener(null);
+    listener("SIGNED_OUT", null);
     expect(client.getSnapshot().status).toBe("signed-out");
   });
+});
+
+it("restores an ordinary page without attempting a callback", async () => {
+  const client = createCoreAuthClient({ publishableKey: "pk_test_example" });
+
+  expect(createDiditAuth).not.toHaveBeenCalled();
+  await client.load();
+  expect(core.handleRedirectCallback).not.toHaveBeenCalled();
+  expect(client.getSnapshot().session).toEqual(session);
+});
+
+it("refuses an external callback return path", async () => {
+  const client = createCoreAuthClient({ publishableKey: "pk_test_example" });
+
+  window.history.replaceState(null, "", "/callback?code=c&state=s");
+  core.handleRedirectCallback.mockResolvedValue({ returnTo: "https://other.example", session: coreSession });
+  await client.load();
+  expect(window.location.pathname).toBe("/callback");
 });
