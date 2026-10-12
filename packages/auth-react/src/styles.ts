@@ -54,6 +54,7 @@ export const stylesheet = `
 .didit-ca-tx{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
 .didit-ca-n{display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 6px}
 .didit-ca-n b{font-size:13px;font-weight:600;color:var(--da-heading)}
+.didit-ca-n span{font-size:11.5px;color:var(--da-text-subtle)}
 .didit-ca-d{font-size:12px;line-height:17px;color:var(--da-text);text-wrap:pretty}
 .didit-ca-m{font-size:11.5px;line-height:16px;color:var(--da-text-subtle)}
 .didit-ca-btn{appearance:none;margin:0;display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:9999px;border:1px solid var(--da-line-strong);background:var(--da-surface);font:inherit;font-size:12px;font-weight:500;line-height:1.55;color:var(--da-danger);flex-shrink:0;white-space:nowrap;cursor:pointer}

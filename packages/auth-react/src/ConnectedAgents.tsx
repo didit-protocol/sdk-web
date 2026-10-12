@@ -123,7 +123,10 @@ export function ConnectedAgents({ applicationName, scopeLabels }: ConnectedAgent
                 </span>
                 <span className="didit-ca-tx">
                   <span className="didit-ca-n">
-                    <b>{grant.agentName}</b>
+                    {/* The board sets the name in the row's 13px line, at the label size. */}
+                    <b>
+                      <span>{grant.agentName}</span>
+                    </b>
                   </span>
                   {can ? <span className="didit-ca-d">{can}</span> : null}
                   <span className="didit-ca-m">{meta}</span>
