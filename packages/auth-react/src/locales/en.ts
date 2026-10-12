@@ -15,6 +15,8 @@ export const en: Messages = {
   agentsRevokedNotice: "{agent}'s session ended everywhere. It can't act for you until you approve it again.",
   agentsRevokeError: "We could not revoke {agent}. Try again.",
   poweredBy: "Powered by",
+  signInError: "We could not open the sign-in page.",
+  retry: "Try again",
   signOutError: "We could not sign you out. Try again.",
   accountMenu: "Account",
   signOut: "Sign out"

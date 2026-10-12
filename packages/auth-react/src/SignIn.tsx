@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { useDiditAuthContext } from "./context.js";
 import { useAuthSnapshot } from "./hooks.js";
+import { messagesFor } from "./i18n.js";
 import { returnToFromLocation, safeReturnTo } from "./return-to.js";
 
 export interface SignInProps {
@@ -17,6 +18,8 @@ function useHostedRedirect(screen: "signIn" | "signUp", redirectUrl: string | un
   const { client } = useDiditAuthContext();
   const { status } = useAuthSnapshot();
   const started = useRef(false);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(function openHostedPage() {
     if (status === "loading" || started.current) return;
@@ -26,19 +29,28 @@ function useHostedRedirect(screen: "signIn" | "signUp", redirectUrl: string | un
     if (status === "signed-in") window.location.replace(target);
     else client[screen]({ redirectUrl: target }).catch(() => {
       started.current = false;
-      console.error("[didit-auth] Could not open the sign-in page.");
+      setFailed(true);
     });
-  }, [client, redirectUrl, screen, status]);
+  }, [client, redirectUrl, screen, status, attempt]);
+
+  return { failed, retry: () => { setFailed(false); setAttempt(value => value + 1); } };
+}
+
+function HostedRedirect({ screen, redirectUrl, fallback }: SignInProps & { screen: "signIn" | "signUp" }) {
+  const { locale } = useDiditAuthContext();
+  const { failed, retry } = useHostedRedirect(screen, redirectUrl);
+  const messages = messagesFor(locale);
+
+  if (failed) return <div role="alert"><p>{messages.signInError}</p><button onClick={retry}>{messages.retry}</button></div>;
+  return <>{fallback}</>;
 }
 
 /** Sends the visitor to your Didit sign-in page, or onwards when already signed in. */
 export function SignIn({ redirectUrl, fallback = null }: SignInProps) {
-  useHostedRedirect("signIn", redirectUrl);
-  return <>{fallback}</>;
+  return <HostedRedirect screen="signIn" redirectUrl={redirectUrl} fallback={fallback} />;
 }
 
 /** Sends the visitor to create an account on your Didit sign-in page. */
 export function SignUp({ redirectUrl, fallback = null }: SignInProps) {
-  useHostedRedirect("signUp", redirectUrl);
-  return <>{fallback}</>;
+  return <HostedRedirect screen="signUp" redirectUrl={redirectUrl} fallback={fallback} />;
 }

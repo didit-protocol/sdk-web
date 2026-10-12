@@ -22,4 +22,6 @@ export interface Messages {
   accountMenu: string;
   signOut: string;
   signOutError: string;
+  signInError: string;
+  retry: string;
 }

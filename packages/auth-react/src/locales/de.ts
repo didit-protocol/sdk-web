@@ -15,6 +15,8 @@ export const de: Messages = {
   agentsRevokedNotice: "Die Sitzung von {agent} wurde überall beendet. Der Agent kann erst wieder für dich handeln, wenn du ihn erneut freigibst.",
   agentsRevokeError: "{agent} konnte nicht widerrufen werden. Versuche es erneut.",
   poweredBy: "Bereitgestellt von",
+  signInError: "Die Anmeldeseite konnte nicht geöffnet werden.",
+  retry: "Erneut versuchen",
   signOutError: "Die Abmeldung ist fehlgeschlagen. Versuche es erneut.",
   accountMenu: "Konto",
   signOut: "Abmelden"

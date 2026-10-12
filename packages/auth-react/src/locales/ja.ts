@@ -15,6 +15,8 @@ export const ja: Messages = {
   agentsRevokedNotice: "{agent} のセッションはすべての場所で終了しました。もう一度承認するまで、あなたの代わりに操作することはできません。",
   agentsRevokeError: "{agent} を取り消せませんでした。もう一度お試しください。",
   poweredBy: "技術提供:",
+  signInError: "ログインページを開けませんでした。",
+  retry: "再試行",
   signOutError: "ログアウトできませんでした。もう一度お試しください。",
   accountMenu: "アカウント",
   signOut: "ログアウト"

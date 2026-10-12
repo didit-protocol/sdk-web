@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { DiditAuthProvider } from "../context";
 import { SignIn, SignUp } from "../SignIn";
@@ -51,4 +51,14 @@ describe("<SignIn /> and <SignUp />", () => {
     );
     expect(client.signIn).toHaveBeenCalledWith({ redirectUrl: "/welcome" });
   });
+  it("shows a retry after a redirect fails", async () => {
+    const { client } = testClient({ session: null });
+    client.signIn.mockRejectedValueOnce(new Error("network"));
+    render(<DiditAuthProvider client={client}><SignIn /></DiditAuthProvider>);
+    expect((await screen.findByRole("alert")).textContent).toContain("We could not open the sign-in page.");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(client.signIn).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
 });
