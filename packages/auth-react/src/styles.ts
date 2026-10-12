@@ -70,7 +70,9 @@ export const stylesheet = `
 .didit-ca-foot{display:flex;align-items:center;justify-content:center;height:32px;border-top:1px solid var(--da-line-soft);background:var(--da-surface-2);font-size:11px;line-height:1.55;color:var(--da-text-subtle)}
 .didit-lockup{position:relative;display:inline-block;height:12px;line-height:0;vertical-align:middle;margin-left:5px;color:var(--da-wordmark)}
 .didit-lockup>svg{display:block}
-.didit-lockup>.didit-wordmark{height:100%;width:auto}
+.didit-lockup>.didit-wordmark{display:block;height:100%;width:auto;filter:brightness(.1)}
+[data-didit-theme=dark] .didit-wordmark{filter:none}
+@media (prefers-color-scheme:dark){[data-didit-theme=auto] .didit-wordmark{filter:none}}
 .didit-lockup>.didit-ring{position:absolute;left:0;top:0}
 .didit-ub{position:relative;display:inline-flex}
 .didit-ub-trigger{appearance:none;margin:0;padding:0;border:0;background:none;border-radius:9999px;display:inline-flex;cursor:pointer}
