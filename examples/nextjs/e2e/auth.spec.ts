@@ -139,7 +139,7 @@ test("connected agents can be revoked", async () => {
   await page.goto("/account/agents");
   const card = page.getByRole("region", { name: "Connected agents" });
 
-  await expect(card).toBeVisible();
+  await expect(card).toHaveAttribute("aria-busy", "false");
   const revoke = card.getByRole("button", { name: /^Revoke: / });
 
   test.skip((await revoke.count()) === 0, "No agent grants for this person (set E2E_SEED_GRANTS).");
@@ -175,7 +175,7 @@ test("signing out ends the session at Didit and clears the cookies", async () =>
   await page.goto("/");
   await page.getByRole("button", { name: "Account" }).click();
   await page.getByRole("menuitem", { name: "Sign out" }).click();
-  await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByRole("navigation").getByRole("link", { name: "Sign in" })).toBeVisible();
   expect(await cookie("didit_at")).toBeUndefined();
   expect(await cookie("didit_rt")).toBeUndefined();
   const check = await page.request.get(`${FRONTEND_API}/session/`, { headers: { Authorization: `Bearer ${token}` } });
