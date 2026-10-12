@@ -6,7 +6,7 @@ import { expect, test } from "@playwright/test";
 //   EVENTS_UPSTREAM=<API base URL> EVENTS_MONITORING_TOKEN=<token from POST /v3/events/sdk-token/> \
 //     npx playwright test e2e/events-live.spec.mjs --project=chromium
 //
-// The token needs `auth` in its categories (or none), at least 6 uses, and
+// The token needs `auth` and `payment` in its categories (or none), at least 8 uses, and
 // must permit the fixture origin http://127.0.0.1:4173 when Origin-bound.
 const { EVENTS_UPSTREAM, EVENTS_MONITORING_TOKEN } = process.env;
 
@@ -43,4 +43,21 @@ test("stores sign-up, login and logout events, and a resend is a replay", async 
     outcomes: ["accepted", "accepted", "accepted"]
   });
   expect(await send()).toMatchObject({ acceptedCount: 0, replayedCount: 3, outcomes: ["replayed", "replayed", "replayed"] });
+});
+
+test("settles a partial batch using the service's per-event validation", async ({ page }) => {
+  await page.goto("/e2e/fixtures/events.html");
+  await expect(page.locator("body[data-ready=true]")).toBeAttached();
+  const result = await page.evaluate(async ({ baseUrl, monitoringToken }) => {
+    const run = `live-partial-${Date.now()}`;
+
+    window.events.configureEvents({ baseUrl });
+    window.events.submitEvent({ monitoringToken, event: { eventId: `${run}-valid`, category: "auth", actionType: "logout" } });
+    window.events.submitEvent({ monitoringToken, event: { eventId: `${run}-invalid`, category: "payment", actionType: "deposit_initiated" } });
+    const result = await window.events.flush();
+
+    return { acceptedCount: result.acceptedCount, rejectedCount: result.rejectedCount, pendingCount: result.pendingCount, errorType: result.results[1]?.error?.type };
+  }, { baseUrl: EVENTS_UPSTREAM, monitoringToken: EVENTS_MONITORING_TOKEN });
+
+  expect(result).toEqual({ acceptedCount: 1, rejectedCount: 1, pendingCount: 0, errorType: "validation" });
 });
