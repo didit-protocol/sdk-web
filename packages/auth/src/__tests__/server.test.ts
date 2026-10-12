@@ -91,7 +91,7 @@ async function token(
   { key = owner.keys[0], header = {} }: { key?: SigningKey; header?: Record<string, unknown> } = {}
 ): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  const input = `${encode({ alg: "ES256", typ: "JWT", kid: key.kid, ...header })}.${encode({
+  const input = `${encode({ alg: "ES256", typ: "at+jwt", kid: key.kid, ...header })}.${encode({
     iss: owner.issuer,
     aud: owner.applicationId,
     sub: "6e911151-6862-4541-851d-23ad36e85ed6",
@@ -119,7 +119,7 @@ describe("verifyToken", () => {
   it("returns the claims of a token signed by the application's issuer", async () => {
     const app = await tenant();
     const claims = await verifyToken(
-      await token(app, { act: { agent_id: "d73d7dc9", agent: "Local Agent", scopes: ["read"] } }),
+      await token(app, { org: null, act: { sub: "d73d7dc9", agent: "Local Agent", scopes: ["read"] } }),
       { publishableKey: app.publishableKey }
     );
 
@@ -128,7 +128,8 @@ describe("verifyToken", () => {
       aud: app.applicationId,
       sub: "6e911151-6862-4541-851d-23ad36e85ed6",
       vendor_data: "customer-7731",
-      act: { agent: "Local Agent", scopes: ["read"] }
+      org: null,
+      act: { sub: "d73d7dc9", agent: "Local Agent", scopes: ["read"] }
     });
   });
 
@@ -168,7 +169,7 @@ describe("verifyToken", () => {
     const [, payload, signature] = valid.split(".");
 
     for (const header of [{ alg: "none" }, { alg: "HS256" }, { alg: "RS256" }, { alg: "ES256" }, { alg: "ES256", kid: 7 }]) {
-      const forged = `${encode({ typ: "JWT", ...header })}.${payload}.${header.alg === "none" ? "" : signature}`;
+      const forged = `${encode({ typ: "at+jwt", ...header })}.${payload}.${header.alg === "none" ? "" : signature}`;
       expect((await rejection(verifyToken(forged, { publishableKey: app.publishableKey }))).code).toBe("invalid_token");
     }
     const critical = await token(app, {}, { header: { crit: ["exp"] } });
@@ -177,6 +178,25 @@ describe("verifyToken", () => {
     for (const malformed of ["", "a.b", "a.b.c.d", `${valid}x`, `${valid.split(".")[0]}.@@.${signature}`]) {
       expect((await rejection(verifyToken(malformed, { publishableKey: app.publishableKey }))).code).toBe("invalid_token");
     }
+  });
+
+  it("refuses an ID token of the same issuer and anything else that is not an access token", async () => {
+    const app = await tenant();
+    const options = { publishableKey: app.publishableKey };
+
+    // The issuer signs the ID token with the same key, issuer, audience and subject; only the type differs.
+    const idToken = await token(app, { email: "person@example.com" }, { header: { typ: "JWT" } });
+    expect(await rejection(verifyToken(idToken, options))).toMatchObject({
+      code: "invalid_token",
+      message: expect.stringMatching(/not an access token/)
+    });
+    for (const typ of [undefined, "", "dpop+jwt", ["at+jwt"]]) {
+      expect((await rejection(verifyToken(await token(app, {}, { header: { typ } }), options))).code).toBe("invalid_token");
+    }
+    expect(app.jwksRequests).toBe(0);
+    await expect(verifyToken(await token(app, {}, { header: { typ: "application/at+jwt" } }), options)).resolves.toMatchObject({
+      sub: expect.any(String)
+    });
   });
 
   it("rejects a token whose claims were changed after signing", async () => {
