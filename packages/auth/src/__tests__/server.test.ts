@@ -197,6 +197,7 @@ describe("verifyToken", () => {
     const options = { publishableKey: app.publishableKey };
     const now = Date.now();
     const clock = jest.spyOn(Date, "now");
+    const current = app.keys[0];
 
     await verifyToken(await token(app), options);
     await verifyToken(await token(app), options);
@@ -218,10 +219,10 @@ describe("verifyToken", () => {
     await rejection(verifyToken(await token(app, {}, { key: stranger }), options));
     expect(app.jwksRequests).toBe(3);
 
-    // After ten minutes the set is reloaded, so a retired key stops verifying.
+    // Ten minutes after the last load the set is reloaded, so a retired key stops verifying.
     app.keys = [next];
-    clock.mockReturnValue(now + 11 * 60_000);
-    expect((await rejection(verifyToken(await token(app), options))).message).toMatch(/unknown key/);
+    clock.mockReturnValue(now + 62_000 + 10 * 60_000);
+    expect((await rejection(verifyToken(await token(app, {}, { key: current }), options))).message).toMatch(/unknown key/);
     expect(app.jwksRequests).toBe(4);
   });
 
