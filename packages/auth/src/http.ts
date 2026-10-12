@@ -38,8 +38,9 @@ function fallbackCode(status: number): string {
 
 /**
  * Maps a Didit API error response to a DiditAuthError. The API answers with
- * `{"error": code}`, `{"detail": code}` or per-field lists such as
- * `{"password": ["password_policy"]}`; throttling answers 429 with prose.
+ * `{"error": code}`, `{"detail": code}` or per-field codes such as
+ * `{"password": "password_policy"}` (kept in `fields`); throttling answers 429
+ * with prose.
  */
 export function toError(status: number, body: Body, retryAfter?: number): DiditAuthError {
   const fields = fieldErrors(body);
@@ -48,8 +49,9 @@ export function toError(status: number, body: Body, retryAfter?: number): DiditA
       ? "rate_limited"
       : firstCode(body?.error) ??
         firstCode(body?.detail) ??
-        firstCode(fields?.non_field_errors) ??
-        (fields?.password?.includes("password_policy") ? "password_policy" : null) ??
+        Object.values(fields ?? {})
+          .map(firstCode)
+          .find(Boolean) ??
         fallbackCode(status);
   const detail = typeof body?.detail === "string" && !CODE.test(body.detail) ? body.detail : undefined;
 
