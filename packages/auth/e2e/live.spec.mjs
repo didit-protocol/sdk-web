@@ -56,15 +56,23 @@ function watchRequests(page) {
   return seen;
 }
 
-// Calls the runtime API from the page: this machine's browsers resolve *.localhost, Node does not.
-const callApi = (page, path, init = {}) =>
-  page.evaluate(
-    async ([url, init]) => {
-      const response = await fetch(url, { ...init, credentials: "omit" });
-      return { status: response.status, body: await response.json().catch(() => null) };
-    },
-    [`${AUTH_ORIGIN}/${path}`, init]
-  );
+// Calls the runtime API from a page of its own, next to `page`: this machine's browsers resolve
+// *.localhost, Node does not.
+async function callApi(page, path, init = {}) {
+  const caller = await page.context().newPage();
+  try {
+    await caller.goto(APP);
+    return await caller.evaluate(
+      async ([url, init]) => {
+        const response = await fetch(url, { ...init, credentials: "omit" });
+        return { status: response.status, body: await response.json().catch(() => null) };
+      },
+      [`${AUTH_ORIGIN}/${path}`, init]
+    );
+  } finally {
+    await caller.close();
+  }
+}
 
 function lastEmailedCode(email) {
   const mail = readFileSync(DIDIT_AUTH_LIVE_MAILBOX, "utf8").trim().split("\n").map(JSON.parse).filter((m) => m.to === email).at(-1);
@@ -233,5 +241,62 @@ test("registers a passkey, signs in and reauthenticates with it, then approves a
   // Same origin, so every request carried the device headers, and the API accepted them.
   expect(seen.length).toBeGreaterThan(5);
   for (const entry of seen) expect(entry.headers["x-didit-pid"]).toMatch(/^[A-Za-z0-9_-]{20,32}$/);
+  await page.evaluate(() => window.auth.signOut());
+});
+
+test("steps up before a contact change: the hosted check, verification and Didit's record", async ({ page }) => {
+  test.skip(!DIDIT_AUTH_LIVE_VERIFICATION, "needs a contact-change step-up rule and verification's stand-in");
+  await openApp(page);
+  expect(await passwordSignIn(page, "browser-person@example.com")).toBe("signed_in");
+
+  // No payout rule: the action goes ahead without a check.
+  expect(await page.evaluate(() => window.auth.stepUp({ action: "payout", amount: "900.00", currency: "USD" }))).toMatchObject({
+    status: "not_required",
+    approved: true
+  });
+  await page.evaluate(() => void window.auth.stepUp({ action: "contact" }));
+  await page.waitForURL(`${AUTH_ORIGIN}/verify/**`);
+  await page.locator("form button").click();
+  await page.waitForURL(`${DIDIT_AUTH_LIVE_VERIFICATION}/session/**`);
+  await page.getByRole("link", { name: "approve" }).click();
+  await page.waitForURL(/[?&]step_up=/);
+
+  await openApp(page, page.url());
+  const outcome = await page.evaluate(async () => ({ ...(await window.auth.handleStepUpCallback()), href: location.href }));
+  expect(outcome).toMatchObject({ status: "approved", approved: true, rule: "contact", href: APP });
+  await page.evaluate(() => window.auth.signOut());
+});
+
+test("answers bot protection with an emailed code, then with a passkey", async ({ context, page }) => {
+  test.skip(!DIDIT_AUTH_LIVE_PROTECTION || !DIDIT_AUTH_LIVE_MAILBOX, "needs brute-force protection set to challenge and the mailbox");
+  const email = "protected-browser-person@example.com";
+  const failFiveTimes = async () => {
+    for (let attempt = 0; attempt < 5; attempt++) expect(await passwordSignIn(page, email, WRONG_PASSWORD)).toBeUndefined();
+  };
+  const cdp = await context.newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true }
+  });
+  await openApp(page, SAME_ORIGIN_APP);
+
+  await failFiveTimes();
+  expect(await page.evaluate(([email, password]) => window.auth.password.signIn({ email, password }), [email, DIDIT_AUTH_LIVE_PASSWORD])).toEqual({
+    status: "protection_required",
+    methods: ["email_code"],
+    expiresIn: 300
+  });
+  const byCode = await page.evaluate((code) => window.auth.protection.verify({ code }), lastEmailedCode(email));
+  expect(byCode.status).toBe("signed_in");
+  await page.evaluate(() => window.auth.passkeys.register());
+  await page.evaluate(() => window.auth.signOut());
+
+  await failFiveTimes();
+  expect(
+    await page.evaluate(([email, password]) => window.auth.password.signIn({ email, password }), [email, DIDIT_AUTH_LIVE_PASSWORD])
+  ).toMatchObject({ status: "protection_required", methods: ["passkey", "email_code"] });
+  const byPasskey = await page.evaluate(() => window.auth.protection.passkey());
+  expect(byPasskey.status).toBe("signed_in");
+  expect(byPasskey.session).toMatchObject({ email, mfaVerified: true });
   await page.evaluate(() => window.auth.signOut());
 });
