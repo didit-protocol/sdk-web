@@ -1,13 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
-const APPLICATION_ID = "b83c95f9-93bd-4bed-a94f-f4b354a446db";
+// The recorded API is an application's origin, as each application's host is: its key names that origin.
 const RECORDED_API = "http://127.0.0.1:4175";
-const API_BASE = `${RECORDED_API}/auth/v2/authentication/${APPLICATION_ID}`;
-const PUBLISHABLE_KEY = `pk_test_${Buffer.from(API_BASE).toString("base64url")}`;
+const PUBLISHABLE_KEY = `pk_test_${Buffer.from(RECORDED_API).toString("base64url")}`;
 const APP = "http://localhost:4174/e2e/fixtures/app.html";
 const PASSWORD = "Correct-horse-battery-91";
-const TOKENS = `didit-auth:${APPLICATION_ID}`;
+const TOKENS = `didit-auth:${RECORDED_API}`;
 
 const fixture = (name) => JSON.parse(readFileSync(new URL(`../src/__tests__/fixtures/${name}.json`, import.meta.url), "utf8"));
 
@@ -86,7 +85,7 @@ async function startSlowRefresh(tab) {
   let arrived;
   let held = null;
   const first = new Promise((resolve) => (arrived = resolve));
-  await tab.route(`${API_BASE}/token/`, (route) => (held ? route.continue() : arrived((held = route))));
+  await tab.route(`${RECORDED_API}/token/`, (route) => (held ? route.continue() : arrived((held = route))));
   await tab.evaluate(() => {
     window.clockOffset = 5 * 60_000;
     window.refreshed = window.auth.getToken();
@@ -139,7 +138,7 @@ test("completes in another tab, as an emailed magic link does, and the first tab
     return window.auth.signIn();
   }, PUBLISHABLE_KEY);
   // The same address the recording opened, on this test's API host.
-  expect(await page.evaluate(() => window.opened)).toBe(recorded.signInUrl.replace("http://127.0.0.1:8765", RECORDED_API));
+  expect(await page.evaluate(() => window.opened)).toBe(recorded.signInUrl.replace(recorded.apiBase, RECORDED_API));
 
   const link = await context.newPage();
   await openApp(link, { url: recorded.callbackUrl });
@@ -316,8 +315,8 @@ for (const late of [false, true]) {
     const other = await context.newPage();
     await openApp(other);
 
-    // This tab steps up on the hosted page and comes back with a code.
-    await page.evaluate(() => void window.auth.stepUp());
+    // This tab signs in again on the hosted page and comes back with a code.
+    await page.evaluate(() => void window.auth.reauthenticate());
     await page.waitForURL(/[?&]code=/);
     expect(page.url()).toBe(recorded.callbackUrl);
     await openApp(page, { url: page.url() });
@@ -377,4 +376,80 @@ test("sends device signals when the page and the API share an origin", async ({ 
   expect(reset.headers["x-didit-pid"]).toMatch(/^[A-Za-z0-9_-]{20,32}$/);
   expect(reset.headers["x-didit-fp-hash"]).toBeTruthy();
   expect(await page.evaluate(() => localStorage.getItem("didit-pid-v1"))).toBe(reset.headers["x-didit-pid"]);
+});
+
+// A client that keeps the address it opens instead of leaving the page.
+async function openKeepingNavigation(page, scenario) {
+  await openApp(page, { scenario, create: false });
+  await page.evaluate((key) => {
+    window.auth = window.didit.createDiditAuth({ publishableKey: key, navigate: (url) => void (window.opened = url) });
+    window.auth.onAuthStateChange((event, session) => window.didit.events.push([event, session && session.email]));
+  }, PUBLISHABLE_KEY);
+}
+
+test("a step-up opens the identity check a rule asks for and reads Didit's outcome on return", async ({ page, request }) => {
+  const recorded = fixture("step-up-check");
+  await loadRecording(request, "step-up-check");
+  await openKeepingNavigation(page, "step-up-check");
+
+  const steps = await page.evaluate(async (password) => {
+    await window.auth.password.signIn({ email: "person@example.com", password });
+    const payout = await window.auth.stepUp({ action: "payout", amount: "900.00", currency: "USD" });
+    const refused = await window.auth
+      .stepUp({ action: "contact", redirectUri: "https://elsewhere.example.com/" })
+      .catch((error) => error.code);
+    const contact = await window.auth.stepUp({ action: "contact" });
+    return { payout, refused, contact, opened: window.opened };
+  }, PASSWORD);
+  expect(steps).toEqual({
+    payout: recorded.payout,
+    refused: "invalid_redirect_uri",
+    contact: recorded.contact,
+    opened: recorded.verificationUrl
+  });
+  // An address claiming approval is not proof: Didit's record of the check is.
+  expect(await page.evaluate((address) => window.auth.handleStepUpCallback(address), recorded.forgedReturn)).toMatchObject({
+    status: "pending",
+    approved: false
+  });
+
+  // The person passed the check and came back.
+  await openApp(page, { url: recorded.returnUrl });
+  const outcome = await page.evaluate(async () => ({ ...(await window.auth.handleStepUpCallback()), href: location.href }));
+  expect(outcome).toEqual(recorded.outcome);
+  const seen = await requestsSeen(request);
+  expect(seen.filter((entry) => entry.path.startsWith("step-up/")).map(({ method, path }) => `${method} ${path}`)).toEqual([
+    "POST step-up/",
+    "POST step-up/",
+    "POST step-up/",
+    `GET step-up/${recorded.contact.id}/`,
+    `GET step-up/${recorded.contact.id}/`
+  ]);
+  expect(seen.filter((entry) => entry.mismatch)).toEqual([]);
+});
+
+test("answers Didit's bot protection with the emailed code", async ({ page, request }) => {
+  const recorded = fixture("protection-email-code");
+  await loadRecording(request, "protection-email-code");
+  await openApp(page, { scenario: "protection-email-code" });
+
+  const result = await page.evaluate(
+    async ({ email, password, wrongPassword, code, wrongCode }) => {
+      for (let attempt = 0; attempt < 5; attempt++) await window.auth.password.signIn({ email, password: wrongPassword }).catch(() => null);
+      const challenged = await window.auth.password.signIn({ email, password });
+      const wrong = await window.auth.protection.verify({ code: wrongCode }).catch((error) => error.code);
+      const signedIn = await window.auth.protection.verify({ code });
+      return { challenged, wrong, status: signedIn.status, email: signedIn.session.email };
+    },
+    { email: recorded.email, password: PASSWORD, wrongPassword: recorded.wrongPassword, code: recorded.code, wrongCode: recorded.wrongCode }
+  );
+
+  expect(result).toEqual({
+    challenged: { status: "protection_required", methods: ["email_code"], expiresIn: 300 },
+    wrong: "invalid_grant",
+    status: "signed_in",
+    email: recorded.email
+  });
+  expect(await page.evaluate(() => window.didit.events)).toEqual([["SIGNED_IN", recorded.email]]);
+  expect((await requestsSeen(request)).filter((entry) => entry.mismatch)).toEqual([]);
 });

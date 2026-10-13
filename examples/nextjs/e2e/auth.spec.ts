@@ -6,7 +6,9 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 // Runs against a real Didit Frontend API (a Sandbox application, or a local
 // stack). Sign-up and password reset read their emails from E2E_MAILBOX, a
 // JSON Lines file with one { to, subject, html } object per email sent.
-const FRONTEND_API = process.env.DIDIT_FRONTEND_API ?? "";
+const KEY = process.env.DIDIT_PUBLISHABLE_KEY ?? "";
+// The application's origin: a publishable key is pk_test_ or pk_live_ and its base64url.
+const FRONTEND_API = KEY ? Buffer.from(KEY.replace(/^pk_(test|live)_/, ""), "base64url").toString() : "";
 const MAILBOX = process.env.E2E_MAILBOX ?? "";
 // Optional: a command that gives the signed-up person agent grants; it gets the email as its last argument.
 const SEED_GRANTS = process.env.E2E_SEED_GRANTS ?? "";
@@ -17,7 +19,7 @@ const password = "A-long-random-passphrase-491!";
 const newPassword = "Another-long-passphrase-582!";
 
 test.describe.configure({ mode: "serial" });
-test.skip(!FRONTEND_API || !MAILBOX, "Set DIDIT_FRONTEND_API and E2E_MAILBOX to run against a Frontend API.");
+test.skip(!FRONTEND_API || !MAILBOX, "Set DIDIT_PUBLISHABLE_KEY and E2E_MAILBOX to run against a Frontend API.");
 
 let context: BrowserContext;
 let page: Page;

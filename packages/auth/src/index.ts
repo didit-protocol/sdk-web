@@ -12,10 +12,16 @@ export type {
   DiditAuthLanguage,
   DiditAuthListener,
   DiditAuthOptions,
+  DiditCodeGrant,
   DiditOrganization,
+  DiditProtectionMethod,
   DiditRedirectResult,
   DiditSession,
+  DiditSessionResponse,
   DiditSignInResult,
+  DiditStepUpAction,
+  DiditStepUpResult,
+  ReauthenticateOptions,
   SignInRedirectOptions,
   StepUpOptions
 } from "./types";

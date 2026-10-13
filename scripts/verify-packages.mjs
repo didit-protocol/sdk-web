@@ -60,14 +60,16 @@ try {
     export const fingerprint: DeviceFingerprintPayload | null = null;
   `);
   // @didit-protocol/auth imports the installed signals package, so these also check the exports it needs.
-  const publishableKey = `pk_test_${Buffer.from("https://auth.example.com/auth/v2/authentication/00000000-0000-4000-8000-000000000000").toString("base64url")}`;
+  // A key the Didit auth service minted (packages/auth/src/__tests__/fixtures/publishable-keys.json).
+  const { publishableKey } = JSON.parse(await readFile(join(root, "packages/auth/src/__tests__/fixtures/publishable-keys.json"), "utf8")).live;
   run(process.execPath, ["--input-type=module", "-e", `
     import assert from 'node:assert/strict';
     import { createDiditAuth, DiditAuthError } from '@didit-protocol/auth';
     import { verifyToken, DiditAuthError as ServerError } from '@didit-protocol/auth/server';
     assert.equal(ServerError, DiditAuthError);
-    const auth = createDiditAuth({ publishableKey: '${publishableKey}' });
-    assert.equal(auth.applicationId, '00000000-0000-4000-8000-000000000000');
+    const auth = createDiditAuth({ publishableKey: '${publishableKey}', redirectUri: 'https://app.example.com/callback' });
+    assert.equal(typeof auth.stepUp, 'function');
+    assert.throws(() => createDiditAuth({ publishableKey: 'pk_live_bm90IGEgdXJs' }), (error) => error.code === 'invalid_publishable_key');
     await assert.rejects(verifyToken('not-a-token', { publishableKey: '${publishableKey}' }), (error) => error instanceof DiditAuthError && error.code === 'invalid_token');
   `]);
   run(process.execPath, ["--input-type=commonjs", "-e", `
@@ -75,14 +77,15 @@ try {
     const { createDiditAuth, DiditAuthError } = require('@didit-protocol/auth');
     const server = require('@didit-protocol/auth/server');
     assert.equal(server.DiditAuthError, DiditAuthError);
-    assert.equal(createDiditAuth({ publishableKey: '${publishableKey}' }).applicationId, '00000000-0000-4000-8000-000000000000');
+    assert.equal(typeof createDiditAuth({ publishableKey: '${publishableKey}' }).handleStepUpCallback, 'function');
     assert.equal(typeof server.verifyToken, 'function');
   `]);
   await writeFile(join(destination, "auth-consumer.mts"), `
-    import { createDiditAuth, type DiditSession } from '@didit-protocol/auth';
+    import { createDiditAuth, type DiditSession, type DiditStepUpResult } from '@didit-protocol/auth';
     import { verifyToken, type DiditTokenClaims } from '@didit-protocol/auth/server';
     const auth = createDiditAuth({ publishableKey: 'pk_test_example', storage: 'session' });
     auth.getSession().then((session: DiditSession | null) => session?.vendorData);
+    auth.stepUp({ action: 'payout', amount: '900.00', currency: 'USD' }).then((result: DiditStepUpResult) => result.approved);
     verifyToken('token', { publishableKey: 'pk_test_example' }).then((claims: DiditTokenClaims) => claims.sub);
   `);
   run(process.execPath, [resolve(root, "node_modules/typescript/bin/tsc"), "--noEmit", "--strict", "--module", "nodenext", "--target", "ES2020", "consumer.mts", "auth-consumer.mts"]);

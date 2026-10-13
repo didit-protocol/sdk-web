@@ -1,5 +1,27 @@
+/// <reference types="node" />
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { createAuthStore, snapshotOf } from "../store";
-import type { AgentGrant, AuthClient, DiditSession } from "../types";
+import type { AgentGrant, AuthClient, DiditSession, SignInResult, StepUpResult } from "../types";
+
+/** A scenario @didit-protocol/auth recorded against a local Didit auth service (its own test fixtures). */
+function recorded(scenario: string) {
+  return JSON.parse(readFileSync(join(__dirname, "../../../auth/src/__tests__/fixtures", `${scenario}.json`), "utf8"));
+}
+
+const stepUpCheck = recorded("step-up-check");
+const { href: _returnedTo, ...approved } = stepUpCheck.outcome;
+
+/** What the core's stepUp and handleStepUpCallback answered: no rule, a pending check, then its approval. */
+export const stepUps: Record<"notRequired" | "pending" | "approved", StepUpResult> = {
+  notRequired: stepUpCheck.payout,
+  pending: stepUpCheck.contact,
+  approved
+};
+
+/** What the core's password sign-in answered once bot protection challenged it. */
+export const protectionRequired: SignInResult = recorded("protection-email-code").challenged;
 
 export const session: DiditSession = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -63,7 +85,17 @@ export function testClient(options: Options = {}) {
     signIn: jest.fn(async () => undefined),
     signUp: jest.fn(async () => undefined),
     signOut: jest.fn(async () => store.set(snapshotOf(null))),
-    stepUp: jest.fn(async () => undefined),
+    stepUp: jest.fn(async () => stepUps.pending),
+    handleStepUpCallback: jest.fn(async () => stepUps.approved),
+    reauthenticate: jest.fn(async () => undefined),
+    password: { signIn: jest.fn(async () => protectionRequired) },
+    emailCode: { start: jest.fn(async () => protectionRequired), verify: jest.fn(async () => protectionRequired) },
+    phone: { start: jest.fn(async () => protectionRequired), verify: jest.fn(async () => protectionRequired) },
+    protection: {
+      verify: jest.fn(async (): Promise<SignInResult> => ({ status: "signed_in", session: session })),
+      passkey: jest.fn(async (): Promise<SignInResult> => ({ status: "signed_in", session: session }))
+    },
+    mfa: { verify: jest.fn(async () => protectionRequired), setup: jest.fn(async () => protectionRequired) },
     getToken: jest.fn(async () => "access-token"),
     listAgents: jest.fn(async () => {
       if (options.listError) throw new Error("unavailable");
