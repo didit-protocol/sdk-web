@@ -468,23 +468,25 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     await (options.navigate ? options.navigate(url.href) : location.assign(url.href));
   }
 
-  // The address a redirect came back to, with `names` removed from the address bar when it is the current page.
-  function returnAddress(url: string | undefined, names: string[]): URL {
+  // The address a redirect came back to: `url`, or the current page.
+  function returnAddress(url: string | undefined): URL {
     const current = typeof location === "undefined" ? undefined : location.href;
     if (!url && !current) throw new DiditAuthError("invalid_request", "Pass the redirect address.");
-    const address = new URL((url || current) as string);
+    return new URL((url || current) as string);
+  }
 
-    if (address.href === current) {
-      const clean = new URL(address.href);
-      names.forEach((name) => clean.searchParams.delete(name));
-      history.replaceState(history.state, "", clean.href);
-    }
-    return address;
+  // Removes `names` from the address bar when `address` is the current page.
+  function forgetParams(address: URL, names: string[]) {
+    if (typeof location === "undefined" || address.href !== location.href) return;
+    const clean = new URL(address.href);
+    names.forEach((name) => clean.searchParams.delete(name));
+    history.replaceState(history.state, "", clean.href);
   }
 
   async function handleRedirectCallback(url?: string) {
+    const address = returnAddress(url);
     // Keep the one-time code out of the address bar, history and later reloads.
-    const address = returnAddress(url, ["code", "state", "error"]);
+    forgetParams(address, ["code", "state", "error"]);
     const state = address.searchParams.get("state");
     const code = address.searchParams.get("code");
     const pending = state ? takePending(state) : null;
@@ -671,8 +673,11 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     },
 
     async handleStepUpCallback(url) {
-      const id = returnAddress(url, ["step_up", "status"]).searchParams.get("step_up");
+      const address = returnAddress(url);
+      const id = address.searchParams.get("step_up");
       if (!id || !UUID.test(id)) throw new DiditAuthError("invalid_request", "This address is not a step-up's return.");
+      // Only a step-up's return loses its parameters; any other address keeps the page's own.
+      forgetParams(address, ["step_up", "status"]);
       // The address only says the person came back: Didit's record of the check is the outcome.
       return toStepUp(await authed<StepUpResponse>(`step-up/${id}/`));
     },
