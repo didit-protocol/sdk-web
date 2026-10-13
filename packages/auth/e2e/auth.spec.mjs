@@ -377,3 +377,79 @@ test("sends device signals when the page and the API share an origin", async ({ 
   expect(reset.headers["x-didit-fp-hash"]).toBeTruthy();
   expect(await page.evaluate(() => localStorage.getItem("didit-pid-v1"))).toBe(reset.headers["x-didit-pid"]);
 });
+
+// A client that keeps the address it opens instead of leaving the page.
+async function openKeepingNavigation(page, scenario) {
+  await openApp(page, { scenario, create: false });
+  await page.evaluate((key) => {
+    window.auth = window.didit.createDiditAuth({ publishableKey: key, navigate: (url) => void (window.opened = url) });
+    window.auth.onAuthStateChange((event, session) => window.didit.events.push([event, session && session.email]));
+  }, PUBLISHABLE_KEY);
+}
+
+test("a step-up opens the identity check a rule asks for and reads Didit's outcome on return", async ({ page, request }) => {
+  const recorded = fixture("step-up-check");
+  await loadRecording(request, "step-up-check");
+  await openKeepingNavigation(page, "step-up-check");
+
+  const steps = await page.evaluate(async (password) => {
+    await window.auth.password.signIn({ email: "person@example.com", password });
+    const payout = await window.auth.stepUp({ action: "payout", amount: "900.00", currency: "USD" });
+    const refused = await window.auth
+      .stepUp({ action: "contact", redirectUri: "https://elsewhere.example.com/" })
+      .catch((error) => error.code);
+    const contact = await window.auth.stepUp({ action: "contact" });
+    return { payout, refused, contact, opened: window.opened };
+  }, PASSWORD);
+  expect(steps).toEqual({
+    payout: recorded.payout,
+    refused: "invalid_redirect_uri",
+    contact: recorded.contact,
+    opened: recorded.verificationUrl
+  });
+  // An address claiming approval is not proof: Didit's record of the check is.
+  expect(await page.evaluate((address) => window.auth.handleStepUpCallback(address), recorded.forgedReturn)).toMatchObject({
+    status: "pending",
+    approved: false
+  });
+
+  // The person passed the check and came back.
+  await openApp(page, { url: recorded.returnUrl });
+  const outcome = await page.evaluate(async () => ({ ...(await window.auth.handleStepUpCallback()), href: location.href }));
+  expect(outcome).toEqual(recorded.outcome);
+  const seen = await requestsSeen(request);
+  expect(seen.filter((entry) => entry.path.startsWith("step-up/")).map(({ method, path }) => `${method} ${path}`)).toEqual([
+    "POST step-up/",
+    "POST step-up/",
+    "POST step-up/",
+    `GET step-up/${recorded.contact.id}/`,
+    `GET step-up/${recorded.contact.id}/`
+  ]);
+  expect(seen.filter((entry) => entry.mismatch)).toEqual([]);
+});
+
+test("answers Didit's bot protection with the emailed code", async ({ page, request }) => {
+  const recorded = fixture("protection-email-code");
+  await loadRecording(request, "protection-email-code");
+  await openApp(page, { scenario: "protection-email-code" });
+
+  const result = await page.evaluate(
+    async ({ email, password, wrongPassword, code, wrongCode }) => {
+      for (let attempt = 0; attempt < 5; attempt++) await window.auth.password.signIn({ email, password: wrongPassword }).catch(() => null);
+      const challenged = await window.auth.password.signIn({ email, password });
+      const wrong = await window.auth.protection.verify({ code: wrongCode }).catch((error) => error.code);
+      const signedIn = await window.auth.protection.verify({ code });
+      return { challenged, wrong, status: signedIn.status, email: signedIn.session.email };
+    },
+    { email: recorded.email, password: PASSWORD, wrongPassword: recorded.wrongPassword, code: recorded.code, wrongCode: recorded.wrongCode }
+  );
+
+  expect(result).toEqual({
+    challenged: { status: "protection_required", methods: ["email_code"], expiresIn: 300 },
+    wrong: "invalid_grant",
+    status: "signed_in",
+    email: recorded.email
+  });
+  expect(await page.evaluate(() => window.didit.events)).toEqual([["SIGNED_IN", recorded.email]]);
+  expect((await requestsSeen(request)).filter((entry) => entry.mismatch)).toEqual([]);
+});
