@@ -82,6 +82,33 @@ copy in IndexedDB for the tabs to agree on), `"session"` (this tab only),
 read web storage and IndexedDB, so keep a strict Content Security Policy; Didit
 limits the damage of a stolen refresh token by rotating it.
 
+### Keeping the tokens on your server
+
+To keep the tokens out of the page entirely, let your server exchange the
+one-time code that ends every sign-in. The steps still run in the browser,
+straight to Didit; only the code goes to your server, which posts it to
+`token/`, keeps the tokens (for example in httpOnly cookies) and answers with
+the body of `GET session/`:
+
+```ts
+const auth = createDiditAuth({
+  publishableKey: "pk_live_...",
+  redirectUri: "https://app.example.com/callback",
+  async exchangeCode({ code, codeVerifier, redirectUri }) {
+    const response = await fetch("/api/didit/exchange", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, codeVerifier, redirectUri })
+    });
+    return (await response.json()).session;
+  }
+});
+```
+
+This client then keeps no tokens, so use it for the sign-in steps only:
+`getSession` and `getToken` answer `null`, and it reports no auth events.
+`@didit-protocol/auth-nextjs` works this way.
+
 ## Your own screens (headless)
 
 Every headless sign-in returns a result to act on:
@@ -268,6 +295,9 @@ with it and people signed in on your pages sign in again. The key is public:
 ship it in your front end. Live keys use HTTPS; Sandbox keys may also name a
 local HTTP host (`localhost` or a name under it). Anything else, including an
 address with a path, is refused with `invalid_publishable_key`.
+
+On a server, `parsePublishableKey(key)` from `@didit-protocol/auth/server`
+returns `{ mode, origin }`, or throws that error.
 
 ## Errors
 

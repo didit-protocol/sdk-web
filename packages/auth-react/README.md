@@ -57,16 +57,64 @@ does not return them; the component never fabricates publisher or activity data.
 ## Hooks
 
 ```tsx
-const { isLoaded, isSignedIn, userId, session, signIn, signUp, signOut, stepUp, getToken } = useAuth();
+const { isLoaded, isSignedIn, userId, session, signIn, signUp, signOut, getToken } = useAuth();
+const { stepUp, handleStepUpCallback, reauthenticate } = useAuth();
 const { user } = useUser(); // { id, email, emailVerified, phone, vendorData, verifiedIdentity, organizations }
 ```
 
 - `getToken()` returns a short-lived access token for calling your own API.
-- `stepUp()` asks the person to sign in again before a sensitive action and
-  brings them back to the current page.
 - `user.vendorData` is your own id for the person, shared with Didit identity
   verification and transaction monitoring when the runtime supplies `vendor_data`;
   it remains `null` on runtimes that do not expose that field yet.
+
+### Step-up before sensitive actions
+
+Your application's step-up rules, set in the Didit console, can ask for a
+liveness check, a selfie or an ID before a payout, a bank account change or a
+contact change. Ask before the action:
+
+```tsx
+const check = await stepUp({ action: "payout", amount: "900.00", currency: "USD" });
+if (check.approved) await payOut(); // no rule asked for a check
+
+// Otherwise the check opened. Back on the page, with ?step_up=<id> in the address:
+const outcome = await handleStepUpCallback();
+if (outcome.approved) await payOut();
+```
+
+`action` is `payout`, `bank` or `contact`. Both resolve with
+`{ id, status, approved, rule, method }`. The person comes back to the
+`redirectUri` of `<DiditAuth>` (by default the page that asked);
+`handleStepUpCallback` reads the outcome from Didit, never from the address.
+Your backend reads the step-up again (`GET step-up/<id>/` with the person's
+access token) before acting.
+
+`reauthenticate()` signs the person in again on the hosted page and brings them
+back to the current page (or `redirectUrl`), for actions that need a fresh
+session.
+
+### Your own sign-in screens
+
+`useAuth()` also has the headless steps of `@didit-protocol/auth`:
+`password.signIn`, `emailCode.start` and `verify`, `phone.start` and `verify`,
+`protection.verify` and `passkey`, and `mfa.verify` and `setup`. Each resolves
+with what to ask for next:
+
+```tsx
+const { password, protection, mfa } = useAuth();
+
+let result = await password.signIn({ email, password: secret });
+if (result.status === "protection_required") {
+  // Didit's bot and risk protection wants one more proof: a code it just emailed, or a passkey.
+  result = result.methods.includes("passkey") ? await protection.passkey() : await protection.verify({ code });
+}
+if (result.status === "mfa_required") result = await mfa.verify({ code: authenticatorCode });
+if (result.status === "signed_in") navigate("/account");
+```
+
+`status` is `signed_in`, `code_sent`, `protection_required`, `mfa_required` or
+`mfa_enrollment_required`. An emailed protection code does not replace MFA, so
+`mfa_required` can follow it. Passkeys only work on your Didit sign-in domain.
 
 ## Appearance
 
