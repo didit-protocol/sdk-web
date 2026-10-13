@@ -1,9 +1,26 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import recorded from "./fixtures/runtime-responses.json";
 
 export { recorded };
 
-export const FRONTEND_API = "http://127.0.0.1:8000/auth/v2/authentication/00000000-0000-4000-8000-000000000003";
-export const ENV = { DIDIT_FRONTEND_API: FRONTEND_API, DIDIT_REDIRECT_URI: "http://localhost:3000/auth/callback" };
+/** A scenario @didit-protocol/auth recorded against a local Didit auth service (its own test fixtures). */
+export function coreFixture(scenario: string) {
+  return JSON.parse(readFileSync(join(__dirname, "../../../auth/src/__tests__/fixtures", `${scenario}.json`), "utf8"));
+}
+
+interface MintedKey {
+  origin: string;
+  publishableKey: string;
+}
+
+/** Publishable keys the local Didit auth service minted, with the application origin each names. */
+export const KEYS = coreFixture("publishable-keys") as Record<"localSandbox" | "sandbox" | "live" | "customDomain", MintedKey>;
+
+/** The application's origin, which its publishable key names: the Frontend API. */
+export const FRONTEND_API = KEYS.localSandbox.origin;
+export const ENV = { DIDIT_PUBLISHABLE_KEY: KEYS.localSandbox.publishableKey, DIDIT_REDIRECT_URI: "http://localhost:3000/auth/callback" };
 
 export interface RecordedResponse {
   status: number;
@@ -25,7 +42,8 @@ export interface Call {
 
 /**
  * Replaces fetch with a replay of recorded Frontend API responses. Each
- * expected call answers once; an unexpected call fails the test.
+ * expected call answers once; an unexpected call, or one to another origin
+ * than the publishable key names, fails the test.
  */
 export function replay(...expected: Expected[]) {
   const queue = [...expected];
@@ -34,8 +52,9 @@ export function replay(...expected: Expected[]) {
   global.fetch = jest.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = new URL(String(input));
     const method = init.method ?? "GET";
-    const path = url.pathname.replace(new URL(FRONTEND_API).pathname, "").replace(/^\//, "") + url.search;
+    const path = url.pathname.replace(/^\//, "") + url.search;
 
+    if (url.origin !== FRONTEND_API) throw new Error(`Call to another origin: ${method} ${url.href}`);
     calls.push({ method, path, headers: new Headers(init.headers), body: init.body ? JSON.parse(String(init.body)) : null });
     const index = queue.findIndex((entry) => entry.method === method && entry.path === path);
 
