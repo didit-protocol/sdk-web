@@ -90,12 +90,16 @@ describe("step-up", () => {
     api.verify(0);
   });
 
-  it("refuses an address that does not come back from a step-up, without asking Didit", async () => {
+  it("refuses an address that does not come back from a step-up, without asking Didit or changing it", async () => {
     const { api, auth } = setup();
 
     for (const address of [`http://localhost:4174${PAGE}`, `http://localhost:4174${PAGE}?step_up=../session`]) {
       await expect(auth.handleStepUpCallback(address)).rejects.toMatchObject({ code: "invalid_request" });
     }
+    // The page's own parameters stay in the address bar.
+    history.replaceState(null, "", `${PAGE}?status=paid`);
+    await expect(auth.handleStepUpCallback()).rejects.toMatchObject({ code: "invalid_request" });
+    expect(location.search).toBe("?status=paid");
     api.verify(0);
   });
 });
