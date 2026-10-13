@@ -2,10 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 
 import { DiditAuthError } from "../errors";
 import { parsePublishableKey } from "../key";
-import { publishableKeyFor } from "./helpers/replay";
-
-const APPLICATION_ID = "b83c95f9-93bd-4bed-a94f-f4b354a446db";
-const LIVE_BASE = `https://auth.didit.me/auth/v2/authentication/${APPLICATION_ID}`;
+import { KEYS, publishableKeyFor } from "./helpers/replay";
 
 function rejects(key: string): void {
   expect(() => parsePublishableKey(key)).toThrow(DiditAuthError);
@@ -17,41 +14,54 @@ function rejects(key: string): void {
 }
 
 describe("parsePublishableKey", () => {
-  it("decodes the runtime API base and application id of a live key", () => {
-    expect(parsePublishableKey(publishableKeyFor(LIVE_BASE, "live"))).toEqual({
-      mode: "live",
-      apiBase: LIVE_BASE,
-      applicationId: APPLICATION_ID
+  it("reads the application's origin from the keys the Didit auth service issues", () => {
+    // Live and Sandbox applications on Didit's hosts, an active custom domain, and a local Sandbox application.
+    expect(parsePublishableKey(KEYS.live.publishableKey)).toEqual({ mode: "live", origin: KEYS.live.origin });
+    expect(parsePublishableKey(KEYS.sandbox.publishableKey)).toEqual({ mode: "test", origin: KEYS.sandbox.origin });
+    expect(parsePublishableKey(KEYS.customDomain.publishableKey)).toEqual({ mode: "live", origin: "https://auth.example.com" });
+    expect(parsePublishableKey(KEYS.localSandbox.publishableKey)).toEqual({
+      mode: "test",
+      origin: KEYS.localSandbox.origin
     });
   });
 
-  it("drops a trailing slash and surrounding whitespace", () => {
-    expect(parsePublishableKey(` ${publishableKeyFor(`${LIVE_BASE}/`, "live")} `).apiBase).toBe(LIVE_BASE);
+  it("ignores surrounding whitespace", () => {
+    expect(parsePublishableKey(` ${KEYS.live.publishableKey}\n`).origin).toBe(KEYS.live.origin);
   });
 
-  it("lets only test keys point at a loopback HTTP host", () => {
-    const local = `http://127.0.0.1:8765/auth/v2/authentication/${APPLICATION_ID}`;
-
-    expect(parsePublishableKey(publishableKeyFor(local, "test")).apiBase).toBe(local);
-    expect(parsePublishableKey(publishableKeyFor(local.replace("127.0.0.1", "localhost"))).mode).toBe("test");
-    rejects(publishableKeyFor(local, "live"));
-    rejects(publishableKeyFor(`http://auth.example.com/auth/v2/authentication/${APPLICATION_ID}`, "test"));
+  it("lets only test keys name a local HTTP host", () => {
+    // The service issues no key to a live application served over HTTP.
+    expect(KEYS.localLive.publishableKey).toBeNull();
+    for (const local of ["http://localhost:8765", "http://127.0.0.1:8765", "http://[::1]:8765", KEYS.localLive.origin]) {
+      expect(parsePublishableKey(publishableKeyFor(local)).origin).toBe(local);
+      rejects(publishableKeyFor(local, "live"));
+    }
+    rejects(publishableKeyFor("http://auth.example.com"));
+    rejects(publishableKeyFor("http://localhost.example.com"));
   });
 
   it("rejects keys that are not Didit publishable keys", () => {
+    const encoded = KEYS.live.publishableKey.slice("pk_live_".length);
+
     rejects("");
     rejects("sk_live_abc");
-    rejects(`pk_prod_${Buffer.from(LIVE_BASE).toString("base64url")}`);
-    rejects(`pk_live_${Buffer.from(LIVE_BASE).toString("base64")}=`);
+    rejects(`pk_prod_${encoded}`);
+    rejects(`pk_live_${Buffer.from(KEYS.live.origin).toString("base64")}=`);
+    rejects(`${KEYS.live.publishableKey}=`);
     rejects("pk_live_bm90IGEgdXJs");
     rejects(undefined as unknown as string);
   });
 
-  it("rejects addresses without an application id, or with credentials, query or fragment", () => {
-    rejects(publishableKeyFor("https://auth.didit.me/auth/v2/authentication/", "live"));
-    rejects(publishableKeyFor(LIVE_BASE.toUpperCase().replace("HTTPS://AUTH.DIDIT.ME", "https://auth.didit.me"), "live"));
-    rejects(publishableKeyFor(LIVE_BASE.replace("https://", "https://user:secret@"), "live"));
-    rejects(publishableKeyFor(`${LIVE_BASE}?next=1`, "live"));
-    rejects(publishableKeyFor(`${LIVE_BASE}#top`, "live"));
+  it("rejects anything but an origin: an API path, credentials, query, fragment or a non-canonical host", () => {
+    const { origin, applicationId } = KEYS.live;
+
+    rejects(publishableKeyFor(`${origin}/`, "live"));
+    rejects(publishableKeyFor(`${origin}/auth/v2/authentication/${applicationId}`, "live"));
+    rejects(publishableKeyFor(origin.replace("https://", "https://user:secret@"), "live"));
+    rejects(publishableKeyFor(`${origin}?next=1`, "live"));
+    rejects(publishableKeyFor(`${origin}#top`, "live"));
+    rejects(publishableKeyFor(origin.toUpperCase().replace("HTTPS://", "https://"), "live"));
+    rejects(publishableKeyFor("https://auth.example.com:443", "live"));
+    rejects(publishableKeyFor("https://auth.example.com:0", "live"));
   });
 });
