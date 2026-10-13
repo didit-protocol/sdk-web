@@ -1,16 +1,19 @@
 import { decodeText, fromBase64Url } from "../encoding";
 import { DiditAuthError } from "../errors";
-import { parsePublishableKey } from "../key";
+import { isLoopback, parsePublishableKey } from "../key";
 
 export { DiditAuthError } from "../errors";
 export type { DiditAuthErrorCode } from "../errors";
 
 export interface VerifyTokenOptions {
-  /** Derives the expected issuer and audience from the application's publishable key. */
+  /** Derives the expected issuer from the application's publishable key: the origin it names. */
   publishableKey?: string;
   /** Expected `iss`. Overrides the one derived from the publishable key. */
   issuer?: string;
-  /** Accepted `aud` values. Overrides the application id derived from the publishable key. */
+  /**
+   * Accepted `aud` values, such as the application id. Checked only when given: every application
+   * has its own issuer and signing keys, and names itself as the audience of every token it issues.
+   */
   audience?: string | string[];
   /** Signing keys address. Defaults to the `jwks_uri` of the issuer's OpenID discovery document. */
   jwksUri?: string;
@@ -57,7 +60,6 @@ interface Cached<T> {
 const KEYS_TTL_MS = 10 * 60_000;
 const COOLDOWN_AFTER_LOAD_MS = 30_000;
 const COOLDOWN_AFTER_FAILURE_MS = 5_000;
-const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 // RFC 9068 section 4: an access token is typed "at+jwt", or the full media type.
 const ACCESS_TOKEN_TYPES = ["at+jwt", "application/at+jwt"];
 
@@ -71,7 +73,7 @@ function invalid(message: string): DiditAuthError {
 function trustedUrl(value: unknown): value is string {
   try {
     const url = new URL(value as string);
-    return url.protocol === "https:" || (url.protocol === "http:" && LOOPBACK_HOSTS.includes(url.hostname));
+    return url.protocol === "https:" || (url.protocol === "http:" && isLoopback(url.hostname));
   } catch {
     return false;
   }
@@ -171,7 +173,7 @@ async function signingKey(jwksUri: string, kid: string, fetchImpl: typeof fetch)
 /**
  * Verifies a Didit access token on your server: an ES256 signature by one of
  * the issuer's published keys, the access token type (`at+jwt`, so ID tokens
- * are refused), the issuer, the audience, expiry and not-before.
+ * are refused), the issuer, the audience when given, expiry and not-before.
  * Resolves to the token's claims; rejects with a DiditAuthError otherwise.
  *
  * Tokens stay valid until they expire (five minutes). For actions that must
@@ -179,14 +181,12 @@ async function signingKey(jwksUri: string, kid: string, fetchImpl: typeof fetch)
  */
 export async function verifyToken(token: string, options: VerifyTokenOptions = {}): Promise<DiditTokenClaims> {
   const key = options.publishableKey ? parsePublishableKey(options.publishableKey) : null;
-  const issuer = options.issuer ?? key?.apiBase;
-  const audiences = ([] as unknown[]).concat(options.audience ?? key?.applicationId ?? []);
+  const issuer = options.issuer ?? key?.origin;
+  const audiences = ([] as unknown[]).concat(options.audience ?? []);
   const fetchImpl = options.fetch ?? ((input, init) => fetch(input, init));
   const tolerance = options.clockTolerance ?? 5;
 
-  if (!issuer || !audiences.length) {
-    throw new DiditAuthError("invalid_request", "Pass publishableKey, or issuer and audience.");
-  }
+  if (!issuer) throw new DiditAuthError("invalid_request", "Pass publishableKey or issuer.");
   const parts = typeof token === "string" ? token.split(".") : [];
   let header: Record<string, unknown>;
   let claims: Record<string, unknown>;
@@ -218,7 +218,7 @@ export async function verifyToken(token: string, options: VerifyTokenOptions = {
   const now = Date.now() / 1000;
 
   if (claims.iss !== issuer) throw invalid("The token was issued for another application.");
-  if (!([] as unknown[]).concat(claims.aud).some((audience) => audiences.includes(audience))) {
+  if (audiences.length && !([] as unknown[]).concat(claims.aud).some((audience) => audiences.includes(audience))) {
     throw invalid("The token is meant for another audience.");
   }
   if (typeof claims.sub !== "string" || !claims.sub || typeof claims.exp !== "number") {
