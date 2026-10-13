@@ -2,14 +2,16 @@
 //
 // - http://localhost:4174 serves the built package (dist/), the fixture pages
 //   and the built @didit-protocol/signals (npm run build builds both).
-// - http://127.0.0.1:4175 answers the runtime API with the exchanges recorded
-//   against the Didit auth service (src/__tests__/fixtures), applying the same
-//   CORS rules as that API, so a request the real API would
-//   refuse cross-origin fails here too. GET /__replay/load?scenario=a,b loads
-//   recordings; GET /__replay/report lists every request and any mismatch.
-// - With DIDIT_AUTH_LIVE_UPSTREAM set, http://localhost:8766 serves the same
-//   pages and proxies everything else to that auth service, so the page and the
-//   API share one origin, as hosted pages and passkeys require.
+// - http://127.0.0.1:4175 is an application's origin: it answers the runtime API
+//   at its root with the exchanges recorded against the Didit auth service
+//   (src/__tests__/fixtures), applying the same CORS rules as that API, so a
+//   request the real API would refuse cross-origin fails here too.
+//   GET /__replay/load?scenario=a,b loads recordings; GET /__replay/report lists
+//   every request and any mismatch.
+// - With DIDIT_AUTH_LIVE_UPSTREAM set, port 8766 serves the same pages on any
+//   host (an application's host under *.localhost, the service's local zone)
+//   and proxies everything else to that auth service with the host unchanged,
+//   so the page and the API share one origin, as passkeys require.
 import { createReadStream, readFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer, request as forward } from "node:http";
@@ -91,6 +93,8 @@ async function readBody(request) {
   return text ? JSON.parse(text) : undefined;
 }
 
+const isStatic = (pathname) => !!(TRANSPILED[pathname] || SIGNALS[pathname]) || /^\/(dist|e2e\/fixtures)\//.test(pathname);
+
 function hostedSignIn(url) {
   // The hosted page signs the person in and redirects back with the code. The
   // recording holds that redirect; it is replayed only for the exact sign-in
@@ -112,8 +116,8 @@ async function replay(request, response) {
   if (url.pathname === "/__replay/report") {
     return send(response, 200, JSON.stringify(journal), { "Content-Type": "application/json" });
   }
-  const match = /^\/auth\/v2\/authentication\/[0-9a-f-]{36}\/(.*)$/.exec(url.pathname);
-  if (!match) return serveStatic(request, response);
+  if (isStatic(url.pathname)) return serveStatic(request, response);
+  const route = url.pathname.slice(1);
   const headers = cors(request, { "Cache-Control": "no-store" });
   const origin = request.headers.origin;
 
@@ -122,12 +126,12 @@ async function replay(request, response) {
   if (origin && origin !== "http://127.0.0.1:4175" && !ALLOWED_ORIGINS.includes(origin)) {
     return send(response, 403, JSON.stringify({ detail: "origin_not_allowed" }), { "Content-Type": "application/json" });
   }
-  if (match[1] === "sign-in/") {
+  if (route === "sign-in/") {
     const callback = hostedSignIn(url);
     journal.push({ method: "GET", path: "sign-in/", query: Object.fromEntries(url.searchParams), mismatch: !callback });
     return callback ? send(response, 302, null, { Location: callback }) : send(response, 400, "unknown sign-in");
   }
-  const path = match[1] + url.search;
+  const path = route + url.search;
   const body = await readBody(request);
   const sent = canonical({ method: request.method, path, authorization: request.headers.authorization, body });
   const entry = { method: request.method, path, headers: { ...request.headers }, body };
@@ -153,10 +157,10 @@ async function replay(request, response) {
 
 function proxy(upstream) {
   return (request, response) => {
-    const pathname = new URL(request.url, "http://localhost:8766").pathname;
-    if (TRANSPILED[pathname] || SIGNALS[pathname] || /^\/(dist|e2e\/fixtures)\//.test(pathname)) return serveStatic(request, response);
+    if (isStatic(new URL(request.url, "http://localhost:8766").pathname)) return serveStatic(request, response);
     const target = new URL(request.url, upstream);
-    const outgoing = forward(target, { method: request.method, headers: { ...request.headers, host: "localhost:8766" } }, (answer) => {
+    // The service tells applications apart by the host they are served on.
+    const outgoing = forward(target, { method: request.method, headers: request.headers }, (answer) => {
       response.writeHead(answer.statusCode ?? 502, answer.headers);
       answer.pipe(response);
     });
