@@ -86,28 +86,27 @@ returns the person's short-lived access token for calling your own API.
 ## Step-up before sensitive actions
 
 ```tsx
-"use client";
 const { stepUp, handleStepUpCallback } = useAuth();
 
 const check = await stepUp({ action: "payout", amount: "900.00", currency: "USD" });
-if (check.approved) await payOut(check.id); // no rule asked for a check
+if (check.approved) await payOut(); // no rule asked for a check
+
 // Otherwise the identity check opened. Back on this page, with ?step_up=<id>:
 const outcome = await handleStepUpCallback();
 if (outcome.approved) await payOut(outcome.id);
 ```
 
-```ts
-// The server action: Didit's record is what counts, not what the browser says.
-"use server";
-export async function payOut(stepUpId: string | null) {
-  const { getStepUp } = await auth();
-  const check = stepUpId ? await getStepUp(stepUpId) : null;
-  // ...
-}
-```
-
 Didit returns the person to `DIDIT_REDIRECT_URI` and the proxy brings them back
-to the page that asked, with only the step-up's id in the address.
+to the page that asked, with only the step-up's id in the address. What runs
+in a browser can be changed, so the server action reads the step-up again
+before acting:
+
+```ts
+import { auth } from "@didit-protocol/auth-nextjs/server";
+
+const check = await (await auth()).getStepUp(stepUpId); // null when signed out
+if (!check?.approved) throw new Error("Step-up required");
+```
 `useAuth().reauthenticate()` signs the person in again on the hosted page
 instead, for actions that need a fresh session.
 
