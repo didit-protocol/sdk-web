@@ -2,15 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 
 import { createDiditAuth } from "../client";
 import type { DeviceSignalsOption } from "../device";
-import { loadFixture, publishableKeyFor, replay } from "./helpers/replay";
+import { loadFixture, publishableKeyFor, replay, runtimeOf } from "./helpers/replay";
 
-const SAME_ORIGIN_BASE = "http://localhost:4174/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db";
+// An application served on the page's own origin, for example through a reverse proxy.
+const SAME_ORIGIN = "http://localhost:4174";
 
-async function headersSent(deviceSignals: DeviceSignalsOption | undefined, apiBase?: string) {
+async function headersSent(deviceSignals: DeviceSignalsOption | undefined, origin?: string) {
   const recorded = loadFixture("password-reset");
-  const fixture = { ...recorded, apiBase: apiBase ?? recorded.apiBase };
+  const fixture = origin ? { ...recorded, origin, publishableKey: publishableKeyFor(origin) } : recorded;
   const api = replay(fixture);
-  const auth = createDiditAuth({ publishableKey: publishableKeyFor(fixture.apiBase), fetch: api.fetch, deviceSignals });
+  const auth = createDiditAuth({ publishableKey: runtimeOf(fixture).publishableKey, fetch: api.fetch, deviceSignals });
 
   await auth.password.requestReset({ email: "person@example.com" });
   api.verify();
@@ -24,7 +25,7 @@ afterEach(() => {
 
 describe("device signals on auth requests", () => {
   it("sends the persistent device id and fingerprint hash when the API shares the page's origin", async () => {
-    const headers = await headersSent(undefined, SAME_ORIGIN_BASE);
+    const headers = await headersSent(undefined, SAME_ORIGIN);
 
     expect(headers["X-Didit-FP-V2"]).toBe("1");
     expect(headers["X-Didit-PID"]).toMatch(/^[A-Za-z0-9_-]{20,32}$/);
@@ -41,6 +42,6 @@ describe("device signals on auth requests", () => {
 
   it("sends them across origins when asked, and never when turned off", async () => {
     expect((await headersSent("always"))["X-Didit-PID"]).toMatch(/^[A-Za-z0-9_-]{20,32}$/);
-    expect((await headersSent("off", SAME_ORIGIN_BASE))["X-Didit-PID"]).toBeUndefined();
+    expect((await headersSent("off", SAME_ORIGIN))["X-Didit-PID"]).toBeUndefined();
   });
 });

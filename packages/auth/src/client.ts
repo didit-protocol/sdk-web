@@ -19,8 +19,11 @@ import type {
   DiditAuthLanguage,
   DiditAuthListener,
   DiditAuthOptions,
+  DiditProtectionMethod,
   DiditSession,
   DiditSignInResult,
+  DiditStepUpResult,
+  ReauthenticateOptions,
   SignInRedirectOptions,
   StepUpOptions
 } from "./types";
@@ -41,6 +44,7 @@ const SESSION_CACHE_MS = 30_000;
 // Magic links stay valid for fifteen minutes after they are sent.
 const REDIRECT_TTL_MS = 20 * 60_000;
 const GRANTS_PAGE = 100;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface Tokens {
   accessToken: string;
@@ -71,7 +75,7 @@ interface SessionResponse {
   vendor_data?: string | null;
 }
 
-/** What a primary proof, MFA step or agent consent answers. */
+/** What a primary proof, protection challenge, MFA step or agent consent answers. */
 interface ProofResponse {
   code?: string;
   state?: string;
@@ -81,6 +85,10 @@ interface ProofResponse {
   mfa_required?: boolean;
   mfa_enrollment_required?: boolean;
   recovery_codes?: string[];
+  protection_required?: boolean;
+  methods?: DiditProtectionMethod[];
+  options?: PasskeyOptionsJSON | null;
+  expires_in?: number;
 }
 
 interface ChallengeResponse {
@@ -91,6 +99,16 @@ interface ChallengeResponse {
 interface PasskeyResponse {
   challenge: string;
   options: PasskeyOptionsJSON;
+}
+
+/** A step-up check as `POST step-up/` and `GET step-up/{id}/` describe it. */
+interface StepUpResponse {
+  required?: boolean;
+  id?: string;
+  status?: string;
+  rule?: string | null;
+  method?: string | null;
+  verification_url?: string;
 }
 
 interface GrantResponse {
@@ -109,8 +127,10 @@ interface Attempt {
   state: string;
   redirectUri: string;
   stepUpUser?: string;
-  step?: "email" | "phone" | "mfa" | "mfa_setup";
+  step?: "email" | "phone" | "protection" | "mfa" | "mfa_setup";
   challenge?: string;
+  /** The passkey request a protection challenge offers, when the person has one. */
+  passkey?: PasskeyOptionsJSON;
   purpose?: "login" | "signup";
   invitation?: string;
 }
@@ -175,6 +195,17 @@ function toSession(body: SessionResponse, accessToken: string): DiditSession {
   };
 }
 
+function toStepUp(check: StepUpResponse): DiditStepUpResult {
+  const status = check.required === false ? "not_required" : String(check.status);
+  return {
+    id: check.id ? String(check.id) : null,
+    status,
+    approved: status === "approved" || status === "not_required",
+    rule: check.rule ?? null,
+    method: check.method ?? null
+  };
+}
+
 function withCode(redirectUri: string, code: string, state: string): string {
   const url = new URL(redirectUri);
   url.searchParams.append("code", code);
@@ -194,14 +225,15 @@ function withCode(redirectUri: string, code: string, state: string): string {
  */
 export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
   const key = parsePublishableKey(options.publishableKey);
-  const storageKey = `didit-auth:${key.applicationId}`;
+  // Every application has its own origin, so it also names where this application's session is kept.
+  const storageKey = `didit-auth:${key.origin}`;
   // Each hosted sign-in waits under its own key: written once by the tab that starts it, removed by the
   // one that completes it. No tab rewrites another's entry, so sign-ins started or completed in several
   // tabs at the same moment cannot drop each other or bring back one already used.
   const pendingPrefix = `${storageKey}:pending:`;
   const signals = options.deviceSignals ?? "auto";
-  const request = createHttpClient(key.apiBase, options.fetch ?? ((input, init) => fetch(input, init)), () =>
-    deviceSignalsEnabled(signals, key.apiBase) ? deviceHeaders() : Promise.resolve({})
+  const request = createHttpClient(key.origin, options.fetch ?? ((input, init) => fetch(input, init)), () =>
+    deviceSignalsEnabled(signals, key.origin) ? deviceHeaders() : Promise.resolve({})
   );
   const listeners = new Set<DiditAuthListener>();
   let tokenStore: DiditAuthStorage | null = null;
@@ -410,7 +442,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     const verifier = randomString(32);
     const state = randomString(16);
     const redirectUri = opts.redirectUri ?? defaultRedirectUri();
-    const url = new URL(`${key.apiBase}/sign-in/`);
+    const url = new URL(`${key.origin}/sign-in/`);
     const query: Record<string, string | undefined> = {
       redirect_uri: redirectUri,
       state,
@@ -436,19 +468,25 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     await (options.navigate ? options.navigate(url.href) : location.assign(url.href));
   }
 
-  async function handleRedirectCallback(url?: string) {
+  // The address a redirect came back to, with `names` removed from the address bar when it is the current page.
+  function returnAddress(url: string | undefined, names: string[]): URL {
     const current = typeof location === "undefined" ? undefined : location.href;
     if (!url && !current) throw new DiditAuthError("invalid_request", "Pass the redirect address.");
     const address = new URL((url || current) as string);
-    const state = address.searchParams.get("state");
-    const code = address.searchParams.get("code");
 
     if (address.href === current) {
-      // Keep the one-time code out of the address bar, history and later reloads.
       const clean = new URL(address.href);
-      ["code", "state", "error"].forEach((name) => clean.searchParams.delete(name));
+      names.forEach((name) => clean.searchParams.delete(name));
       history.replaceState(history.state, "", clean.href);
     }
+    return address;
+  }
+
+  async function handleRedirectCallback(url?: string) {
+    // Keep the one-time code out of the address bar, history and later reloads.
+    const address = returnAddress(url, ["code", "state", "error"]);
+    const state = address.searchParams.get("state");
+    const code = address.searchParams.get("code");
     const pending = state ? takePending(state) : null;
 
     if (!pending) {
@@ -497,11 +535,18 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
         ? { status: "signed_in", session, recoveryCodes: result.recovery_codes }
         : { status: "signed_in", session };
     }
-    if (!result.challenge) throw new DiditAuthError("server_error", "Unexpected answer from the Didit API.");
+    const unexpected = () => new DiditAuthError("server_error", "Unexpected answer from the Didit API.");
+    if (!result.challenge) throw unexpected();
+    // Bot and risk protection, before any MFA: the person proves it is them with an emailed code or a passkey.
+    if (result.protection_required) {
+      attempt = { ...current, step: "protection", challenge: result.challenge, passkey: result.options ?? undefined };
+      return { status: "protection_required", methods: result.methods ?? [], expiresIn: result.expires_in ?? 0 };
+    }
     if (result.mfa_enrollment_required) {
       attempt = { ...current, step: "mfa_setup", challenge: result.challenge };
       return { status: "mfa_enrollment_required", uri: result.uri ?? "" };
     }
+    if (!result.mfa_required) throw unexpected();
     attempt = { ...current, step: "mfa", challenge: result.challenge };
     return { status: "mfa_required" };
   }
@@ -578,8 +623,6 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
   }
 
   return {
-    applicationId: key.applicationId,
-
     signIn: (opts) => redirect(opts),
     handleRedirectCallback,
     getSession,
@@ -616,7 +659,25 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
       if (tokens) await endSession(tokens).catch(() => undefined);
     },
 
-    async stepUp(opts: StepUpOptions = {}) {
+    async stepUp({ action, amount, currency, redirectUri }: StepUpOptions) {
+      const check = await authed<StepUpResponse>("step-up/", {
+        body: { action, amount, currency, return_to: redirectUri ?? defaultRedirectUri() }
+      });
+      const result = toStepUp(check);
+      if (check.required && check.verification_url) {
+        await (options.navigate ? options.navigate(check.verification_url) : location.assign(check.verification_url));
+      }
+      return result;
+    },
+
+    async handleStepUpCallback(url) {
+      const id = returnAddress(url, ["step_up", "status"]).searchParams.get("step_up");
+      if (!id || !UUID.test(id)) throw new DiditAuthError("invalid_request", "This address is not a step-up's return.");
+      // The address only says the person came back: Didit's record of the check is the outcome.
+      return toStepUp(await authed<StepUpResponse>(`step-up/${id}/`));
+    },
+
+    async reauthenticate(opts: ReauthenticateOptions = {}) {
       const current = await getSession({ force: true });
       if (!current) throw new DiditAuthError("not_signed_in", "Sign in first.");
       if (opts.method === "passkey") {
@@ -719,6 +780,32 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
           body: { challenge, credential: credentialJSON(credential) }
         });
         return { id: String(result.id) };
+      }
+    },
+
+    protection: {
+      async verify({ code }) {
+        const current = waitingFor("protection");
+        return settle(
+          current,
+          await request<ProofResponse>("protection/complete/", {
+            body: { challenge: current.challenge, method: "email_code", code }
+          })
+        );
+      },
+      async passkey() {
+        const current = waitingFor("protection");
+        const json = current.passkey;
+        if (!json) throw new DiditAuthError("method_unavailable", "This person has no passkey to give.");
+
+        assertPasskeysAvailable(json.rpId);
+        const credential = await runCeremony(() => navigator.credentials.get({ publicKey: requestOptions(json) }));
+        return settle(
+          current,
+          await request<ProofResponse>("protection/complete/", {
+            body: { challenge: current.challenge, method: "passkey", response: credentialJSON(credential) }
+          })
+        );
       }
     },
 

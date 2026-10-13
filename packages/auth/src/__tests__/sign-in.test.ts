@@ -2,20 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 
 import { createDiditAuth } from "../client";
 import type { DiditAuthEvent, DiditAuthOptions } from "../types";
-import { advanceClock, loadFixture, publishableKeyFor, replay, type Fixture } from "./helpers/replay";
+import { advanceClock, KEYS, loadFixture, replay, runtimeOf, type Fixture } from "./helpers/replay";
 
 const APPLICATION_ID = "b83c95f9-93bd-4bed-a94f-f4b354a446db";
+const TOKENS = `didit-auth:${KEYS.localSandbox.origin}`;
 const PASSWORD = "Correct-horse-battery-91";
 
 function setup(name: string, options: Partial<DiditAuthOptions> = {}) {
   const fixture = loadFixture(name);
   const api = replay(fixture);
-  const auth = createDiditAuth({ publishableKey: publishableKeyFor(fixture.apiBase), fetch: api.fetch, ...options });
+  const auth = createDiditAuth({ publishableKey: runtimeOf(fixture).publishableKey, fetch: api.fetch, ...options });
   return { fixture, api, auth };
 }
 
 function stored(): Record<string, unknown> | null {
-  return JSON.parse(localStorage.getItem(`didit-auth:${APPLICATION_ID}`) ?? "null");
+  return JSON.parse(localStorage.getItem(TOKENS) ?? "null");
 }
 
 function responseOf(fixture: Fixture, index: number): Record<string, string> {
@@ -143,7 +144,7 @@ describe("password sign-in, session, refresh and sign-out", () => {
 
     await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
     expect(stored()).toBeNull();
-    expect(JSON.parse(sessionStorage.getItem(`didit-auth:${APPLICATION_ID}`) ?? "null")?.sessionId).toBe(
+    expect(JSON.parse(sessionStorage.getItem(TOKENS) ?? "null")?.sessionId).toBe(
       "214de96d-95e1-47a2-8b0f-ccf3f9b1f170"
     );
     api.verify(4);
@@ -160,7 +161,7 @@ describe("password sign-in, session, refresh and sign-out", () => {
     });
 
     await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
-    expect(JSON.parse(items.get(`didit-auth:${APPLICATION_ID}`) ?? "null")?.sessionId).toBe(
+    expect(JSON.parse(items.get(TOKENS) ?? "null")?.sessionId).toBe(
       "214de96d-95e1-47a2-8b0f-ccf3f9b1f170"
     );
     expect(await auth.getToken()).toBeTruthy();
@@ -225,7 +226,7 @@ describe("sessions that end elsewhere", () => {
 });
 
 describe("other tabs", () => {
-  const KEY = `didit-auth:${APPLICATION_ID}`;
+  const KEY = TOKENS;
 
   // As a browser does: the shared storage holds the new value before the other tabs get the event.
   function otherTabWrites(newValue: string | null): void {

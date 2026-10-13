@@ -3,14 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 import { createDiditAuth } from "../client";
 import { toBase64Url } from "../encoding";
 import { assertPasskeysAvailable, creationOptions, credentialJSON, requestOptions, runCeremony } from "../webauthn";
-import { loadFixture, publishableKeyFor, replay } from "./helpers/replay";
+import { loadFixture, replay, runtimeOf } from "./helpers/replay";
 
 const PASSWORD = "Correct-horse-battery-91";
 
 function setup(name: string) {
   const fixture = loadFixture(name);
   const api = replay(fixture);
-  const auth = createDiditAuth({ publishableKey: publishableKeyFor(fixture.apiBase), fetch: api.fetch });
+  const auth = createDiditAuth({ publishableKey: runtimeOf(fixture).publishableKey, fetch: api.fetch });
   return { fixture, api, auth };
 }
 

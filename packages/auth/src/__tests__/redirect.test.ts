@@ -3,11 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 import { createDiditAuth } from "../client";
 import { codeChallenge } from "../encoding";
 import type { DiditAuthEvent } from "../types";
-import { advanceClock, loadFixture, publishableKeyFor, replay, type Fixture } from "./helpers/replay";
+import { advanceClock, atOrigin, KEYS, loadFixture, replay, runtimeOf, type Fixture } from "./helpers/replay";
 
 const APPLICATION_ID = "b83c95f9-93bd-4bed-a94f-f4b354a446db";
 const PASSWORD = "Correct-horse-battery-91";
-const PENDING = `didit-auth:${APPLICATION_ID}:pending:`;
+const TOKENS = `didit-auth:${KEYS.localSandbox.origin}`;
+const PENDING = `${TOKENS}:pending:`;
 
 interface PendingSignIn {
   verifier: string;
@@ -25,9 +26,9 @@ interface RecordedSignIn {
 }
 
 /** A client in another tab of the same browser: same application, same localStorage, same recorded API. */
-function tab(fixture: Fixture, api: ReturnType<typeof replay>, apiBase = fixture.apiBase) {
+function tab(fixture: Fixture, api: ReturnType<typeof replay>, publishableKey = runtimeOf(fixture).publishableKey) {
   const navigate = jest.fn<(url: string) => void>();
-  return { auth: createDiditAuth({ publishableKey: publishableKeyFor(apiBase), fetch: api.fetch, navigate }), navigate };
+  return { auth: createDiditAuth({ publishableKey, fetch: api.fetch, navigate }), navigate };
 }
 
 function setup(name: string) {
@@ -37,7 +38,7 @@ function setup(name: string) {
 }
 
 function tokens(): Record<string, string> | null {
-  return JSON.parse(localStorage.getItem(`didit-auth:${APPLICATION_ID}`) ?? "null");
+  return JSON.parse(localStorage.getItem(TOKENS) ?? "null");
 }
 
 /** The hosted sign-ins waiting in localStorage, by state. */
@@ -70,8 +71,8 @@ describe("hosted sign-in", () => {
     await auth.signIn({ returnTo: "/account" });
 
     const opened = new URL(navigate.mock.calls[0][0]);
-    expect(opened.href).toBe(fixture.signInUrl);
-    expect(opened.origin + opened.pathname).toBe(`${fixture.apiBase}/sign-in/`);
+    expect(opened.href).toBe(atOrigin(fixture, fixture.signInUrl as string));
+    expect(opened.origin + opened.pathname).toBe(`${runtimeOf(fixture).origin}/sign-in/`);
     expect(Object.fromEntries(opened.searchParams)).toMatchObject({
       redirect_uri: "http://localhost:4174/e2e/fixtures/app.html",
       code_challenge_method: "S256",
@@ -131,7 +132,7 @@ describe("hosted sign-in", () => {
 
     const [magic, social] = navigate.mock.calls.map(([url]) => new URL(url));
     for (const opened of [magic, social]) {
-      expect(opened.origin + opened.pathname).toBe(`${fixture.apiBase}/sign-in/`);
+      expect(opened.origin + opened.pathname).toBe(`${runtimeOf(fixture).origin}/sign-in/`);
       // The hosted page refuses parameters it does not know, so nothing beyond the authorization is sent.
       expect([...opened.searchParams.keys()].sort()).toEqual([
         "code_challenge",
@@ -156,7 +157,7 @@ describe("hosted sign-ins in several tabs", () => {
       const order = fixture.completionOrder as number[];
 
       await Promise.all(tabs.map(({ auth }) => auth.signIn()));
-      expect(tabs.map(({ navigate }) => navigate.mock.calls[0][0])).toEqual(signIns.map(({ signInUrl }) => signInUrl));
+      expect(tabs.map(({ navigate }) => navigate.mock.calls[0][0])).toEqual(signIns.map(({ signInUrl }) => atOrigin(fixture, signInUrl)));
 
       for (const index of order) {
         const { session } = await tabs[index].auth.handleRedirectCallback(signIns[index].callbackUrl);
@@ -223,21 +224,21 @@ describe("hosted sign-ins in several tabs", () => {
     api.verify();
   });
 
-  it("stores each sign-in under its own state, with its own verifier and step-up binding", async () => {
+  it("stores each sign-in under its own state, with its own verifier and reauthentication binding", async () => {
     const { fixture, api, auth, navigate } = setup("step-up");
     const other = tab(fixture, api);
 
     await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
-    await auth.stepUp();
+    await auth.reauthenticate();
     await other.auth.signIn();
 
     const stored = pendingSignIns();
-    const [stepUp, signIn] = [openedState(navigate), openedState(other.navigate)];
-    expect(Object.keys(stored).sort()).toEqual([stepUp, signIn].sort());
-    expect(stored[stepUp].stepUpUser).toBe(fixture.result);
+    const [again, signIn] = [openedState(navigate), openedState(other.navigate)];
+    expect(Object.keys(stored).sort()).toEqual([again, signIn].sort());
+    expect(stored[again].stepUpUser).toBe(fixture.result);
     expect(stored[signIn].stepUpUser).toBeNull();
     for (const [state, opened] of [
-      [stepUp, navigate],
+      [again, navigate],
       [signIn, other.navigate]
     ] as const) {
       // Each verifier answers the challenge its own hosted page was opened with.
@@ -253,7 +254,7 @@ describe("hosted sign-ins in several tabs", () => {
 
   it("keeps the sign-ins of two applications on one origin apart", async () => {
     const { fixture, api, auth } = setup("redirect-sign-in");
-    const otherApplication = tab(fixture, api, fixture.apiBase.replace(APPLICATION_ID, "00000000-0000-4000-8000-000000000000"));
+    const otherApplication = tab(fixture, api, KEYS.live.publishableKey);
 
     await auth.signIn();
     await expect(otherApplication.auth.handleRedirectCallback(fixture.callbackUrl as string)).rejects.toMatchObject({
@@ -325,7 +326,7 @@ describe("browser storage", () => {
     const api = replay(fixture);
     const items = new Map<string, string>();
     const auth = createDiditAuth({
-      publishableKey: publishableKeyFor(fixture.apiBase),
+      publishableKey: runtimeOf(fixture).publishableKey,
       fetch: api.fetch,
       navigate: () => undefined,
       storage: {
@@ -341,20 +342,20 @@ describe("browser storage", () => {
     expect(Object.keys(pendingSignIns())).toHaveLength(1);
     const { session } = await auth.handleRedirectCallback(fixture.callbackUrl as string);
 
-    expect(JSON.parse(items.get(`didit-auth:${APPLICATION_ID}`) as string).sessionId).toBe(session.sessionId);
+    expect(JSON.parse(items.get(TOKENS) as string).sessionId).toBe(session.sessionId);
     expect(tokens()).toBeNull();
     api.verify();
   });
 });
 
-describe("step-up", () => {
+describe("reauthenticate", () => {
   it("replaces the session with a fresh one for the same person and ends the old one", async () => {
     const { fixture, api, auth, navigate } = setup("step-up");
 
     await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
     const before = tokens();
-    await expect(auth.stepUp()).resolves.toBeNull();
-    expect(navigate.mock.calls[0][0]).toBe(fixture.signInUrl);
+    await expect(auth.reauthenticate()).resolves.toBeNull();
+    expect(navigate.mock.calls[0][0]).toBe(atOrigin(fixture, fixture.signInUrl as string));
 
     const { session } = await auth.handleRedirectCallback(fixture.callbackUrl as string);
 
@@ -374,7 +375,7 @@ describe("step-up", () => {
 
     await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
     const before = tokens();
-    await auth.stepUp();
+    await auth.reauthenticate();
     advanceClock(5 * 60_000);
 
     const { session } = await auth.handleRedirectCallback(fixture.callbackUrl as string);
@@ -395,11 +396,11 @@ describe("step-up", () => {
     api.verify();
   });
 
-  it("refuses a step-up completed by someone else, ends that session and keeps the original", async () => {
+  it("refuses a reauthentication completed by someone else, ends that session and keeps the original", async () => {
     const { fixture, api, auth } = setup("step-up-mismatch");
 
     await auth.password.signIn({ email: "person@example.com", password: PASSWORD });
-    await auth.stepUp();
+    await auth.reauthenticate();
 
     await expect(auth.handleRedirectCallback(fixture.callbackUrl as string)).rejects.toMatchObject({
       code: "step_up_user_mismatch"
@@ -414,6 +415,6 @@ describe("step-up", () => {
   it("needs a signed-in person", async () => {
     const { auth } = setup("step-up");
 
-    await expect(auth.stepUp()).rejects.toMatchObject({ code: "not_signed_in" });
+    await expect(auth.reauthenticate()).rejects.toMatchObject({ code: "not_signed_in" });
   });
 });

@@ -69,8 +69,9 @@ export function createCoreAuthClient(options: CoreClientOptions): AuthClient {
       await getCore().signOut();
       if (target) window.location.assign(target);
     },
+    // Signs the person in again on the hosted page; the core's stepUp runs your application's step-up rules.
     async stepUp(redirect) {
-      await getCore().stepUp({ returnTo: safeReturnTo(redirect?.redirectUrl) ?? undefined });
+      await getCore().reauthenticate({ returnTo: safeReturnTo(redirect?.redirectUrl) ?? undefined });
     },
     getToken: () => getCore().getToken(),
     listAgents: () => getCore().agents.list(),
