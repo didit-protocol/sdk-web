@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { codeChallenge } from "../server/pkce";
 import { diditAuthProxy } from "../server/proxy";
 import { resetCaches } from "../server/session-cache";
-import { ENV, FRONTEND_API, recorded, replay } from "./replay";
+import { coreFixture, ENV, FRONTEND_API, KEYS, recorded, replay } from "./replay";
 
 const APP = "http://localhost:3000";
 const issued = recorded.tokenIssued.body;
@@ -11,14 +11,18 @@ const rotated = recorded.tokenRotated.body;
 const grantId = recorded.grants.body.results[0].id;
 const sessionEnd = Math.floor(Date.parse(recorded.session.body.expires_at) / 1000);
 
-function request(path: string, init: { method?: string; cookies?: Record<string, string>; headers?: Record<string, string> } = {}) {
+function request(
+  path: string,
+  init: { method?: string; cookies?: Record<string, string>; headers?: Record<string, string>; body?: unknown } = {}
+) {
   const cookie = Object.entries(init.cookies ?? {})
     .map(([name, value]) => `${name}=${encodeURIComponent(value)}`)
     .join("; ");
 
   return new NextRequest(`${APP}${path}`, {
     method: init.method ?? "GET",
-    headers: { ...(cookie ? { cookie } : {}), ...init.headers }
+    headers: { ...(cookie ? { cookie } : {}), ...(init.body === undefined ? {} : { "content-type": "application/json" }), ...init.headers },
+    ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) })
   });
 }
 
@@ -68,10 +72,11 @@ describe("starting a sign-in", () => {
 
   it("uses __Host- cookies and Secure over https", async () => {
     replay();
-    const secure = diditAuthProxy({}, { DIDIT_FRONTEND_API: "https://auth.example.com", DIDIT_REDIRECT_URI: "https://app.example.com/auth/callback" });
+    const secure = diditAuthProxy({}, { DIDIT_PUBLISHABLE_KEY: KEYS.customDomain.publishableKey, DIDIT_REDIRECT_URI: "https://app.example.com/auth/callback" });
     const response = await secure(new NextRequest("https://app.example.com/auth/sign-in"));
     const state = new URL(response.headers.get("location")!).searchParams.get("state")!;
 
+    expect(response.headers.get("location")).toMatch(/^https:\/\/auth\.example\.com\/sign-in\/\?/);
     expect(response.cookies.get(`__Host-didit_tx.${state.slice(0, 16)}`)).toMatchObject({ secure: true, httpOnly: true, path: "/" });
   });
 });
@@ -320,10 +325,10 @@ describe("signing out", () => {
   });
 });
 
-describe("step-up identity binding", () => {
+describe("reauthentication identity binding", () => {
   it("requires a current session", async () => {
     const { calls } = replay();
-    const response = await proxy(request("/auth/step-up"));
+    const response = await proxy(request("/auth/reauthenticate"));
 
     expect(response.status).toBe(401);
     expect(calls).toHaveLength(0);
@@ -331,7 +336,7 @@ describe("step-up identity binding", () => {
 
   it("revokes a different identity's new session and preserves the original", async () => {
     replay({ method: "GET", path: "session/", response: recorded.session });
-    const start = await proxy(request("/auth/step-up", { cookies: signedIn }));
+    const start = await proxy(request("/auth/reauthenticate", { cookies: signedIn }));
     const state = new URL(start.headers.get("location")!).searchParams.get("state")!;
     const name = `didit_tx.${state.slice(0, 16)}`;
     // Exercise the comparison without inventing another runtime response.
@@ -353,5 +358,142 @@ describe("step-up identity binding", () => {
     expect(response.cookies.get(name)?.maxAge).toBe(0);
     expect(calls[2].headers.get("authorization")).toBe(`Bearer ${issued.access_token}`);
     expect(remaining()).toEqual([]);
+  });
+});
+
+describe("step-up", () => {
+  // POST step-up/ and GET step-up/{id}/ as Didit answered them, and what @didit-protocol/auth made of them.
+  const check = coreFixture("step-up-check");
+  const [notRequired, refused, opened] = check.exchanges.filter(
+    ({ request }: { request: { method: string; path: string } }) => request.method === "POST" && request.path === "step-up/"
+  );
+  const [pending, passed] = check.exchanges.filter(({ request }: { request: { path: string } }) =>
+    request.path === `step-up/${check.contact.id}/`
+  );
+  const { href: _returnedTo, ...approved } = check.outcome;
+  const sent = { session: { method: "GET", path: "session/", response: recorded.session } };
+
+  it("asks the application's rules with the person's token and the registered callback, and goes ahead when none applies", async () => {
+    const { calls, remaining } = replay(sent.session, { method: "POST", path: "step-up/", response: notRequired.response });
+    const response = await proxy(
+      request("/auth/step-up", { method: "POST", cookies: signedIn, headers: fromApp, body: { ...notRequired.request.body, redirect_url: "/payouts" } })
+    );
+
+    await expect(response.json()).resolves.toEqual({ stepUp: check.payout });
+    expect(calls[1].body).toEqual({ ...notRequired.request.body, return_to: ENV.DIDIT_REDIRECT_URI });
+    expect(calls[1].headers.get("authorization")).toBe(`Bearer ${issued.access_token}`);
+    expect(response.cookies.get("didit_su")).toBeUndefined();
+    expect(remaining()).toEqual([]);
+  });
+
+  it("opens the identity check and remembers the page to bring the person back to", async () => {
+    replay(sent.session, { method: "POST", path: "step-up/", response: opened.response });
+    const response = await proxy(
+      request("/auth/step-up", { method: "POST", cookies: signedIn, headers: fromApp, body: { action: "contact", redirect_url: "/account/security?tab=email" } })
+    );
+
+    await expect(response.json()).resolves.toEqual({ stepUp: check.contact, verificationUrl: check.verificationUrl });
+    expect(response.cookies.get("didit_su")).toMatchObject({ value: "/account/security?tab=email", httpOnly: true, maxAge: 1800 });
+  });
+
+  it("brings the person back to their page from the callback, with only the step-up's id", async () => {
+    const { calls } = replay();
+    // Didit adds step_up and status=approved to the registered address, as it did to the recording's.
+    const callback = `/auth/callback${new URL(check.returnUrl).search}`;
+    const back = await proxy(request(callback, { cookies: { didit_su: "/account/security?tab=email" } }));
+
+    expect(back.status).toBe(303);
+    expect(back.headers.get("location")).toBe(`${APP}/account/security?tab=email&step_up=${check.contact.id}`);
+    expect(back.cookies.get("didit_su")).toMatchObject({ value: "", maxAge: 0 });
+    // Finished in another browser: the home page, still with the id to read.
+    expect((await proxy(request(callback))).headers.get("location")).toBe(`${APP}/?step_up=${check.contact.id}`);
+    expect((await proxy(request("/auth/callback?step_up=not-an-id&status=approved"))).headers.get("location")).toBe(`${APP}/`);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("reads the outcome from Didit's record, never from the address", async () => {
+    const { calls } = replay(
+      sent.session,
+      { method: "GET", path: pending.request.path, response: pending.response },
+      { method: "GET", path: passed.request.path, response: passed.response }
+    );
+    const read = () => proxy(request(`/auth/step-up/${check.contact.id}`, { cookies: signedIn, headers: fromApp }));
+
+    // The recording's first read came from an address claiming approval before the check ran.
+    await expect((await read()).json()).resolves.toEqual({ stepUp: check.forged });
+    await expect((await read()).json()).resolves.toEqual({ stepUp: approved });
+    expect(calls.map((call) => call.headers.get("authorization"))).toEqual(Array(3).fill(`Bearer ${issued.access_token}`));
+  });
+
+  it("only answers this app's signed-in pages, and reports what Didit refuses", async () => {
+    const { calls } = replay();
+    const foreign = { ...fromApp, origin: "https://evil.example", "sec-fetch-site": "cross-site" };
+
+    expect((await proxy(request("/auth/step-up", { method: "POST", cookies: signedIn, headers: foreign, body: { action: "contact" } }))).status).toBe(403);
+    expect((await proxy(request("/auth/step-up", { method: "POST", cookies: signedIn, body: { action: "contact" } }))).status).toBe(403);
+    expect((await proxy(request(`/auth/step-up/${check.contact.id}`, { cookies: signedIn }))).status).toBe(403);
+    expect((await proxy(request("/auth/step-up", { cookies: signedIn }))).status).toBe(405);
+    expect((await proxy(request("/auth/step-up", { method: "POST", headers: fromApp, body: { action: "contact" } }))).status).toBe(401);
+    expect(calls).toHaveLength(0);
+
+    replay(sent.session, { method: "POST", path: "step-up/", response: refused.response });
+    const response = await proxy(request("/auth/step-up", { method: "POST", cookies: signedIn, headers: fromApp, body: { action: "contact" } }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "invalid_request" });
+  });
+});
+
+describe("completing a headless sign-in", () => {
+  const exchange = (body: unknown, extra: { cookies?: Record<string, string>; headers?: Record<string, string> } = {}) =>
+    request("/auth/exchange", { method: "POST", body, cookies: extra.cookies, headers: { ...fromApp, ...extra.headers } });
+
+  it("exchanges the browser's code with its user agent, keeps the tokens in cookies and answers the session", async () => {
+    const { calls, remaining } = replay(
+      { method: "POST", path: "token/", response: recorded.tokenIssued },
+      { method: "GET", path: "session/", response: recorded.session }
+    );
+    const response = await proxy(exchange({ code: "the-code", code_verifier: "the-verifier" }, { headers: { "user-agent": "Browser/1.0" } }));
+
+    await expect(response.json()).resolves.toEqual({ session: recorded.session.body });
+    expect(calls[0].body).toEqual({
+      grant_type: "authorization_code",
+      code: "the-code",
+      code_verifier: "the-verifier",
+      redirect_uri: ENV.DIDIT_REDIRECT_URI
+    });
+    expect(calls[0].headers.get("user-agent")).toBe("Browser/1.0");
+    expect(response.cookies.get("didit_at")).toMatchObject({ value: issued.access_token, httpOnly: true, maxAge: 294, path: "/" });
+    expect(response.cookies.get("didit_rt")).toMatchObject({ value: `${sessionEnd}.${issued.refresh_token}`, httpOnly: true });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(remaining()).toEqual([]);
+  });
+
+  it("ends the session this browser had before", async () => {
+    const { calls } = replay(
+      { method: "POST", path: "token/", response: recorded.tokenIssued },
+      { method: "GET", path: "session/", response: recorded.session },
+      { method: "DELETE", path: "session/", response: recorded.sessionEnded }
+    );
+
+    await proxy(exchange({ code: "c", code_verifier: "v" }, { cookies: { didit_at: "previousAccessToken" } }));
+    expect(calls[2].headers.get("authorization")).toBe("Bearer previousAccessToken");
+  });
+
+  it("refuses another site, a malformed request and a code Didit rejects", async () => {
+    const { calls } = replay();
+
+    expect((await proxy(exchange({ code: "c", code_verifier: "v" }, { headers: { origin: "https://evil.example", "sec-fetch-site": "cross-site" } }))).status).toBe(403);
+    expect((await proxy(request("/auth/exchange", { method: "POST", body: { code: "c", code_verifier: "v" } }))).status).toBe(403);
+    expect((await proxy(exchange({ code: "c" }))).status).toBe(400);
+    expect((await proxy(request("/auth/exchange", { headers: fromApp }))).status).toBe(405);
+    expect(calls).toHaveLength(0);
+
+    replay({ method: "POST", path: "token/", response: recorded.tokenInvalidGrant });
+    const response = await proxy(exchange({ code: "spent", code_verifier: "v" }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "invalid_grant" });
+    expect(response.cookies.get("didit_at")).toBeUndefined();
   });
 });
