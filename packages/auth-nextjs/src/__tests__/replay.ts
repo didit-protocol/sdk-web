@@ -11,6 +11,7 @@ export function coreFixture(scenario: string) {
 }
 
 interface MintedKey {
+  applicationId: string;
   origin: string;
   publishableKey: string;
 }
