@@ -535,8 +535,8 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
         ? { status: "signed_in", session, recoveryCodes: result.recovery_codes }
         : { status: "signed_in", session };
     }
-    const unexpected = new DiditAuthError("server_error", "Unexpected answer from the Didit API.");
-    if (!result.challenge) throw unexpected;
+    const unexpected = () => new DiditAuthError("server_error", "Unexpected answer from the Didit API.");
+    if (!result.challenge) throw unexpected();
     // Bot and risk protection, before any MFA: the person proves it is them with an emailed code or a passkey.
     if (result.protection_required) {
       attempt = { ...current, step: "protection", challenge: result.challenge, passkey: result.options ?? undefined };
@@ -546,7 +546,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
       attempt = { ...current, step: "mfa_setup", challenge: result.challenge };
       return { status: "mfa_enrollment_required", uri: result.uri ?? "" };
     }
-    if (!result.mfa_required) throw unexpected;
+    if (!result.mfa_required) throw unexpected();
     attempt = { ...current, step: "mfa", challenge: result.challenge };
     return { status: "mfa_required" };
   }
