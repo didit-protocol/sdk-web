@@ -14,14 +14,15 @@ npm install @didit-protocol/auth-nextjs
 
 ```bash
 # .env.local
-# The Frontend API shown in Authentication > Developers in the Didit console.
-DIDIT_FRONTEND_API=https://your-app.sandbox.auth.didit.me
+# Authentication > Developers in the Didit console.
+DIDIT_PUBLISHABLE_KEY=pk_test_...
 # Register this exact address as a redirect address of the application.
 DIDIT_REDIRECT_URI=http://localhost:3000/auth/callback
 ```
 
-Set `DIDIT_FRONTEND_API` explicitly: the SDK does not derive it from the
-publishable key yet.
+The publishable key names your application's sign-in domain, its Frontend
+API, so there is no other address to set. A key that is not a Didit key fails
+at startup with `DiditAuthConfigError`.
 
 ## Set up
 
@@ -82,15 +83,58 @@ and `useUser()` are those of
 they render signed in or out from the first server render. `useAuth().getToken()`
 returns the person's short-lived access token for calling your own API.
 
+## Step-up before sensitive actions
+
+```tsx
+"use client";
+const { stepUp, handleStepUpCallback } = useAuth();
+
+const check = await stepUp({ action: "payout", amount: "900.00", currency: "USD" });
+if (check.approved) await payOut(check.id); // no rule asked for a check
+// Otherwise the identity check opened. Back on this page, with ?step_up=<id>:
+const outcome = await handleStepUpCallback();
+if (outcome.approved) await payOut(outcome.id);
+```
+
+```ts
+// The server action: Didit's record is what counts, not what the browser says.
+"use server";
+export async function payOut(stepUpId: string | null) {
+  const { getStepUp } = await auth();
+  const check = stepUpId ? await getStepUp(stepUpId) : null;
+  // ...
+}
+```
+
+Didit returns the person to `DIDIT_REDIRECT_URI` and the proxy brings them back
+to the page that asked, with only the step-up's id in the address.
+`useAuth().reauthenticate()` signs the person in again on the hosted page
+instead, for actions that need a fresh session.
+
+## Your own sign-in screens
+
+`useAuth()` has the headless steps of `@didit-protocol/auth` (`password`,
+`emailCode`, `phone`, `protection`, `mfa`), with the same results as in
+[`@didit-protocol/auth-react`](../auth-react), including `protection_required`
+when Didit's bot and risk protection asks for an emailed code or a passkey.
+The steps run in the browser, straight to Didit, so its protection and rate
+limits see the person rather than your server; the one-time code that ends
+them goes to `/auth/exchange`, so the tokens only ever live in the cookies.
+Add your app's origin (for example `http://localhost:3000`) to the
+application's allowed origins in the Didit console. Passkeys only work on your
+Didit sign-in domain.
+
 ## Routes
 
 The proxy serves these routes; your app needs no route files for them.
 
 | Route | Purpose |
 | --- | --- |
-| `GET /auth/sign-in`, `/auth/sign-up`, `/auth/step-up` | Open the hosted page with PKCE. `redirect_url` (a path in your app) is where the person comes back to. |
-| `GET` the path of `DIDIT_REDIRECT_URI` | Checks the state, exchanges the code and stores the session. |
+| `GET /auth/sign-in`, `/auth/sign-up`, `/auth/reauthenticate` | Open the hosted page with PKCE. `redirect_url` (a path in your app) is where the person comes back to. |
+| `GET` the path of `DIDIT_REDIRECT_URI` | Checks the state, exchanges the code and stores the session. Brings a person back from a step-up's check. |
 | `POST /auth/sign-out` | Ends the session at Didit and clears the cookies. |
+| `POST /auth/step-up`, `GET /auth/step-up/{id}` | Asks the application's step-up rules about an action, and reads a step-up's outcome. |
+| `POST /auth/exchange` | Completes a headless sign-in: exchanges its one-time code and stores the session. |
 | `GET /auth/session`, `GET /auth/token` | The session and the access token, for this app's own pages. |
 | `GET /auth/agents`, `DELETE /auth/agents/{id}` | The person's agent grants, for `<ConnectedAgents />`. |
 
@@ -104,19 +148,22 @@ rotates the refresh token first, so pages render with a valid session.
 - Each sign-in has its own PKCE verifier and state in a ten-minute cookie; the
   callback refuses a state it did not issue.
 - `redirect_url` only accepts paths in your app.
-- `sign-out` and agent revocation only accept requests from your own origin, and
-  the JSON routes only answer this SDK's client.
+- `sign-out`, step-up, the code exchange and agent revocation only accept
+  requests from your own origin, and the JSON routes only answer this SDK's
+  client.
 - A refresh token is spent once per server process even when parallel requests
   need it: Didit ends a session whose refresh token is reused. Apps on several
   server instances can still race on a refresh at the same moment; the session
   then ends and the person signs in again.
 - `http` is accepted for `localhost` only.
 
-- Step-up requires an existing session and binds the callback to that same
-  person. A different identity is refused and its new session is revoked.
+- Reauthentication requires an existing session and binds the callback to that
+  same person. A different identity is refused and its new session is revoked.
+- A step-up's outcome is read from Didit with the person's session, never from
+  the address it came back with.
 - Sign-out reports an upstream failure and retains the browser session so the
   person can retry. It does not report success before revocation succeeds.
-- Session and refresh caches are isolated by Frontend API. Cached sessions
+- Session and refresh caches are isolated by application origin. Cached sessions
   never outlive their expiry. Access tokens may be opaque or JWT-shaped;
   authorization still uses the runtime session endpoint, not unverified claims.
 
