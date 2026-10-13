@@ -21,7 +21,8 @@ describe("event delivery while the native fingerprint hash is pending", () => {
     Object.defineProperty(crypto, "subtle", {
       configurable: true,
       value: { digest: (algorithm: string, data: ArrayBuffer) => new Promise<ArrayBuffer>((resolve) => {
-        releaseHash = async () => resolve(await webcrypto.subtle.digest(algorithm, data));
+        // Node 20 rejects an ArrayBuffer from the jsdom realm; a view of it is accepted.
+        releaseHash = async () => resolve(await webcrypto.subtle.digest(algorithm, new Uint8Array(data)));
       }) }
     });
     fetchMock = jest.fn<typeof fetch>().mockImplementation(replay("exit", "timer"));
