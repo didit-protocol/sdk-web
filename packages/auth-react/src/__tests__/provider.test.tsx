@@ -5,7 +5,7 @@ import { DiditAuthProvider, useDiditAuthContext } from "../context";
 import { SignedIn, SignedOut } from "../control";
 import { useAuth, useUser } from "../hooks";
 import { snapshotOf } from "../store";
-import { session, testClient } from "./test-client";
+import { protectionRequired, session, stepUps, testClient } from "./test-client";
 
 function wrapperFor(client: ReturnType<typeof testClient>["client"], locale?: string) {
   return ({ children }: { children?: ReactNode }) => (
@@ -79,11 +79,37 @@ describe("useAuth and useUser", () => {
     expect(result.current.auth).toMatchObject({ isLoaded: true, isSignedIn: true, userId: session.user.id, sessionId: session.id });
     expect(result.current.user).toEqual({ isLoaded: true, isSignedIn: true, user: session.user });
     await expect(result.current.auth.getToken()).resolves.toBe("access-token");
-    await result.current.auth.stepUp({ redirectUrl: "/payout" });
-    expect(client.stepUp).toHaveBeenCalledWith({ redirectUrl: "/payout" });
+    await result.current.auth.reauthenticate({ redirectUrl: "/payout" });
+    expect(client.reauthenticate).toHaveBeenCalledWith({ redirectUrl: "/payout" });
     await act(() => result.current.auth.signOut());
     expect(result.current.auth.isSignedIn).toBe(false);
     expect(result.current.user.user).toBeNull();
+  });
+
+  it("run the application's step-up rules, not a new sign-in", async () => {
+    const { client } = testClient({ session });
+    const { result } = renderHook(() => useAuth(), { wrapper: wrapperFor(client) });
+
+    await expect(result.current.stepUp({ action: "contact" })).resolves.toEqual(stepUps.pending);
+    expect(client.stepUp).toHaveBeenCalledWith({ action: "contact" });
+    await expect(result.current.handleStepUpCallback("/account?step_up=x")).resolves.toEqual(stepUps.approved);
+    expect(client.handleStepUpCallback).toHaveBeenCalledWith("/account?step_up=x");
+    expect(client.reauthenticate).not.toHaveBeenCalled();
+  });
+
+  it("give headless screens the protection challenge and its two ways out", async () => {
+    const { client } = testClient();
+    const { result } = renderHook(() => useAuth(), { wrapper: wrapperFor(client) });
+
+    await expect(result.current.password.signIn({ email: "person@example.com", password: "secret" })).resolves.toEqual(
+      protectionRequired
+    );
+    expect(protectionRequired).toEqual({ status: "protection_required", methods: ["email_code"], expiresIn: 300 });
+    await expect(result.current.protection.verify({ code: "123456" })).resolves.toEqual({ status: "signed_in", session });
+    await expect(result.current.protection.passkey()).resolves.toMatchObject({ status: "signed_in" });
+    expect(result.current.emailCode).toBe(client.emailCode);
+    expect(result.current.phone).toBe(client.phone);
+    expect(result.current.mfa).toBe(client.mfa);
   });
 
   it("are not loaded while the session is being restored", () => {

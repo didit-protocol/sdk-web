@@ -9,6 +9,7 @@ module.exports = {
   moduleNameMapper: {
     // Test against the auth-react source, so the suite needs no build first.
     "^@didit-protocol/auth-react/provider$": "<rootDir>/../auth-react/src/provider.ts",
+    "^@didit-protocol/auth/server$": "<rootDir>/../auth/src/server/index.ts",
     "^(\\.{1,2}/.*)\\.js$": "$1"
   }
 };

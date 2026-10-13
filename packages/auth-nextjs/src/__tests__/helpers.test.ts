@@ -10,7 +10,10 @@ import {
 import { negotiateLocale } from "../server/locale";
 import { codeChallenge, randomString, timingSafeEqual } from "../server/pkce";
 import { safeReturnTo } from "../server/return-to";
-import { ENV } from "./replay";
+import { ENV, FRONTEND_API, KEYS } from "./replay";
+
+/** A key in the issued format that names `url`, for the refusals: Didit never issues these. */
+const keyNaming = (url: string, mode = "test") => `pk_${mode}_${Buffer.from(url).toString("base64url")}`;
 
 describe("PKCE", () => {
   it("derives the S256 challenge of RFC 7636 appendix B", async () => {
@@ -34,9 +37,10 @@ describe("PKCE", () => {
 });
 
 describe("resolveConfig", () => {
-  it("reads the Frontend API and callback from the environment", () => {
-    expect(resolveConfig({ ...ENV, DIDIT_FRONTEND_API: `${ENV.DIDIT_FRONTEND_API}/` })).toEqual({
-      frontendApi: ENV.DIDIT_FRONTEND_API,
+  it("reads the Frontend API from the publishable key, and the callback from the environment", () => {
+    expect(resolveConfig({ ...ENV, DIDIT_PUBLISHABLE_KEY: ` ${ENV.DIDIT_PUBLISHABLE_KEY} ` })).toEqual({
+      publishableKey: ENV.DIDIT_PUBLISHABLE_KEY,
+      frontendApi: FRONTEND_API,
       redirectUri: ENV.DIDIT_REDIRECT_URI,
       callbackPath: "/auth/callback",
       basePath: "/auth",
@@ -45,25 +49,43 @@ describe("resolveConfig", () => {
     });
   });
 
-  it("asks for the Frontend API, even when a publishable key is set", () => {
-    expect(() => resolveConfig({ DIDIT_PUBLISHABLE_KEY: "pk_test_x", DIDIT_REDIRECT_URI: ENV.DIDIT_REDIRECT_URI })).toThrow(
-      /DIDIT_FRONTEND_API/
+  it.each(["sandbox", "live", "customDomain"] as const)("takes the application origin a minted %s key names", (name) => {
+    expect(resolveConfig({ ...ENV, DIDIT_PUBLISHABLE_KEY: KEYS[name].publishableKey }).frontendApi).toBe(KEYS[name].origin);
+  });
+
+  it("asks for the publishable key and the callback, and no longer for a Frontend API", () => {
+    expect(() => resolveConfig({ DIDIT_REDIRECT_URI: ENV.DIDIT_REDIRECT_URI, DIDIT_FRONTEND_API: FRONTEND_API })).toThrow(
+      /DIDIT_PUBLISHABLE_KEY/
     );
-    expect(() => resolveConfig({ DIDIT_FRONTEND_API: ENV.DIDIT_FRONTEND_API })).toThrow(DiditAuthConfigError);
+    expect(() => resolveConfig({ DIDIT_PUBLISHABLE_KEY: ENV.DIDIT_PUBLISHABLE_KEY })).toThrow(DiditAuthConfigError);
+  });
+
+  it("refuses a key naming the shared runtime mount, or anything that is not a Didit key", () => {
+    const { applicationId, origin } = KEYS.localSandbox;
+
+    [
+      keyNaming(`${origin}/auth/v2/authentication/${applicationId}`),
+      keyNaming(origin, "live"),
+      "pk_test_x",
+      KEYS.live.publishableKey.replace("pk_live_", "sk_live_")
+    ].forEach((key) => {
+      expect(() => resolveConfig({ ...ENV, DIDIT_PUBLISHABLE_KEY: key })).toThrow(/DIDIT_PUBLISHABLE_KEY/);
+    });
   });
 
   it("refuses plain http outside localhost", () => {
-    expect(() => resolveConfig({ ...ENV, DIDIT_FRONTEND_API: "http://auth.example.com" })).toThrow(/https/);
+    expect(() => resolveConfig({ ...ENV, DIDIT_PUBLISHABLE_KEY: keyNaming("http://auth.example.com") })).toThrow(DiditAuthConfigError);
     expect(() => resolveConfig({ ...ENV, DIDIT_REDIRECT_URI: "http://app.example.com/auth/callback" })).toThrow(/https/);
   });
 
   it("marks an https app secure and caps the session cache", () => {
     const config = resolveConfig({
-      DIDIT_FRONTEND_API: "https://auth.example.com",
+      DIDIT_PUBLISHABLE_KEY: KEYS.customDomain.publishableKey,
       DIDIT_REDIRECT_URI: "https://app.example.com/auth/callback",
       DIDIT_SESSION_CACHE_SECONDS: "9999"
     });
 
+    expect(config.frontendApi).toBe("https://auth.example.com");
     expect(config.secure).toBe(true);
     expect(config.sessionCacheMs).toBe(300_000);
   });
@@ -74,7 +96,8 @@ describe("cookies", () => {
     expect(cookieNames({ secure: true })).toEqual({
       access: "__Host-didit_at",
       refresh: "__Host-didit_rt",
-      transaction: "__Host-didit_tx."
+      transaction: "__Host-didit_tx.",
+      stepUp: "__Host-didit_su"
     });
     expect(cookieNames({ secure: false }).access).toBe("didit_at");
   });
@@ -140,6 +163,7 @@ it("accepts a JWT-sized access cookie without trusting its claims", () => {
 
 it.each(["https://user:password@api.example", "https://api.example?token=secret", "https://api.example#fragment"])(
   "refuses ambiguous configured URLs: %s", (url) => {
-    expect(() => resolveConfig({ ...ENV, DIDIT_FRONTEND_API: url })).toThrow(DiditAuthConfigError);
+    expect(() => resolveConfig({ ...ENV, DIDIT_PUBLISHABLE_KEY: keyNaming(url) })).toThrow(DiditAuthConfigError);
+    expect(() => resolveConfig({ ...ENV, DIDIT_REDIRECT_URI: url })).toThrow(DiditAuthConfigError);
   }
 );

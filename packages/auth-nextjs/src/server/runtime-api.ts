@@ -1,4 +1,4 @@
-import type { AgentGrant, DiditSession } from "@didit-protocol/auth-react/provider";
+import type { AgentGrant, DiditSession, StepUpResult } from "@didit-protocol/auth-react/provider";
 
 import type { DiditAuthConfig } from "./config.js";
 
@@ -26,7 +26,7 @@ export interface TokenSet {
   sessionId: string;
 }
 
-type Json = Record<string, unknown>;
+export type Json = Record<string, unknown>;
 
 async function call(config: DiditAuthConfig, path: string, init: RequestInit = {}): Promise<Response> {
   return fetch(`${config.frontendApi}/${path}`, {
@@ -103,6 +103,19 @@ export function toSession(body: Json): DiditSession {
   };
 }
 
+/** Maps a step-up as `POST step-up/` and `GET step-up/{id}/` describe it. */
+export function toStepUp(body: Json): StepUpResult {
+  const status = body.required === false ? "not_required" : String(body.status);
+
+  return {
+    id: text(body.id),
+    status,
+    approved: status === "approved" || status === "not_required",
+    rule: text(body.rule),
+    method: text(body.method)
+  };
+}
+
 /** Maps one row of `GET grants/`. */
 export function toGrant(row: Json): AgentGrant {
   return {
@@ -149,13 +162,20 @@ export async function refreshTokens(config: DiditAuthConfig, refreshToken: strin
   return toTokens((await response.json()) as Json);
 }
 
-/** The session behind an access token, or `null` when the token is no longer valid. */
-export async function fetchSession(config: DiditAuthConfig, accessToken: string): Promise<DiditSession | null> {
+/** `GET session/` as Didit answers it, or `null` when the token is no longer valid. */
+export async function fetchSessionBody(config: DiditAuthConfig, accessToken: string): Promise<Json | null> {
   const response = await call(config, "session/", { headers: bearer(accessToken) });
 
   if (response.status === 401 || response.status === 403) return null;
   if (!response.ok) throw await errorOf(response);
-  return toSession((await response.json()) as Json);
+  return (await response.json()) as Json;
+}
+
+/** The session behind an access token, or `null` when the token is no longer valid. */
+export async function fetchSession(config: DiditAuthConfig, accessToken: string): Promise<DiditSession | null> {
+  const body = await fetchSessionBody(config, accessToken);
+
+  return body && toSession(body);
 }
 
 /** Ends the session everywhere. An already invalid token is not an error. */
@@ -188,4 +208,40 @@ export async function revokeGrant(config: DiditAuthConfig, accessToken: string, 
   });
 
   if (!response.ok) throw await errorOf(response);
+}
+
+export interface StepUpRequest {
+  action: unknown;
+  amount?: unknown;
+  currency?: unknown;
+  /** The registered address Didit sends the person back to once they pass the check. */
+  returnTo: string;
+}
+
+export interface StepUpStart {
+  stepUp: StepUpResult;
+  /** The identity check to send the person to, when a rule asked for one. */
+  verificationUrl: string | null;
+}
+
+/** Asks Didit whether an action needs a step-up; opens the check when one of the application's rules applies. */
+export async function requestStepUp(config: DiditAuthConfig, accessToken: string, request: StepUpRequest): Promise<StepUpStart> {
+  const response = await call(config, "step-up/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...bearer(accessToken) },
+    body: JSON.stringify({ action: request.action, amount: request.amount, currency: request.currency, return_to: request.returnTo })
+  });
+
+  if (!response.ok) throw await errorOf(response);
+  const body = (await response.json()) as Json;
+
+  return { stepUp: toStepUp(body), verificationUrl: body.required === true ? text(body.verification_url) : null };
+}
+
+/** Didit's record of a step-up the session asked for. */
+export async function readStepUp(config: DiditAuthConfig, accessToken: string, id: string): Promise<StepUpResult> {
+  const response = await call(config, `step-up/${encodeURIComponent(id)}/`, { headers: bearer(accessToken) });
+
+  if (!response.ok) throw await errorOf(response);
+  return toStepUp((await response.json()) as Json);
 }

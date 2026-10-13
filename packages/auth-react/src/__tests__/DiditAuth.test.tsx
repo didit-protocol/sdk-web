@@ -6,7 +6,14 @@ const core = {
   signIn: jest.fn(async () => undefined),
   signOut: jest.fn(async () => undefined),
   reauthenticate: jest.fn(async () => undefined),
+  stepUp: jest.fn(),
+  handleStepUpCallback: jest.fn(),
   getToken: jest.fn(async () => "token"),
+  password: { signIn: jest.fn() },
+  emailCode: { start: jest.fn(), verify: jest.fn() },
+  phone: { start: jest.fn(), verify: jest.fn() },
+  protection: { verify: jest.fn(), passkey: jest.fn() },
+  mfa: { verify: jest.fn(), setup: jest.fn() },
   agents: { list: jest.fn(async () => []), revoke: jest.fn(async () => undefined) }
 };
 const createDiditAuth = jest.fn(() => core);
@@ -18,7 +25,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { SignedIn, SignedOut } from "../control";
 import { DiditAuth } from "../DiditAuth";
 import { createCoreAuthClient } from "../core";
-import { session } from "./test-client";
+import { protectionRequired, session, stepUps } from "./test-client";
 
 const coreSession = {
   ...session.user, userId: session.user.id, sessionId: session.id,
@@ -70,12 +77,38 @@ describe("createCoreAuthClient", () => {
 
     await client.signIn({ redirectUrl: "/a" });
     await client.signUp({ redirectUrl: "/b" });
-    await client.stepUp({ redirectUrl: "/c" });
+    await client.reauthenticate({ redirectUrl: "/c" });
     await client.revokeAgent("grant");
     expect(core.signIn.mock.calls).toEqual([[{ returnTo: "/a" }], [{ returnTo: "/b" }]]);
     expect(core.reauthenticate).toHaveBeenCalledWith({ returnTo: "/c" });
     expect(core.agents.revoke).toHaveBeenCalledWith("grant");
     await expect(client.getToken()).resolves.toBe("token");
+  });
+
+  it("runs the core's step-up, not a new sign-in", async () => {
+    const client = createCoreAuthClient({ publishableKey: "pk_test_example" });
+
+    core.stepUp.mockResolvedValue(stepUps.notRequired);
+    await expect(client.stepUp({ action: "payout", amount: "900.00", currency: "USD" })).resolves.toEqual(stepUps.notRequired);
+    expect(core.stepUp).toHaveBeenCalledWith({ action: "payout", amount: "900.00", currency: "USD" });
+    core.handleStepUpCallback.mockResolvedValue(stepUps.approved);
+    await expect(client.handleStepUpCallback()).resolves.toEqual(stepUps.approved);
+    expect(core.handleStepUpCallback).toHaveBeenCalledWith(undefined);
+    expect(core.reauthenticate).not.toHaveBeenCalled();
+    expect(core.signIn).not.toHaveBeenCalled();
+  });
+
+  it("hands headless steps to the core and reports its sessions in the components' shape", async () => {
+    const client = createCoreAuthClient({ publishableKey: "pk_test_example" });
+
+    core.password.signIn.mockResolvedValue(protectionRequired);
+    core.protection.verify.mockResolvedValue({ status: "signed_in", session: coreSession });
+    core.mfa.setup.mockResolvedValue({ status: "signed_in", session: coreSession, recoveryCodes: ["a", "b"] });
+    await expect(client.password.signIn({ email: "person@example.com", password: "secret" })).resolves.toEqual(protectionRequired);
+    await expect(client.protection.verify({ code: "123456" })).resolves.toEqual({ status: "signed_in", session });
+    await expect(client.mfa.setup({ code: "654321" })).resolves.toEqual({ status: "signed_in", session, recoveryCodes: ["a", "b"] });
+    expect(core.password.signIn).toHaveBeenCalledWith({ email: "person@example.com", password: "secret" });
+    expect(core.protection.verify).toHaveBeenCalledWith({ code: "123456" });
   });
 
   it("follows the core's auth state changes", async () => {

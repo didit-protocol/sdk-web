@@ -11,7 +11,13 @@ export type {
   DiditOrganization,
   DiditSession,
   DiditUser,
+  HeadlessSignIn,
+  ProtectionMethod,
   RedirectOptions,
+  SignInResult,
+  StepUpAction,
+  StepUpOptions,
+  StepUpResult,
   UseAuthResult,
   UseUserResult,
   UserButtonProps

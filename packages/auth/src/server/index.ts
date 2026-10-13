@@ -4,6 +4,9 @@ import { isLoopback, parsePublishableKey } from "../key";
 
 export { DiditAuthError } from "../errors";
 export type { DiditAuthErrorCode } from "../errors";
+// Server integrations (such as @didit-protocol/auth-nextjs) read the application's origin from its key.
+export { parsePublishableKey } from "../key";
+export type { PublishableKey } from "../key";
 
 export interface VerifyTokenOptions {
   /** Derives the expected issuer from the application's publishable key: the origin it names. */

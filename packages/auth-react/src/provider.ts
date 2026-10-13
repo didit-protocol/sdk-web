@@ -18,5 +18,11 @@ export type {
   DiditOrganization,
   DiditSession,
   DiditUser,
-  RedirectOptions
+  HeadlessSignIn,
+  ProtectionMethod,
+  RedirectOptions,
+  SignInResult,
+  StepUpAction,
+  StepUpOptions,
+  StepUpResult
 } from "./types.js";
