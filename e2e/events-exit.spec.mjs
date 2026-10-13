@@ -117,6 +117,7 @@ test("return navigation retains delivery without duplicates when back/forward ca
   const lane = `${testInfo.project.name}-${testInfo.testId}`;
 
   try {
+    // Playwright Test applies the configured context options, baseURL included, to this browser too.
     const page = await browser.newPage();
 
     await prepare(page, lane, "esm", "pending");
