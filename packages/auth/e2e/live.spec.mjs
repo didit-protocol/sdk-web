@@ -18,6 +18,9 @@
 //   DIDIT_AUTH_LIVE_PROTECTION=1                      the application's bot protection challenges brute force
 //
 //   npx playwright test --project=live
+//
+// The service allows 30 requests a minute per address and endpoint: run the step-up and protection
+// tests on their own (-g), or a minute after the others.
 import { expect, test } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
