@@ -13,9 +13,13 @@ export type {
   DiditAuthListener,
   DiditAuthOptions,
   DiditOrganization,
+  DiditProtectionMethod,
   DiditRedirectResult,
   DiditSession,
   DiditSignInResult,
+  DiditStepUpAction,
+  DiditStepUpResult,
+  ReauthenticateOptions,
   SignInRedirectOptions,
   StepUpOptions
 } from "./types";

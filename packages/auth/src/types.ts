@@ -5,7 +5,7 @@ import type { DiditAuthStorageOption } from "./storage";
 export type DiditAuthLanguage = "en" | "es" | "fr" | "de" | "ja";
 
 export interface DiditAuthOptions {
-  /** The application's publishable key (`pk_live_...` or `pk_test_...`). */
+  /** The application's publishable key (`pk_live_...` or `pk_test_...`), from the Didit console. */
   publishableKey: string;
   /**
    * Where Didit sends the person back after the hosted page. It must match one
@@ -80,7 +80,15 @@ export type DiditSignInResult =
   /** Finish with `mfa.verify` (authenticator or recovery code). */
   | { status: "mfa_required" }
   /** The person must add an authenticator: show `uri` as a QR code, then call `mfa.setup`. */
-  | { status: "mfa_enrollment_required"; uri: string };
+  | { status: "mfa_enrollment_required"; uri: string }
+  /**
+   * Didit's bot and risk protection asks for one more proof before signing the person in. `methods`
+   * lists what they can use: "email_code" (a code was emailed to them; finish with `protection.verify`)
+   * and "passkey" (finish with `protection.passkey`). The proof expires after `expiresIn` seconds.
+   */
+  | { status: "protection_required"; methods: DiditProtectionMethod[]; expiresIn: number };
+
+export type DiditProtectionMethod = "email_code" | "passkey";
 
 export interface SignInRedirectOptions {
   /** Overrides the client's redirect address for this sign-in. */
@@ -95,12 +103,46 @@ export interface DiditRedirectResult {
   returnTo: string | null;
 }
 
-export interface StepUpOptions extends SignInRedirectOptions {
+export interface ReauthenticateOptions extends SignInRedirectOptions {
   /**
    * "redirect" (the default) signs the person in again on the hosted page;
    * "passkey" asks for their passkey on this page (Didit sign-in domain only).
    */
   method?: "redirect" | "passkey";
+}
+
+/** A sensitive action your application's step-up rules can apply to. */
+export type DiditStepUpAction = "payout" | "bank" | "contact";
+
+export interface StepUpOptions {
+  /** "payout", "bank" (adding or changing a bank account) or "contact" (changing the email or phone). */
+  action: DiditStepUpAction;
+  /** The payout's amount, a decimal such as "900.00" (payouts only). */
+  amount?: string | number;
+  /** The payout's ISO 4217 currency, such as "USD". */
+  currency?: string;
+  /**
+   * Where Didit sends the person back once they pass the check. It must match one of the
+   * application's registered redirect addresses exactly. Defaults to the client's `redirectUri`.
+   */
+  redirectUri?: string;
+}
+
+/**
+ * A step-up as Didit recorded it. Before acting, your backend reads it again with
+ * `GET step-up/{id}/`: what a browser reports can be changed, Didit's record cannot.
+ */
+export interface DiditStepUpResult {
+  /** The step-up's id; null when no rule asked for one. */
+  id: string | null;
+  /** "not_required", "pending", "approved", "review", "declined" or "expired". */
+  status: "not_required" | "pending" | "approved" | "review" | "declined" | "expired" | (string & {});
+  /** The action may go ahead: no step-up was needed, or the person passed it. */
+  approved: boolean;
+  /** The rule that asked for it: "payout", "bank", "contact" or "device" (a new device). */
+  rule: string | null;
+  /** The check the person takes: "liveness", "selfie" or "full_id". */
+  method: string | null;
 }
 
 export interface DiditAgentGrant {
@@ -115,7 +157,6 @@ export interface DiditAgentGrant {
 export type DiditAgentConsentResult = { status: "approved"; redirectTo: string } | { status: "denied" };
 
 export interface DiditAuth {
-  readonly applicationId: string;
   /** Opens the hosted sign-in page. Resolves once the navigation starts. */
   signIn(options?: SignInRedirectOptions): Promise<void>;
   /** Completes a hosted sign-in on the redirect page; reads the current address by default. */
@@ -128,8 +169,19 @@ export interface DiditAuth {
   onAuthStateChange(listener: DiditAuthListener): () => void;
   /** Ends the session at Didit and forgets it here. */
   signOut(): Promise<void>;
-  /** Signs the current person in again (for sensitive actions) and checks it is the same person. */
-  stepUp(options?: StepUpOptions): Promise<DiditSession | null>;
+  /**
+   * Asks Didit whether `action` needs a step-up. When one of your application's rules applies, opens
+   * the identity check (liveness, a selfie or an ID) and resolves once the navigation starts; the
+   * person comes back to `redirectUri`, where `handleStepUpCallback` reads the outcome.
+   */
+  stepUp(options: StepUpOptions): Promise<DiditStepUpResult>;
+  /** Reads the outcome of the step-up the current address (or `url`) came back from. */
+  handleStepUpCallback(url?: string): Promise<DiditStepUpResult>;
+  /**
+   * Signs the current person in again and checks it is the same person, for actions that need a
+   * session at most five minutes old or created with a passkey.
+   */
+  reauthenticate(options?: ReauthenticateOptions): Promise<DiditSession | null>;
   password: {
     signIn(input: { email: string; password: string }): Promise<DiditSignInResult>;
     /** Sends a code to confirm the address; finish with `emailCode.verify`. */
@@ -170,6 +222,13 @@ export interface DiditAuth {
     signIn(): Promise<DiditSignInResult>;
     /** Adds a passkey to the signed-in person (needs a session at most five minutes old). */
     register(): Promise<{ id: string }>;
+  };
+  /** Completes a sign-in that answered "protection_required". */
+  protection: {
+    /** With the code Didit emailed ("email_code"). */
+    verify(input: { code: string }): Promise<DiditSignInResult>;
+    /** With one of the person's passkeys ("passkey"), on the Didit sign-in domain. */
+    passkey(): Promise<DiditSignInResult>;
   };
   mfa: {
     /** Completes a sign-in that answered "mfa_required". */
