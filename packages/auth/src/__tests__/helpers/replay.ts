@@ -15,7 +15,11 @@ export interface Exchange {
  */
 export interface Fixture {
   scenario: string;
-  apiBase: string;
+  /** The application's origin and the publishable key the service minted for it. */
+  origin?: string;
+  publishableKey?: string;
+  /** Older recordings: the shared runtime mount they were recorded at, before each application got its own host. */
+  apiBase?: string;
   redirectUri: string;
   events: string[];
   exchanges: Exchange[];
@@ -26,8 +30,39 @@ export function loadFixture(name: string): Fixture {
   return JSON.parse(readFileSync(new URL(`../fixtures/${name}.json`, import.meta.url), "utf8"));
 }
 
-export function publishableKeyFor(apiBase: string, mode: "test" | "live" = "test"): string {
-  return `pk_${mode}_${Buffer.from(apiBase).toString("base64url")}`;
+export interface MintedKey {
+  applicationId: string;
+  origin: string;
+  publishableKey: string;
+}
+
+/** Publishable keys the local Didit auth service minted (fixtures/publishable-keys.json). */
+export const KEYS = loadFixture("publishable-keys") as unknown as Record<
+  "localSandbox" | "sandbox" | "live" | "customDomain",
+  MintedKey
+> & { localLive: Omit<MintedKey, "publishableKey"> & { publishableKey: null } };
+
+/**
+ * The application a recording talks to. The service serves the same runtime routes at the root of
+ * each application's host as at the shared mount older recordings were made at, so those replay at
+ * the host of the local sandbox application the newer ones were recorded with.
+ */
+export function runtimeOf(fixture: Fixture): { origin: string; publishableKey: string } {
+  return fixture.origin && fixture.publishableKey
+    ? { origin: fixture.origin, publishableKey: fixture.publishableKey }
+    : KEYS.localSandbox;
+}
+
+/** A recorded absolute address of the runtime (a hosted page), at the application's origin. */
+export function atOrigin(fixture: Fixture, url: string): string {
+  return fixture.apiBase && url.startsWith(`${fixture.apiBase}/`)
+    ? runtimeOf(fixture).origin + url.slice(fixture.apiBase.length)
+    : url;
+}
+
+/** A key naming `origin`, for the local issuers of the server tests. */
+export function publishableKeyFor(origin: string, mode: "test" | "live" = "test"): string {
+  return `pk_${mode}_${Buffer.from(origin).toString("base64url")}`;
 }
 
 /**
@@ -55,7 +90,7 @@ export function replay(fixture: Fixture) {
     }
     const { request, response } = exchange;
     const expected = canonical({
-      url: `${fixture.apiBase}/${request.path}`,
+      url: `${runtimeOf(fixture).origin}/${request.path}`,
       method: request.method,
       authorization: request.authorization,
       body: request.body

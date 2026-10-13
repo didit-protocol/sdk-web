@@ -1,14 +1,14 @@
 /**
  * @jest-environment node
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it, jest } from "@jest/globals";
+import { afterAll, afterEach, describe, expect, it, jest } from "@jest/globals";
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { DiditAuthError as BrowserDiditAuthError } from "../index";
 import { DiditAuthError, verifyToken } from "../server/index";
-import { publishableKeyFor } from "./helpers/replay";
+import { loadFixture, publishableKeyFor } from "./helpers/replay";
 
 interface SigningKey {
   kid: string;
@@ -18,6 +18,7 @@ interface SigningKey {
 
 interface Tenant {
   applicationId: string;
+  server: Server;
   issuer: string;
   publishableKey: string;
   keys: SigningKey[];
@@ -28,17 +29,19 @@ interface Tenant {
   discovery?: Record<string, unknown>;
 }
 
-const tenants = new Map<string, Tenant>();
-let server: Server;
-let origin: string;
+const tenants: Tenant[] = [];
 
-beforeAll(async () => {
-  // Serves each tenant's OpenID discovery document and key set, as the issuer does.
-  server = createServer((request, response) => {
-    const match = /^\/auth\/v2\/authentication\/([^/]+)\/(\.well-known\/openid-configuration|jwks)$/.exec(request.url ?? "");
-    const tenant = match && tenants.get(match[1]);
-    if (!tenant) return void response.writeHead(404).end();
-    if (match[2] === "jwks") {
+afterAll(() => Promise.all(tenants.map(({ server }) => new Promise<void>((resolve) => server.close(() => resolve())))));
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
+// Every application is its own issuer, at its own origin: this one's discovery document and key set.
+function serve(tenant: Tenant): Server {
+  return createServer((request, response) => {
+    const route = /^\/(\.well-known\/openid-configuration|jwks)$/.exec(request.url ?? "")?.[1];
+    if (!route) return void response.writeHead(404).end();
+    if (route === "jwks") {
       tenant.jwksRequests++;
       if (tenant.jwksStatus !== 200) return void response.writeHead(tenant.jwksStatus).end();
       return void response
@@ -51,14 +54,7 @@ beforeAll(async () => {
       .writeHead(200, { "Content-Type": "application/json" })
       .end(JSON.stringify(tenant.discovery ?? { issuer: tenant.issuer, jwks_uri: `${tenant.issuer}/jwks` }));
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-});
-
-afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
-afterEach(() => {
-  jest.restoreAllMocks();
-});
+}
 
 async function signingKey(kid = randomUUID()): Promise<SigningKey> {
   const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
@@ -67,19 +63,19 @@ async function signingKey(kid = randomUUID()): Promise<SigningKey> {
 }
 
 async function tenant(): Promise<Tenant> {
-  const applicationId = randomUUID();
-  const issuer = `${origin}/auth/v2/authentication/${applicationId}`;
-  const created: Tenant = {
-    applicationId,
-    issuer,
-    publishableKey: publishableKeyFor(issuer),
+  const created = {
+    applicationId: randomUUID(),
     keys: [await signingKey()],
     jwksStatus: 200,
     jwksRequests: 0,
     discoveryStatus: 200,
     discoveryRequests: 0
-  };
-  tenants.set(applicationId, created);
+  } as Tenant;
+  created.server = serve(created);
+  await new Promise<void>((resolve) => created.server.listen(0, "127.0.0.1", resolve));
+  created.issuer = `http://127.0.0.1:${(created.server.address() as AddressInfo).port}`;
+  created.publishableKey = publishableKeyFor(created.issuer);
+  tenants.push(created);
   return created;
 }
 
@@ -115,7 +111,52 @@ async function rejection(promise: Promise<unknown>): Promise<DiditAuthError> {
   throw new Error("expected a rejection");
 }
 
+/** What the local Didit auth service issued and published (fixtures/issuer.json, fixtures/step-up-check.json). */
+function issued() {
+  const issuer = loadFixture("issuer") as unknown as {
+    origin: string;
+    publishableKey: string;
+    applicationId: string;
+    discovery: Record<string, unknown>;
+    jwks: Record<string, unknown>;
+  };
+  const tokens = loadFixture("step-up-check").exchanges.find(({ request }) => request.path === "token/")?.response
+    .body as { access_token: string; id_token: string };
+  const published: Record<string, unknown> = {
+    [`${issuer.origin}/.well-known/openid-configuration`]: issuer.discovery,
+    [issuer.discovery.jwks_uri as string]: issuer.jwks
+  };
+  const fetch = jest.fn(async (url: string) => {
+    if (!published[url]) return { ok: false, status: 404, json: async () => ({}) } as Response;
+    return { ok: true, status: 200, json: async () => published[url] } as Response;
+  });
+  // The recorded token's own clock: issued a moment ago, five minutes before it expires.
+  const { iat } = JSON.parse(Buffer.from(tokens.access_token.split(".")[1], "base64url").toString());
+  jest.spyOn(Date, "now").mockReturnValue((iat + 1) * 1000);
+  return { ...issuer, ...tokens, fetch: fetch as unknown as typeof globalThis.fetch };
+}
+
 describe("verifyToken", () => {
+  it("verifies an access token the Didit auth service issued, with the publishable key it minted", async () => {
+    const service = issued();
+    const claims = await verifyToken(service.access_token, { publishableKey: service.publishableKey, fetch: service.fetch });
+
+    // The key names the application's origin, which is the issuer of its tokens.
+    expect(claims).toMatchObject({ iss: service.origin, aud: service.applicationId, act: null });
+    expect(service.fetch).toHaveBeenCalledWith(`${service.origin}/.well-known/openid-configuration`, expect.anything());
+    await expect(
+      verifyToken(service.access_token, {
+        publishableKey: service.publishableKey,
+        audience: service.applicationId,
+        fetch: service.fetch
+      })
+    ).resolves.toMatchObject({ sub: claims.sub });
+    // The ID token the service issued with it has the same issuer, audience and keys.
+    expect(
+      await rejection(verifyToken(service.id_token, { publishableKey: service.publishableKey, fetch: service.fetch }))
+    ).toMatchObject({ code: "invalid_token", message: expect.stringMatching(/not an access token/) });
+  });
+
   it("returns the claims of a token signed by the application's issuer", async () => {
     const app = await tenant();
     const claims = await verifyToken(
@@ -137,7 +178,7 @@ describe("verifyToken", () => {
     expect(DiditAuthError).toBe(BrowserDiditAuthError);
   });
 
-  it("rejects tokens of another application, another issuer or another audience", async () => {
+  it("rejects tokens of another application or another issuer, and of another audience when one is given", async () => {
     const app = await tenant();
     const other = await tenant();
 
@@ -152,14 +193,14 @@ describe("verifyToken", () => {
     const wrongIssuer = await rejection(
       verifyToken(await token(app, { iss: other.issuer }), { publishableKey: app.publishableKey })
     );
-    const wrongAudience = await rejection(
-      verifyToken(await token(app, { aud: [other.applicationId] }), { publishableKey: app.publishableKey })
-    );
+    // The publishable key names the issuer, not the application id: pass it as the audience to check `aud` too.
+    const audience = { publishableKey: app.publishableKey, audience: app.applicationId };
+    const wrongAudience = await rejection(verifyToken(await token(app, { aud: [other.applicationId] }), audience));
     expect(wrongIssuer.message).toMatch(/another application/);
     expect(wrongAudience.message).toMatch(/another audience/);
     // A token naming several audiences passes when one of them is this application.
     await expect(
-      verifyToken(await token(app, { aud: [other.applicationId, app.applicationId] }), { publishableKey: app.publishableKey })
+      verifyToken(await token(app, { aud: [other.applicationId, app.applicationId] }), audience)
     ).resolves.toMatchObject({ sub: expect.any(String) });
   });
 

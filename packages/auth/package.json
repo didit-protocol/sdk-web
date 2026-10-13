@@ -23,11 +23,11 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "rollup -c",
+    "build": "npm run build -w @didit-protocol/signals && rollup -c",
     "size": "node scripts/size.mjs",
     "test": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js",
     "test:e2e": "npm run build && playwright test --project=chromium --project=firefox --project=webkit",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "npm run build -w @didit-protocol/signals && tsc --noEmit",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build"
   },
