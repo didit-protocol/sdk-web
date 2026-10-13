@@ -1,0 +1,50 @@
+{
+  "name": "@didit-protocol/signals",
+  "version": "0.1.0",
+  "description": "Didit device signals and end-user event monitoring for the browser",
+  "main": "dist/didit-signals.cjs",
+  "module": "dist/didit-signals.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/didit-signals.esm.js",
+      "require": "./dist/didit-signals.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "rollup -c",
+    "typecheck": "tsc --noEmit",
+    "test:size": "node scripts/check-size.mjs",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build && npm run test:size"
+  },
+  "keywords": [
+    "didit",
+    "fraud",
+    "events",
+    "device-fingerprint",
+    "transaction-monitoring",
+    "sdk"
+  ],
+  "author": "Didit",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/didit-protocol/sdk-web.git",
+    "directory": "packages/signals"
+  },
+  "homepage": "https://docs.didit.me",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
