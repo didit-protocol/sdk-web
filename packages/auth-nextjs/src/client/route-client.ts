@@ -1,4 +1,4 @@
-import type { DiditAuth as HeadlessCore, DiditSignInResult } from "@didit-protocol/auth";
+import type { DiditAuth as HeadlessCore, DiditSessionResponse, DiditSignInResult } from "@didit-protocol/auth";
 import { createAuthStore, snapshotOf } from "@didit-protocol/auth-react/provider";
 import type {
   AgentGrant,
@@ -81,16 +81,15 @@ export function createRouteClient({
         publishableKey,
         redirectUri,
         storage: "memory",
-        navigate,
         async exchangeCode({ code, codeVerifier }) {
           const response = await post("exchange", { code, code_verifier: codeVerifier });
 
           if (!response.ok) throw new Error(`[didit-auth] Completing the sign-in failed with ${response.status}.`);
-          const { session } = (await response.json()) as { session: Json };
+          const { session } = (await response.json()) as { session: DiditSessionResponse & Json };
 
           exchanged = toSession(session);
           store.set(snapshotOf(exchanged));
-          return session as never;
+          return session;
         }
       })
     );
@@ -100,7 +99,9 @@ export function createRouteClient({
   async function step(run: (auth: HeadlessCore) => Promise<DiditSignInResult>): Promise<SignInResult> {
     const result = await run(await core());
 
-    return result.status === "signed_in" ? { ...result, session: exchanged as DiditSession } : result;
+    if (result.status !== "signed_in") return result;
+    // exchangeCode ran just before, and kept the session this app's server answered with.
+    return { ...result, session: exchanged! };
   }
 
   return {

@@ -50,6 +50,7 @@
     "node": ">=20.9.0"
   },
   "dependencies": {
+    "@didit-protocol/auth": "0.1.0",
     "@didit-protocol/auth-react": "0.1.0"
   },
   "peerDependencies": {
