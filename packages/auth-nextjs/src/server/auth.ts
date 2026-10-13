@@ -2,12 +2,13 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 
-import type { DiditSession } from "@didit-protocol/auth-react/provider";
+import type { DiditSession, StepUpResult } from "@didit-protocol/auth-react/provider";
 
 import { PATH_HEADER } from "../constants.js";
 import { resolveConfig, type DiditAuthConfig } from "./config.js";
 import { cookieNames, readSessionCookies } from "./cookies.js";
 import { safeReturnTo } from "./return-to.js";
+import { readStepUp } from "./runtime-api.js";
 import { cachedSession } from "./session-cache.js";
 
 export interface AuthState {
@@ -16,6 +17,11 @@ export interface AuthState {
   sessionId: string | null;
   /** The person's access token, for calling your own API from the server. */
   getToken(): Promise<string | null>;
+  /**
+   * Didit's record of a step-up this session asked for, or `null` when signed out. Check it is
+   * `approved` (and for the same action and amount) before acting: the browser's report can be changed.
+   */
+  getStepUp(id: string): Promise<StepUpResult | null>;
 }
 
 export interface ProtectOptions {
@@ -25,7 +31,7 @@ export interface ProtectOptions {
 
 let config: DiditAuthConfig | undefined;
 
-function settings(): DiditAuthConfig {
+export function settings(): DiditAuthConfig {
   config ??= resolveConfig();
   return config;
 }
@@ -41,7 +47,8 @@ const readAuth = cache(async (): Promise<AuthState> => {
     session,
     userId: session?.user.id ?? null,
     sessionId: session?.id ?? null,
-    getToken: async () => (session ? access : null)
+    getToken: async () => (session ? access : null),
+    getStepUp: async (id) => (session && access ? readStepUp(current, access, id) : null)
   };
 });
 

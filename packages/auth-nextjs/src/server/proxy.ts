@@ -21,6 +21,7 @@ import {
   DiditAuthApiError,
   endSession,
   exchangeCode,
+  fetchSession,
   fetchSessionBody,
   listGrants,
   readStepUp,
