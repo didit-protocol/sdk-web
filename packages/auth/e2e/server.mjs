@@ -116,7 +116,8 @@ async function replay(request, response) {
   if (url.pathname === "/__replay/report") {
     return send(response, 200, JSON.stringify(journal), { "Content-Type": "application/json" });
   }
-  if (isStatic(url.pathname)) return serveStatic(request, response);
+  // Every runtime route ends with a slash; anything else (pages, scripts, the favicon) is static.
+  if (isStatic(url.pathname) || !url.pathname.endsWith("/")) return serveStatic(request, response);
   const route = url.pathname.slice(1);
   const headers = cors(request, { "Cache-Control": "no-store" });
   const origin = request.headers.origin;
