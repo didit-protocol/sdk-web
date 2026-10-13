@@ -110,15 +110,14 @@ test("closing a page while hashing is pending delivers the queued events", async
   expect((await received(request, lane))[0].body.events).toEqual(recording.request.events);
 });
 
-test("return navigation retains delivery without duplicates when back/forward caching is enabled", async ({ playwright, browserName, request }, testInfo) => {
+test("return navigation retains delivery without duplicates when back/forward caching is enabled", async ({ playwright, browserName, baseURL, request }, testInfo) => {
   const browser = await playwright[browserName].launch(browserName === "chromium"
     ? { channel: "chromium", ignoreDefaultArgs: ["--disable-back-forward-cache"] }
     : {});
   const lane = `${testInfo.project.name}-${testInfo.testId}`;
 
   try {
-    // Playwright Test applies the configured context options, baseURL included, to this browser too.
-    const page = await browser.newPage();
+    const page = await browser.newPage({ baseURL });
 
     await prepare(page, lane, "esm", "pending");
     await page.evaluate(({ events, token }) => {
