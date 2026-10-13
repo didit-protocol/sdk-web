@@ -1,0 +1,20 @@
+# Changelog
+
+All notable changes to `@didit-protocol/auth` are documented in this file.
+
+## [Unreleased]
+
+### Added
+
+- `createDiditAuth({ publishableKey })`: hosted sign-in with PKCE (`signIn`,
+  `handleRedirectCallback`), `getSession`, `getToken`, `onAuthStateChange` and
+  `signOut`. Refreshes, sign-ins and sign-outs take turns across tabs, and
+  other tabs' changes are reported from the tokens stored now.
+- Headless methods: `password`, `emailCode`, `phone`, `passkeys`, `mfa`,
+  `magicLink`, `social`, `stepUp` and `agents`. `magicLink` and `social` open
+  the hosted page with every enabled method.
+- Device signals from `@didit-protocol/signals` on auth requests.
+- `@didit-protocol/auth/server`: `verifyToken` for ES256 access tokens (header
+  `typ: at+jwt`; ID tokens are refused), with issuer discovery and signing
+  keys cached, loaded once for concurrent requests and retried at most every 5
+  seconds while the issuer is down.
