@@ -3,7 +3,7 @@
 Didit device signals and end-user event monitoring for the browser, in under 5 KB minified and gzipped.
 
 - **`submitEvent`** sends sign-ups, logins, failed logins, logouts and any other end-user event to Didit's [event monitoring](https://docs.didit.me/transaction-monitoring/events), tied to the same person as their verifications and transactions.
-- **Device signals**: the didit-fp-v2 device fingerprint (persistent device id plus a composite hash of stable browser signals) is attached to every batch.
+- **Device signals**: the didit-fp-v2 device fingerprint is attached to every batch. Page exit uses the available signals if its composite hash is still pending.
 - Works alone or together with the other Didit SDKs: [`@didit-protocol/sdk-web`](https://www.npmjs.com/package/@didit-protocol/sdk-web) depends on this package and re-exports it, so an app that uses both shares one event queue per module format. Standalone CDN and script-tag builds each carry their own queue.
 
 ## Installation
@@ -59,9 +59,10 @@ The person an event belongs to always comes from the token: Didit overwrites any
 | The page is hidden or closed | Waiting events that fit the page-exit budget, with `fetch` and `keepalive` so the request outlives the page |
 | You call `flush()` | Everything that is waiting; resolves with each event's outcome |
 
-- Every request carries the `X-Monitoring-Token` header and the device fingerprint (`fingerprint_v2` in the body plus the `X-Didit-PID` and `X-Didit-FP-Hash` headers).
+- Every request carries the `X-Monitoring-Token` header and the device fingerprint (`fingerprint_v2` in the body plus its matching `X-Didit-*` headers).
 - Each event keeps the token it was submitted with; events with different tokens never share a request, so a sign-out and a new sign-in on the same page never mix people.
 - Delivery is best effort: the in-memory queue is lost when the page closes, and browsers may terminate requests. At page exit, browsers allow 64 KiB of `keepalive` requests per page; what does not fit stays queued and is sent if the page comes back. `sendBeacon` is not used: it cannot carry the token header.
+- Exit requests start right away with the collected persistent device id, browser signals and bot context. If WebCrypto hashing is still pending, `compositeHash` is empty and `X-Didit-FP-Hash` is omitted, and those events are stored without the composite hash. Normal batches and `flush()` wait for the complete fingerprint, and exit requests use it once it is ready.
 - On a network error, HTTP timeout (408), rate limit (429), server error (5xx) or an unreadable answer, the same events are sent again after 10, 20 and 40 seconds, then every minute. They are re-sent byte for byte, so an event Didit already stored comes back as `replayed` instead of being stored twice.
 - A refusal is final and is reported through `onError` and in the `flush()` results:
 
