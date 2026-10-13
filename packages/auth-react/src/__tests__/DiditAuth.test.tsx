@@ -5,7 +5,7 @@ const core = {
   onAuthStateChange: jest.fn(),
   signIn: jest.fn(async () => undefined),
   signOut: jest.fn(async () => undefined),
-  stepUp: jest.fn(async () => undefined),
+  reauthenticate: jest.fn(async () => undefined),
   getToken: jest.fn(async () => "token"),
   agents: { list: jest.fn(async () => []), revoke: jest.fn(async () => undefined) }
 };
@@ -73,7 +73,7 @@ describe("createCoreAuthClient", () => {
     await client.stepUp({ redirectUrl: "/c" });
     await client.revokeAgent("grant");
     expect(core.signIn.mock.calls).toEqual([[{ returnTo: "/a" }], [{ returnTo: "/b" }]]);
-    expect(core.stepUp).toHaveBeenCalledWith({ returnTo: "/c" });
+    expect(core.reauthenticate).toHaveBeenCalledWith({ returnTo: "/c" });
     expect(core.agents.revoke).toHaveBeenCalledWith("grant");
     await expect(client.getToken()).resolves.toBe("token");
   });
