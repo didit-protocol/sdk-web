@@ -35,6 +35,37 @@ export interface DiditAuthOptions {
   navigate?: (url: string) => void | Promise<void>;
   /** A fetch implementation, for runtimes without a global one. */
   fetch?: typeof fetch;
+  /**
+   * Exchanges the one-time code of a sign-in on your server instead of in this
+   * browser, so the tokens never reach the page (`@didit-protocol/auth-nextjs`
+   * keeps them in httpOnly cookies). Your server posts the grant to `token/`,
+   * keeps the tokens and answers with the body of `GET session/`. This client
+   * then keeps no tokens: use it for the headless steps only.
+   */
+  exchangeCode?: (grant: DiditCodeGrant) => Promise<DiditSessionResponse>;
+}
+
+/** A sign-in's one-time code, for `token/` with `grant_type: "authorization_code"`. */
+export interface DiditCodeGrant {
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+}
+
+/** The session as `GET session/` describes it. */
+export interface DiditSessionResponse {
+  sub: string;
+  sid: string;
+  application_id: string;
+  amr?: string[];
+  mfa_verified?: boolean;
+  email?: string | null;
+  email_verified?: boolean;
+  phone?: string | null;
+  verified_identity?: Record<string, unknown> | null;
+  expires_at: string;
+  organizations?: { organization_id: string; organization__name: string; role: string }[];
+  vendor_data?: string | null;
 }
 
 export interface DiditOrganization {

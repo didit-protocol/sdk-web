@@ -21,6 +21,7 @@ import type {
   DiditAuthOptions,
   DiditProtectionMethod,
   DiditSession,
+  DiditSessionResponse as SessionResponse,
   DiditSignInResult,
   DiditStepUpResult,
   ReauthenticateOptions,
@@ -58,21 +59,6 @@ interface TokenResponse {
   refresh_token: string;
   expires_in: number;
   session_id: string;
-}
-
-interface SessionResponse {
-  sub: string;
-  sid: string;
-  application_id: string;
-  amr?: string[];
-  mfa_verified?: boolean;
-  email?: string | null;
-  email_verified?: boolean;
-  phone?: string | null;
-  verified_identity?: Record<string, unknown> | null;
-  expires_at: string;
-  organizations?: { organization_id: string; organization__name: string; role: string }[];
-  vendor_data?: string | null;
 }
 
 /** What a primary proof, protection challenge, MFA step or agent consent answers. */
@@ -389,6 +375,12 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
     redirectUri: string,
     stepUpUser?: string | null
   ): Promise<DiditSession> {
+    if (options.exchangeCode) {
+      // The app's server exchanges the code and keeps the tokens; this client only reads the session.
+      const session = toSession(await options.exchangeCode({ code, codeVerifier: verifier, redirectUri }), "");
+      attempt = null;
+      return session;
+    }
     const tokens = fromResponse(
       await request<TokenResponse>("token/", {
         body: { grant_type: "authorization_code", code, code_verifier: verifier, redirect_uri: redirectUri }
