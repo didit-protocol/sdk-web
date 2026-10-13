@@ -138,11 +138,14 @@ async function replay(request, response) {
   const entry = { method: request.method, path, headers: { ...request.headers }, body };
   journal.push(entry);
 
-  for (const exchange of pool.flatMap((fixture) => fixture.exchanges)) {
-    const { request: recorded, response: answer } = exchange;
-    const same = canonical({ method: recorded.method, path: recorded.path, authorization: recorded.authorization, body: recorded.body }) === sent;
-    // Each recorded request is answered once, except reads: the same GET gets the same answer.
-    if (!same || (exchange.used && recorded.method !== "GET")) continue;
+  const matching = pool
+    .flatMap((fixture) => fixture.exchanges)
+    .filter(({ request: recorded }) => canonical({ method: recorded.method, path: recorded.path, authorization: recorded.authorization, body: recorded.body }) === sent);
+  // Each recorded request is answered once, in order, except reads: a GET asked again after its
+  // recorded answers ran out gets the last one again.
+  const exchange = matching.find((candidate) => !candidate.used) ?? matching.findLast((candidate) => candidate.request.method === "GET");
+  if (exchange) {
+    const { response: answer } = exchange;
     exchange.used = true;
     return send(response, answer.status, answer.body === null ? null : JSON.stringify(answer.body), {
       ...headers,

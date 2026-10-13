@@ -1,13 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
-const APPLICATION_ID = "b83c95f9-93bd-4bed-a94f-f4b354a446db";
+// The recorded API is an application's origin, as each application's host is: its key names that origin.
 const RECORDED_API = "http://127.0.0.1:4175";
-const API_BASE = `${RECORDED_API}/auth/v2/authentication/${APPLICATION_ID}`;
-const PUBLISHABLE_KEY = `pk_test_${Buffer.from(API_BASE).toString("base64url")}`;
+const PUBLISHABLE_KEY = `pk_test_${Buffer.from(RECORDED_API).toString("base64url")}`;
 const APP = "http://localhost:4174/e2e/fixtures/app.html";
 const PASSWORD = "Correct-horse-battery-91";
-const TOKENS = `didit-auth:${APPLICATION_ID}`;
+const TOKENS = `didit-auth:${RECORDED_API}`;
 
 const fixture = (name) => JSON.parse(readFileSync(new URL(`../src/__tests__/fixtures/${name}.json`, import.meta.url), "utf8"));
 
@@ -86,7 +85,7 @@ async function startSlowRefresh(tab) {
   let arrived;
   let held = null;
   const first = new Promise((resolve) => (arrived = resolve));
-  await tab.route(`${API_BASE}/token/`, (route) => (held ? route.continue() : arrived((held = route))));
+  await tab.route(`${RECORDED_API}/token/`, (route) => (held ? route.continue() : arrived((held = route))));
   await tab.evaluate(() => {
     window.clockOffset = 5 * 60_000;
     window.refreshed = window.auth.getToken();
@@ -139,7 +138,7 @@ test("completes in another tab, as an emailed magic link does, and the first tab
     return window.auth.signIn();
   }, PUBLISHABLE_KEY);
   // The same address the recording opened, on this test's API host.
-  expect(await page.evaluate(() => window.opened)).toBe(recorded.signInUrl.replace("http://127.0.0.1:8765", RECORDED_API));
+  expect(await page.evaluate(() => window.opened)).toBe(recorded.signInUrl.replace(recorded.apiBase, RECORDED_API));
 
   const link = await context.newPage();
   await openApp(link, { url: recorded.callbackUrl });
@@ -316,8 +315,8 @@ for (const late of [false, true]) {
     const other = await context.newPage();
     await openApp(other);
 
-    // This tab steps up on the hosted page and comes back with a code.
-    await page.evaluate(() => void window.auth.stepUp());
+    // This tab signs in again on the hosted page and comes back with a code.
+    await page.evaluate(() => void window.auth.reauthenticate());
     await page.waitForURL(/[?&]code=/);
     expect(page.url()).toBe(recorded.callbackUrl);
     await openApp(page, { url: page.url() });
