@@ -80,10 +80,10 @@ function lastEmailedCode(email) {
   return left + right;
 }
 
-const passwordSignIn = (page, email) =>
+const passwordSignIn = (page, email, password = DIDIT_AUTH_LIVE_PASSWORD) =>
   page.evaluate(
-    ([email, password]) => window.auth.password.signIn({ email, password }).then((result) => result.status),
-    [email, DIDIT_AUTH_LIVE_PASSWORD]
+    ([email, password]) => window.auth.password.signIn({ email, password }).then((result) => result.status, (error) => error.code),
+    [email, password]
   );
 
 test("signs in on the real hosted page, refreshes, and signs out at Didit", async ({ page }) => {
@@ -271,7 +271,7 @@ test("answers bot protection with an emailed code, then with a passkey", async (
   test.skip(!DIDIT_AUTH_LIVE_PROTECTION || !DIDIT_AUTH_LIVE_MAILBOX, "needs brute-force protection set to challenge and the mailbox");
   const email = "protected-browser-person@example.com";
   const failFiveTimes = async () => {
-    for (let attempt = 0; attempt < 5; attempt++) expect(await passwordSignIn(page, email, WRONG_PASSWORD)).toBeUndefined();
+    for (let attempt = 0; attempt < 5; attempt++) expect(await passwordSignIn(page, email, WRONG_PASSWORD)).toBe("invalid_credentials");
   };
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
