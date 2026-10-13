@@ -1,3 +1,5 @@
+import { parsePublishableKey } from "@didit-protocol/auth/server";
+
 import { BASE_PATH } from "../constants.js";
 
 export class DiditAuthConfigError extends Error {
@@ -8,7 +10,9 @@ export class DiditAuthConfigError extends Error {
 }
 
 export interface DiditAuthConfig {
-  /** Frontend API base URL, without a trailing slash. */
+  /** The application's publishable key, for the headless steps that run in the browser. */
+  publishableKey: string;
+  /** The application's origin, which its publishable key names: its Frontend API and hosted pages. */
   frontendApi: string;
   /** The callback address registered for your application. */
   redirectUri: string;
@@ -45,29 +49,34 @@ function parseUrl(name: string, value: string): URL {
 }
 
 /**
- * Reads the configuration from the environment: `DIDIT_FRONTEND_API` (the
- * Frontend API shown in Authentication > Developers) and `DIDIT_REDIRECT_URI`
- * (your callback address, for example `http://localhost:3000/auth/callback`).
+ * Reads the configuration from the environment: `DIDIT_PUBLISHABLE_KEY` (in
+ * Authentication > Developers; it names the application's Frontend API) and
+ * `DIDIT_REDIRECT_URI` (your callback address, for example
+ * `http://localhost:3000/auth/callback`).
  */
 export function resolveConfig(env: Env = process.env): DiditAuthConfig {
-  const frontendApi = env.DIDIT_FRONTEND_API?.trim();
+  const publishableKey = env.DIDIT_PUBLISHABLE_KEY?.trim();
   const redirectUri = env.DIDIT_REDIRECT_URI?.trim();
 
-  if (!frontendApi) {
-    throw new DiditAuthConfigError(
-      "Set DIDIT_FRONTEND_API to the Frontend API in Authentication > Developers. " +
-        "It is not derived from DIDIT_PUBLISHABLE_KEY yet."
-    );
+  if (!publishableKey) {
+    throw new DiditAuthConfigError("Set DIDIT_PUBLISHABLE_KEY to the publishable key in Authentication > Developers.");
   }
   if (!redirectUri) {
     throw new DiditAuthConfigError("Set DIDIT_REDIRECT_URI to your callback address, for example https://example.com/auth/callback.");
   }
-  const api = parseUrl("DIDIT_FRONTEND_API", frontendApi);
+  let frontendApi: string;
+
+  try {
+    frontendApi = parsePublishableKey(publishableKey).origin;
+  } catch {
+    throw new DiditAuthConfigError("DIDIT_PUBLISHABLE_KEY is not a Didit publishable key. Copy it again from Authentication > Developers.");
+  }
   const callback = parseUrl("DIDIT_REDIRECT_URI", redirectUri);
   const cacheSeconds = Number(env.DIDIT_SESSION_CACHE_SECONDS ?? 30);
 
   return {
-    frontendApi: `${api.origin}${api.pathname}`.replace(/\/+$/, ""),
+    publishableKey,
+    frontendApi,
     redirectUri: callback.href,
     callbackPath: callback.pathname,
     basePath: BASE_PATH,

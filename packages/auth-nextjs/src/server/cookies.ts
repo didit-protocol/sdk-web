@@ -5,13 +5,15 @@ export interface CookieNames {
   refresh: string;
   /** Prefix of the per-sign-in transaction cookie; the state's first characters follow. */
   transaction: string;
+  /** The page to come back to after a step-up's identity check. */
+  stepUp: string;
 }
 
 /** `__Host-` names cannot be set by a subdomain or for another path, so they need HTTPS. */
 export function cookieNames(config: Pick<DiditAuthConfig, "secure">): CookieNames {
   const prefix = config.secure ? "__Host-" : "";
 
-  return { access: `${prefix}didit_at`, refresh: `${prefix}didit_rt`, transaction: `${prefix}didit_tx.` };
+  return { access: `${prefix}didit_at`, refresh: `${prefix}didit_rt`, transaction: `${prefix}didit_tx.`, stepUp: `${prefix}didit_su` };
 }
 
 export interface CookieOptions {
