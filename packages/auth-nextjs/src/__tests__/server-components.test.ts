@@ -52,6 +52,8 @@ describe("<DiditAuth> in a server layout", () => {
     expect(isValidElement(element)).toBe(true);
     expect(element.type).toBe(DiditAuthRouteProvider);
     expect(element.props).toMatchObject({ locale: "fr", children: "page", initialSession: { id: recorded.session.body.sid } });
+    // Headless sign-in runs in the browser with the application's key and this app's callback.
+    expect(element.props).toMatchObject({ publishableKey: ENV.DIDIT_PUBLISHABLE_KEY, redirectUri: ENV.DIDIT_REDIRECT_URI });
   });
 
   it("renders signed out when Didit cannot be reached", async () => {
