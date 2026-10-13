@@ -21,9 +21,13 @@ import {
   DiditAuthApiError,
   endSession,
   exchangeCode,
-  fetchSession,
+  fetchSessionBody,
   listGrants,
+  readStepUp,
+  requestStepUp,
   revokeGrant,
+  toSession,
+  type Json,
   type TokenSet
 } from "./runtime-api.js";
 import { cachedSession, forgetSession, primeSession, refreshOnce } from "./session-cache.js";
@@ -48,8 +52,13 @@ interface Resolved {
   update: CookieUpdate;
 }
 
-const GRANT_PATH = /^agents\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
-const HOSTED_START = new Set(["sign-in", "sign-up", "step-up"]);
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const GRANT_PATH = new RegExp(`^agents/(${UUID})$`, "i");
+const STEP_UP_PATH = new RegExp(`^step-up/(${UUID})$`, "i");
+const STEP_UP_ID = new RegExp(`^${UUID}$`, "i");
+const HOSTED_START = new Set(["sign-in", "sign-up", "reauthenticate"]);
+// A step-up's identity check stays open for thirty minutes.
+const STEP_UP_SECONDS = 1800;
 
 function noStore<T extends Response>(response: T): T {
   response.headers.set("Cache-Control", "no-store");
@@ -145,10 +154,10 @@ function json(body: unknown, status = 200): NextResponse {
 
 async function startHostedSignIn(request: NextRequest, config: DiditAuthConfig): Promise<NextResponse> {
   const returnTo = safeReturnTo(request.nextUrl.searchParams.get("redirect_url")) ?? "/";
-  const stepUp = request.nextUrl.pathname === `${config.basePath}/step-up`;
-  const current = stepUp ? await resolve(request, config, true) : null;
+  const reauthenticating = request.nextUrl.pathname === `${config.basePath}/reauthenticate`;
+  const current = reauthenticating ? await resolve(request, config, true) : null;
 
-  if (stepUp && !current?.session) return json({ error: "signed_out" }, 401);
+  if (reauthenticating && !current?.session) return json({ error: "signed_out" }, 401);
   const verifier = randomString();
   const state = randomString();
   // The hosted page opens on sign-in and links to sign-up and password reset itself.
@@ -213,20 +222,121 @@ async function completeSignIn(request: NextRequest, config: DiditAuthConfig): Pr
     rejected.cookies.set(transactionCookie(names, state), "", cookieOptions(config, 0));
     return rejected;
   }
+  const response = noStore(NextResponse.redirect(new URL(returnTo, config.redirectUri), 303));
+
+  await storeSession(request, config, response, tokens, session);
+  response.cookies.set(transactionCookie(names, state), "", cookieOptions(config, 0));
+  return response;
+}
+
+/** Keeps a new session in the cookies and ends the one this browser had before, if any. */
+async function storeSession(
+  request: NextRequest,
+  config: DiditAuthConfig,
+  response: NextResponse,
+  tokens: TokenSet,
+  session: DiditSession
+): Promise<void> {
   primeSession(config, tokens.accessToken, session);
 
   // Signing in again in this browser (for example to confirm it is you) replaces the earlier session.
-  const old = readCookies(request, names);
+  const old = readCookies(request, cookieNames(config));
   const previous = old.access ?? (old.refresh ? (await refreshOnce(config, old.refresh.token))?.accessToken : null);
 
   if (previous && previous !== tokens.accessToken) {
     forgetSession(config, previous);
     await endSession(config, previous);
   }
-  const response = noStore(NextResponse.redirect(new URL(returnTo, config.redirectUri), 303));
-
   writeUpdate(response, config, { kind: "set", tokens, sessionEnd: Math.floor(Date.parse(session.expiresAt) / 1000) });
-  response.cookies.set(transactionCookie(names, state), "", cookieOptions(config, 0));
+}
+
+async function readJson(request: NextRequest): Promise<Json | null> {
+  const body: unknown = await request.json().catch(() => null);
+
+  return body && typeof body === "object" && !Array.isArray(body) ? (body as Json) : null;
+}
+
+/**
+ * Completes a headless sign-in. Its steps run in the browser, straight to Didit, so bot protection and
+ * rate limits see the person; the one-time code comes here, so the tokens only ever live in cookies.
+ */
+async function exchangeHeadless(request: NextRequest, config: DiditAuthConfig): Promise<NextResponse> {
+  if (!fromClient(request) || !sameOrigin(request, config)) return json({ error: "forbidden" }, 403);
+  const input = await readJson(request);
+  const code = input?.code;
+  const verifier = input?.code_verifier;
+
+  if (typeof code !== "string" || !code || typeof verifier !== "string" || !verifier) {
+    return json({ error: "invalid_request" }, 400);
+  }
+  let tokens: TokenSet;
+
+  try {
+    tokens = await exchangeCode(config, { code, verifier, userAgent: request.headers.get("user-agent") });
+  } catch (error) {
+    if (error instanceof DiditAuthApiError && error.status < 500 && error.status !== 429) {
+      return json({ error: error.code ?? "invalid_grant" }, 400);
+    }
+    throw error;
+  }
+  const body = await fetchSessionBody(config, tokens.accessToken);
+
+  if (!body) return json({ error: "session_unavailable" }, 502);
+  // The browser's client reads the session as Didit describes it, like after its own exchange.
+  const response = json({ session: body });
+
+  await storeSession(request, config, response, tokens, toSession(body));
+  return response;
+}
+
+/** Asks Didit's step-up rules about an action, and opens the identity check when one applies. */
+async function startStepUp(request: NextRequest, config: DiditAuthConfig): Promise<NextResponse> {
+  if (!fromClient(request) || !sameOrigin(request, config)) return json({ error: "forbidden" }, 403);
+  const input = await readJson(request);
+
+  if (!input) return json({ error: "invalid_request" }, 400);
+  const resolved = await resolve(request, config, true);
+  let response: NextResponse;
+
+  if (!resolved.session || !resolved.access) response = json({ error: "signed_out" }, 401);
+  else {
+    try {
+      // Didit only returns to a registered address: the callback brings the person back to their page.
+      const { stepUp, verificationUrl } = await requestStepUp(config, resolved.access, {
+        action: input.action,
+        amount: input.amount,
+        currency: input.currency,
+        returnTo: config.redirectUri
+      });
+
+      response = json(verificationUrl ? { stepUp, verificationUrl } : { stepUp });
+      if (verificationUrl) {
+        const returnTo = safeReturnTo(typeof input.redirect_url === "string" ? input.redirect_url : null) ?? "/";
+
+        response.cookies.set(cookieNames(config).stepUp, returnTo, cookieOptions(config, STEP_UP_SECONDS));
+      }
+    } catch (error) {
+      if (!(error instanceof DiditAuthApiError) || error.status !== 400) throw error;
+      response = json({ error: error.code ?? "invalid_request" }, 400);
+    }
+  }
+  writeUpdate(response, config, resolved.update);
+  return response;
+}
+
+/**
+ * Didit sends a person who passed a step-up's check to the callback with `step_up` and
+ * `status=approved`. Only the id goes on to their page, which reads the outcome from Didit.
+ */
+function completeStepUp(request: NextRequest, config: DiditAuthConfig): NextResponse {
+  const name = cookieNames(config).stepUp;
+  const id = request.nextUrl.searchParams.get("step_up") ?? "";
+  const target = new URL(safeReturnTo(request.cookies.get(name)?.value) ?? "/", config.redirectUri);
+
+  if (STEP_UP_ID.test(id)) target.searchParams.set("step_up", id);
+  const response = noStore(NextResponse.redirect(target, 303));
+
+  response.cookies.set(name, "", cookieOptions(config, 0));
   return response;
 }
 
@@ -251,7 +361,8 @@ async function signOut(request: NextRequest, config: DiditAuthConfig, options: D
 
 async function clientRoute(request: NextRequest, config: DiditAuthConfig, action: string): Promise<NextResponse | null> {
   const grant = action.match(GRANT_PATH)?.[1];
-  const known = action === "session" || action === "token" || action === "agents" || Boolean(grant);
+  const stepUp = action.match(STEP_UP_PATH)?.[1];
+  const known = action === "session" || action === "token" || action === "agents" || Boolean(grant) || Boolean(stepUp);
 
   if (!known) return null;
   if (!fromClient(request)) return json({ error: "forbidden" }, 403);
@@ -266,7 +377,14 @@ async function clientRoute(request: NextRequest, config: DiditAuthConfig, action
   if (action === "session") response = json({ session: resolved.session });
   else if (!resolved.session || !resolved.access) response = json({ error: "signed_out" }, 401);
   else if (action === "token") response = json({ token: resolved.access });
-  else if (grant) {
+  else if (stepUp) {
+    try {
+      response = json({ stepUp: await readStepUp(config, resolved.access, stepUp) });
+    } catch (error) {
+      if (!(error instanceof DiditAuthApiError) || error.status !== 404) throw error;
+      response = json({ error: "not_found" }, 404);
+    }
+  } else if (grant) {
     try {
       await revokeGrant(config, resolved.access, grant);
       response = noStore(new NextResponse(null, { status: 204 }));
@@ -343,7 +461,10 @@ export function diditAuthProxy(options: DiditAuthProxyOptions = {}, env?: Env) {
     const { pathname } = request.nextUrl;
 
     if (pathname === config.callbackPath) {
-      return request.method === "GET" ? completeSignIn(request, config) : json({ error: "method_not_allowed" }, 405);
+      if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
+      const params = request.nextUrl.searchParams;
+
+      return params.has("step_up") && !params.has("state") ? completeStepUp(request, config) : completeSignIn(request, config);
     }
     if (pathname.startsWith(`${config.basePath}/`)) {
       const action = pathname.slice(config.basePath.length + 1);
@@ -353,6 +474,12 @@ export function diditAuthProxy(options: DiditAuthProxyOptions = {}, env?: Env) {
       }
       if (action === "sign-out") {
         return request.method === "POST" ? signOut(request, config, options) : json({ error: "method_not_allowed" }, 405);
+      }
+      if (action === "step-up") {
+        return request.method === "POST" ? startStepUp(request, config) : json({ error: "method_not_allowed" }, 405);
+      }
+      if (action === "exchange") {
+        return request.method === "POST" ? exchangeHeadless(request, config) : json({ error: "method_not_allowed" }, 405);
       }
       const handled = await clientRoute(request, config, action);
 
