@@ -10,13 +10,13 @@ document.documentElement.lang = locale;
 
 function Account() {
   const { user } = useUser();
-  const { stepUp } = useAuth();
+  const { reauthenticate } = useAuth();
   const [failed, setFailed] = useState(false);
 
   return <>
     <h1>{t.signedIn}</h1>
     <p>{user?.email ?? user?.phone}</p>
-    <button className="button" onClick={() => stepUp().catch(() => setFailed(true))}>{t.stepUp}</button>
+    <button className="button" onClick={() => reauthenticate().catch(() => setFailed(true))}>{t.stepUp}</button>
     {failed ? <p role="alert">{t.failed}</p> : null}
     <ConnectedAgents applicationName={t.app} />
   </>;

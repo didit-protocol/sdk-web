@@ -34,7 +34,7 @@ object per email your test environment sends, and is skipped without it.
 
 ```bash
 npm run build
-DIDIT_FRONTEND_API=... DIDIT_REDIRECT_URI=http://localhost:3000/auth/callback \
+DIDIT_PUBLISHABLE_KEY=pk_test_... DIDIT_REDIRECT_URI=http://localhost:3000/auth/callback \
 E2E_MAILBOX=/path/to/mail.jsonl npx playwright test
 ```
 
