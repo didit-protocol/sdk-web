@@ -1,4 +1,11 @@
-import { CAMERA_LENSES, CAMERA_QUERY_PARAMS, languages } from "./constants";
+import {
+  CAMERA_LENSES,
+  CAMERA_QUERY_PARAMS,
+  DEFAULT_CONFIG,
+  PRESENTATION_QUERY_PARAMS,
+  RTL_LANGUAGES,
+  languages
+} from "./constants";
 import type { CameraLens, DiditSdkConfiguration } from "./types";
 
 class SDKLogger {
@@ -80,15 +87,16 @@ const CAMERA_SWITCH_OPTIONS = ["showDocumentCameraSwitchButton", "showLivenessCa
  * `defaultLivenessCamera` -> `liveness_camera=<lens>`,
  * `showDocumentCameraSwitchButton` -> `document_camera_switch=true|false`,
  * `showLivenessCameraSwitchButton` -> `liveness_camera_switch=true|false`.
+ * How the SDK presents the flow is always added: `sdk_presentation=modal|embedded`
+ * and, in a modal, `sdk_close_button=true|false`.
  * Each parameter is set (not appended) so the configuration wins over a value
  * already on the URL; existing query parameters and the hash are kept. A
  * value of the wrong shape is ignored with a warning rather than forwarded,
  * and a URL the browser cannot parse is returned as it came (the modal
  * reports it when it loads).
  */
-export function buildVerificationUrl(url: string, configuration?: DiditSdkConfiguration): string {
-  if (!configuration) return url;
-  const params: Array<[string, string]> = [];
+export function buildVerificationUrl(url: string, configuration: DiditSdkConfiguration = {}): string {
+  const params = presentationParams(configuration);
   for (const option of CAMERA_LENS_OPTIONS) {
     const value = configuration[option];
     if (value === undefined) continue;
@@ -107,7 +115,6 @@ export function buildVerificationUrl(url: string, configuration?: DiditSdkConfig
     }
     params.push([CAMERA_QUERY_PARAMS[option], value ? "true" : "false"]);
   }
-  if (params.length === 0) return url;
   try {
     const parsed = new URL(url);
     params.forEach(([name, value]) => parsed.searchParams.set(name, value));
@@ -115,6 +122,21 @@ export function buildVerificationUrl(url: string, configuration?: DiditSdkConfig
   } catch {
     return url;
   }
+}
+
+function presentationParams(configuration: DiditSdkConfiguration): Array<[string, string]> {
+  if (configuration.embedded) {
+    return [[PRESENTATION_QUERY_PARAMS.presentation, "embedded"]];
+  }
+  const closeButton = configuration.showCloseButton ?? DEFAULT_CONFIG.showCloseButton;
+  return [
+    [PRESENTATION_QUERY_PARAMS.presentation, "modal"],
+    [PRESENTATION_QUERY_PARAMS.closeButton, closeButton ? "true" : "false"]
+  ];
+}
+
+export function isRtlLanguage(language: string): boolean {
+  return RTL_LANGUAGES.includes(language.split("-")[0]);
 }
 
 export function detectLanguageFromUrl(url: string): string {
