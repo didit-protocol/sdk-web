@@ -271,7 +271,7 @@ When the hosted verification page reports its layout with a `didit:layout` messa
 | 541px to 1023px | 500px wide, as tall as the page's content, at most 90% of the window's height |
 | 540px and below | Full screen, as above |
 
-The close button becomes a 44px circle over the page's top bar. It follows the page's light or dark theme and moves to the left for right-to-left languages. Until the page reports its layout, and for pages that never do, the modal keeps the 500px by 700px size above. Embedded mode keeps filling its host element. There is nothing to configure, and every existing option keeps working.
+The close button becomes a 44px circle over the page's top bar. It follows the page's light or dark theme and moves to the left for right-to-left languages. If a large text size makes the exit confirmation taller than a short page, the confirmation scrolls inside the modal. Until the page reports its layout, and for pages that never do, the modal keeps the 500px by 700px size above. Embedded mode keeps filling its host element. There is nothing to configure, and every existing option keeps working.
 
 The SDK tells the page how it is shown with two query parameters on the verification URL: `sdk_presentation` (`modal` or `embedded`) and, in a modal, `sdk_close_button` (`true` or `false`, following `showCloseButton`). The SDK handles the `didit:layout` message itself and does not pass it to `onEvent`.
 
