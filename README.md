@@ -263,7 +263,7 @@ Browsers that support dynamic viewport units use `dvh`, while older supported br
 
 ### Redesigned verification flow
 
-When the hosted verification page reports its layout, which the redesigned flow does, the modal sizes itself around it:
+When the hosted verification page reports its layout with a `didit:layout` message, the modal sizes itself around it:
 
 | Window width | Modal |
 |---|---|
@@ -273,7 +273,7 @@ When the hosted verification page reports its layout, which the redesigned flow 
 
 The close button becomes a 44px circle over the page's top bar. It follows the page's light or dark theme and moves to the left for right-to-left languages. Until the page reports its layout, and for pages that never do, the modal keeps the 500px by 700px size above. Embedded mode keeps filling its host element. There is nothing to configure, and every existing option keeps working.
 
-The SDK tells the page how it is shown with two query parameters on the verification URL: `sdk_presentation` (`modal` or `embedded`) and, in a modal, `sdk_close_button` (`true` or `false`, following `showCloseButton`). The page reports its layout with a `didit:layout` message. The SDK handles that message itself and does not pass it to `onEvent`.
+The SDK tells the page how it is shown with two query parameters on the verification URL: `sdk_presentation` (`modal` or `embedded`) and, in a modal, `sdk_close_button` (`true` or `false`, following `showCloseButton`). The SDK handles the `didit:layout` message itself and does not pass it to `onEvent`.
 
 ## Embedded Mode
 
