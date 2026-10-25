@@ -1,6 +1,6 @@
 import type { DiditSdkConfiguration, VerificationEvent } from "./types";
-import { DEFAULT_CONFIG, CSS_CLASSES } from "./constants";
-import { SDKLogger, generateModalId, isAllowedOrigin, detectLanguageFromUrl } from "./utils";
+import { DEFAULT_CONFIG, CSS_CLASSES, LAYOUT_MESSAGE_TYPE } from "./constants";
+import { SDKLogger, generateModalId, isAllowedOrigin, detectLanguageFromUrl, isRtlLanguage } from "./utils";
 import { getTranslations } from "./translations";
 
 export interface ModalState {
@@ -14,6 +14,14 @@ export interface ModalCallbacks {
   onCloseConfirmed: () => void;
   onMessage: (event: VerificationEvent) => void;
   onIframeLoad: () => void;
+}
+
+/** The layout the hosted flow reports in a didit:layout message. */
+export interface FlowLayout {
+  /** Height of the flow's content in CSS pixels, its top bar included. */
+  contentHeight: number;
+  colorScheme: "light" | "dark";
+  dir: "ltr" | "rtl";
 }
 
 export class VerificationModal {
@@ -441,9 +449,13 @@ export class VerificationModal {
       closeBtn.className = CSS_CLASSES.closeButton;
       closeBtn.setAttribute("aria-label", t.ariaLabelClose);
       closeBtn.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 14 14">
+        <svg class="${CSS_CLASSES.closeIconLegacy}" width="14" height="14" viewBox="0 0 14 14">
           <line x1="1" y1="1" x2="13" y2="13" />
           <line x1="13" y1="1" x2="1" y2="13" />
+        </svg>
+        <svg class="${CSS_CLASSES.closeIcon}" width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path d="M7 7.03882L17 16.9611" />
+          <path d="M7.03968 17L16.9619 7" />
         </svg>
       `;
       closeBtn.addEventListener("click", () => this.handleCloseRequest());
@@ -598,7 +610,55 @@ export class VerificationModal {
       return;
     }
 
+    if ((messageData.type as string) === LAYOUT_MESSAGE_TYPE) {
+      const layout = this.readFlowLayout(messageData.data);
+      if (layout) {
+        this.applyFlowLayout(layout);
+      } else {
+        SDKLogger.warn("Ignoring a layout message without a positive contentHeight:", messageData.data);
+      }
+      return;
+    }
+
     this.callbacks.onMessage(messageData);
+  }
+
+  /**
+   * Reads a didit:layout message's data. Without a positive contentHeight the
+   * message is ignored; a missing or unknown colorScheme follows the device,
+   * and a missing or unknown dir follows the verification URL's language.
+   */
+  private readFlowLayout(data: unknown): FlowLayout | null {
+    const fields = typeof data === "object" && data !== null ? (data as Record<string, unknown>) : {};
+    const { contentHeight, colorScheme, dir } = fields;
+    if (typeof contentHeight !== "number" || !Number.isFinite(contentHeight) || contentHeight <= 0) {
+      return null;
+    }
+    const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+    return {
+      contentHeight: Math.ceil(contentHeight),
+      colorScheme: colorScheme === "light" || colorScheme === "dark" ? colorScheme : prefersDark ? "dark" : "light",
+      dir: dir === "ltr" || dir === "rtl" ? dir : isRtlLanguage(this.language) ? "rtl" : "ltr"
+    };
+  }
+
+  /** Embedded mode keeps filling the integrator's host element, whatever the flow reports. */
+  private applyFlowLayout(layout: FlowLayout): void {
+    if (this.embedded || !this.container) return;
+    SDKLogger.log("Flow layout:", layout);
+    this.container.classList.add(CSS_CLASSES.flowSized);
+    this.container.style.setProperty("--didit-flow-height", `${layout.contentHeight}px`);
+    this.container.dataset.diditTheme = layout.colorScheme;
+    this.container.dataset.diditDir = layout.dir;
+  }
+
+  /** Back to the fixed 500 x 700 modal until the newly loaded flow reports its layout. */
+  private resetFlowLayout(): void {
+    if (this.embedded || !this.container) return;
+    this.container.classList.remove(CSS_CLASSES.flowSized);
+    this.container.style.removeProperty("--didit-flow-height");
+    delete this.container.dataset.diditTheme;
+    delete this.container.dataset.diditDir;
   }
 
   private handleKeydown(event: KeyboardEvent): void {
@@ -675,6 +735,7 @@ export class VerificationModal {
     this.state.showConfirmation = false;
     this.loadingEl?.classList.remove("hidden");
     this.confirmOverlay?.classList.remove("active");
+    this.resetFlowLayout();
 
     if (this.iframe) {
       this.iframe.src = verificationUrl;
@@ -708,6 +769,7 @@ export class VerificationModal {
     this.state.showConfirmation = false;
     this.removeFromStack();
     this.removeEventListeners();
+    this.resetFlowLayout();
 
     if (this.iframe) {
       this.iframe.src = "about:blank";
