@@ -359,7 +359,7 @@ describe("VerificationModal flow layout", () => {
     const wide = /@media \(min-width: 1024px\) \{([\s\S]*?)\n      \}/.exec(styles)?.[1] ?? "";
     const flowIframe = new RegExp(`\\.${CSS_CLASSES.flowSized} \\.${CSS_CLASSES.iframe} \\{([^}]*)\\}`).exec(styles)?.[1];
 
-    expect(wide).toContain("max-width: min(960px, 90vw)");
+    expect(wide).toMatch(/width: 90vw;\s+max-width: 960px/);
     expect(wide).toContain("height: 660px");
     expect(flowIframe).toMatch(/height: var\(--didit-flow-height\);\s+max-height: 90vh;\s+max-height: 90dvh/);
     expect(styles).toMatch(

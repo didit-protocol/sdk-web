@@ -375,7 +375,8 @@ export class VerificationModal {
 
       @media (min-width: 1024px) {
         .${CSS_CLASSES.container}.${CSS_CLASSES.flowSized} {
-          max-width: min(960px, 90vw);
+          width: 90vw;
+          max-width: 960px;
         }
 
         .${CSS_CLASSES.flowSized} .${CSS_CLASSES.iframe} {
