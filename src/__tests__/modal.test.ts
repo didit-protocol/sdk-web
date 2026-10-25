@@ -5,6 +5,7 @@ import { CSS_CLASSES } from "../constants";
 
 interface ModalInternals {
   iframe: HTMLIFrameElement | null;
+  container: HTMLDivElement | null;
 }
 
 function getIframe(modal: VerificationModal): HTMLIFrameElement {
@@ -21,14 +22,20 @@ function dispatchMessage(source: Window | null, data: unknown, origin = "https:/
 // without an intermediate confirmation dialog, keeping these tests focused.
 const noConfirmConfig: DiditSdkConfiguration = { showExitConfirmation: false };
 
-function createModal(): {
+function getContainer(modal: VerificationModal): HTMLDivElement {
+  const container = (modal as unknown as ModalInternals).container;
+  if (!container) throw new Error("Modal has no container");
+  return container;
+}
+
+function createModal(configuration: DiditSdkConfiguration = noConfirmConfig): {
   modal: VerificationModal;
   onMessage: jest.Mock<(event: VerificationEvent) => void>;
   onCloseConfirmed: jest.Mock<() => void>;
 } {
   const onMessage = jest.fn();
   const onCloseConfirmed = jest.fn();
-  const modal = new VerificationModal(noConfirmConfig, {
+  const modal = new VerificationModal(configuration, {
     onClose: () => {},
     onCloseConfirmed,
     onMessage,
@@ -200,5 +207,173 @@ describe("VerificationModal iframe sizing", () => {
 
     expect(embeddedIframe).toContain("height: 100%");
     expect(embeddedIframe).toContain("max-height: none");
+  });
+});
+
+describe("VerificationModal flow layout", () => {
+  const openModals: VerificationModal[] = [];
+
+  afterEach(() => {
+    openModals.forEach((modal) => modal.destroy());
+    openModals.length = 0;
+    document.getElementById("didit-sdk-styles")?.remove();
+    document.getElementById("host")?.remove();
+    document.body.style.overflow = "";
+    delete (window as { matchMedia?: unknown }).matchMedia;
+  });
+
+  function openModal(url = "https://verify.didit.me/session/a", configuration?: DiditSdkConfiguration) {
+    const created = createModal(configuration);
+    openModals.push(created.modal);
+    created.modal.open(url);
+    return created;
+  }
+
+  function postLayout(modal: VerificationModal, data: unknown, origin?: string): void {
+    dispatchMessage(getIframe(modal).contentWindow, { type: "didit:layout", data, timestamp: 1 }, origin);
+  }
+
+  function isFlowSized(modal: VerificationModal): boolean {
+    return getContainer(modal).classList.contains(CSS_CLASSES.flowSized);
+  }
+
+  it("keeps the fixed modal until the flow reports its layout", () => {
+    const { modal } = openModal();
+
+    expect(isFlowSized(modal)).toBe(false);
+    expect(getContainer(modal).style.getPropertyValue("--didit-flow-height")).toBe("");
+  });
+
+  it("sizes the modal from the reported layout and keeps the message from onMessage", () => {
+    const { modal, onMessage } = openModal();
+
+    postLayout(modal, { contentHeight: 612.4, colorScheme: "dark", dir: "rtl" });
+
+    const container = getContainer(modal);
+    expect(isFlowSized(modal)).toBe(true);
+    expect(container.style.getPropertyValue("--didit-flow-height")).toBe("613px");
+    expect(container.dataset.diditTheme).toBe("dark");
+    expect(container.dataset.diditDir).toBe("rtl");
+    expect(onMessage).not.toHaveBeenCalled();
+  });
+
+  it("follows the content height each time the flow reports it, including as a JSON string", () => {
+    const { modal } = openModal();
+
+    postLayout(modal, { contentHeight: 600 });
+    dispatchMessage(
+      getIframe(modal).contentWindow,
+      JSON.stringify({ type: "didit:layout", data: { contentHeight: 560 }, timestamp: 2 })
+    );
+
+    expect(getContainer(modal).style.getPropertyValue("--didit-flow-height")).toBe("560px");
+  });
+
+  it.each([
+    ["no data", undefined],
+    ["no content height", { colorScheme: "dark" }],
+    ["a content height as text", { contentHeight: "600" }],
+    ["a zero content height", { contentHeight: 0 }],
+    ["a negative content height", { contentHeight: -10 }],
+    ["a content height that is not a number", { contentHeight: Number.NaN }],
+    ["an infinite content height", { contentHeight: Number.POSITIVE_INFINITY }]
+  ])("ignores a layout message with %s", (_, data) => {
+    const { modal, onMessage } = openModal();
+
+    postLayout(modal, data);
+
+    expect(isFlowSized(modal)).toBe(false);
+    expect(onMessage).not.toHaveBeenCalled();
+  });
+
+  it("ignores a layout message from another window or a disallowed origin", () => {
+    const { modal } = openModal();
+
+    dispatchMessage(window, { type: "didit:layout", data: { contentHeight: 600 }, timestamp: 1 });
+    postLayout(modal, { contentHeight: 600 }, "https://attacker.example");
+
+    expect(isFlowSized(modal)).toBe(false);
+  });
+
+  it("follows the verification URL's language and the device colour scheme when the flow does not say", () => {
+    const { modal } = openModal("https://verify.didit.me/ar/session/a");
+
+    postLayout(modal, { contentHeight: 600, colorScheme: "sepia", dir: "up" });
+
+    expect(getContainer(modal).dataset.diditDir).toBe("rtl");
+    expect(getContainer(modal).dataset.diditTheme).toBe("light");
+
+    (window as { matchMedia?: unknown }).matchMedia = (query: string) => ({
+      matches: query === "(prefers-color-scheme: dark)"
+    });
+    postLayout(modal, { contentHeight: 600 });
+
+    expect(getContainer(modal).dataset.diditTheme).toBe("dark");
+  });
+
+  it("lays a left-to-right language out left to right", () => {
+    const { modal } = openModal("https://verify.didit.me/en/session/a");
+
+    postLayout(modal, { contentHeight: 600 });
+
+    expect(getContainer(modal).dataset.diditDir).toBe("ltr");
+  });
+
+  it("goes back to the fixed modal when it is re-opened or closed", () => {
+    const { modal } = openModal();
+
+    postLayout(modal, { contentHeight: 600, colorScheme: "dark", dir: "rtl" });
+    modal.open("https://verify.didit.me/session/b");
+
+    const container = getContainer(modal);
+    expect(isFlowSized(modal)).toBe(false);
+    expect(container.style.getPropertyValue("--didit-flow-height")).toBe("");
+    expect(container.dataset.diditTheme).toBeUndefined();
+    expect(container.dataset.diditDir).toBeUndefined();
+
+    postLayout(modal, { contentHeight: 600 });
+    expect(isFlowSized(modal)).toBe(true);
+    modal.close();
+    expect(isFlowSized(modal)).toBe(false);
+  });
+
+  it("leaves embedded mode to the host element", () => {
+    const host = document.createElement("div");
+    host.id = "host";
+    document.body.appendChild(host);
+    const { modal, onMessage } = openModal("https://verify.didit.me/session/a", {
+      embedded: true,
+      embeddedContainerId: "host"
+    });
+
+    postLayout(modal, { contentHeight: 600 });
+
+    expect(isFlowSized(modal)).toBe(false);
+    expect(getContainer(modal).style.getPropertyValue("--didit-flow-height")).toBe("");
+    expect(onMessage).not.toHaveBeenCalled();
+  });
+
+  it("grows to the handoff card on a computer, follows the content in a narrow window and fills a phone", () => {
+    openModal();
+    const styles = document.getElementById("didit-sdk-styles")?.textContent ?? "";
+    const wide = /@media \(min-width: 1024px\) \{([\s\S]*?)\n      \}/.exec(styles)?.[1] ?? "";
+    const flowIframe = new RegExp(`\\.${CSS_CLASSES.flowSized} \\.${CSS_CLASSES.iframe} \\{([^}]*)\\}`).exec(styles)?.[1];
+
+    expect(wide).toContain("max-width: min(960px, 90vw)");
+    expect(wide).toContain("height: 660px");
+    expect(flowIframe).toMatch(/height: var\(--didit-flow-height\);\s+max-height: 90vh;\s+max-height: 90dvh/);
+    expect(styles).toMatch(
+      new RegExp(`@media \\(max-width: 540px\\) \\{\\s+\\.${CSS_CLASSES.container}\\.${CSS_CLASSES.flowSized} \\{[^}]*max-width: 100%`)
+    );
+  });
+
+  it("draws the design system close icon only once the flow reports its layout", () => {
+    openModal("https://verify.didit.me/session/a", { showExitConfirmation: false });
+    const button = document.querySelector(`.${CSS_CLASSES.closeButton}`);
+
+    expect(button?.querySelector(`.${CSS_CLASSES.closeIconLegacy}`)).not.toBeNull();
+    expect(button?.querySelector(`.${CSS_CLASSES.closeIcon}`)).not.toBeNull();
+    const styles = document.getElementById("didit-sdk-styles")?.textContent ?? "";
+    expect(styles).toMatch(new RegExp(`\\.${CSS_CLASSES.closeIcon} \\{\\s+display: none;`));
   });
 });
