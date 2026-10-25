@@ -1,0 +1,397 @@
+import { mkdir } from "node:fs/promises";
+import { expect, test } from "@playwright/test";
+
+const FRAME = ".didit-verification-iframe";
+const CONTAINER = ".didit-modal-container";
+const OVERLAY = ".didit-modal-overlay";
+const EMBEDDED = ".didit-embedded";
+const HOST = "#verification-container";
+const PROOF_DIR = ".github/pr-review-assets/web-sdk-modal";
+const VIEWPORTS = [
+  { name: "short desktop", viewport: { width: 1366, height: 625 }, height: 562.5 },
+  { name: "tall desktop", viewport: { width: 1366, height: 900 }, height: 700 },
+  { name: "desktop breakpoint", viewport: { width: 541, height: 800 }, height: 700 },
+  { name: "mobile breakpoint", viewport: { width: 540, height: 800 }, height: 800 },
+  { name: "mobile portrait", viewport: { width: 390, height: 844 }, height: 844 },
+  { name: "mobile landscape", viewport: { width: 844, height: 390 }, height: 351 }
+];
+
+async function openFixture(page, viewport, options = "") {
+  await page.setViewportSize(viewport);
+  await page.goto(`/e2e/fixtures/host.html${options}`);
+  const iframe = page.locator(FRAME);
+
+  await expect(iframe).toBeVisible();
+  await expect(iframe.contentFrame().getByRole("heading", { name: "Verify your identity" })).toBeVisible();
+
+  return iframe;
+}
+
+async function elementHeight(locator) {
+  return locator.evaluate((element) => element.getBoundingClientRect().height);
+}
+
+// Content box, so a host border never counts as space the iframe may use.
+async function contentHeight(locator) {
+  return locator.evaluate((element) => element.clientHeight);
+}
+
+async function expectHeight(locator, expected) {
+  const actual = await elementHeight(locator);
+
+  expect(actual).toBeCloseTo(expected, 0);
+}
+
+function rectOf(locator) {
+  return locator.evaluate((element) => {
+    const { top, bottom, left, right } = element.getBoundingClientRect();
+    return { top, bottom, left, right };
+  });
+}
+
+// Scrolls the flow with wheel events, the way a person scrolls an iframe, so no
+// assertion can be satisfied by programmatically scrolling a clipped ancestor.
+async function wheelToEndOfFlow(page, iframe) {
+  const frame = iframe.contentFrame();
+  const box = await iframe.boundingBox();
+  const atEnd = () =>
+    frame
+      .locator("body")
+      .evaluate(() => Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight);
+
+  await page.mouse.move(box.x + box.width / 2, box.y + 40);
+  for (let attempt = 0; attempt < 40 && !(await atEnd()); attempt += 1) {
+    await page.mouse.wheel(0, 240);
+    await page.waitForTimeout(50);
+  }
+
+  expect(await atEnd()).toBe(true);
+}
+
+// A frame-local viewport assertion cannot see clipping that happens outside the
+// iframe, so project the frame-local rect into top-level coordinates.
+async function topLevelRect(iframe, locator) {
+  const frame = await rectOf(iframe);
+  const local = await rectOf(locator);
+
+  return {
+    top: frame.top + local.top,
+    bottom: frame.top + local.bottom,
+    left: frame.left + local.left,
+    right: frame.left + local.right
+  };
+}
+
+function outerScrollOffsets(page) {
+  return page.evaluate(
+    ([containerSelector, overlaySelector]) => ({
+      window: { x: window.scrollX, y: window.scrollY },
+      container: document.querySelector(containerSelector).scrollTop,
+      overlay: document.querySelector(overlaySelector).scrollTop
+    }),
+    [CONTAINER, OVERLAY]
+  );
+}
+
+for (const scenario of VIEWPORTS) {
+  test(`fits the ${scenario.name} viewport`, async ({ page }) => {
+    const iframe = await openFixture(page, scenario.viewport);
+    const container = page.locator(CONTAINER);
+
+    await expectHeight(iframe, scenario.height);
+    await expectHeight(container, scenario.height);
+  });
+}
+
+test("updates its height when the viewport resizes", async ({ page }) => {
+  const iframe = await openFixture(page, { width: 1366, height: 900 });
+
+  await expectHeight(iframe, 700);
+  await page.setViewportSize({ width: 1366, height: 625 });
+  await expectHeight(iframe, 562.5);
+  await expectHeight(page.locator(CONTAINER), 562.5);
+});
+
+test("keeps the end of a long verification flow reachable", async ({ page }) => {
+  const viewport = { width: 1366, height: 625 };
+  const iframe = await openFixture(page, viewport);
+  const frame = iframe.contentFrame();
+  const button = frame.getByRole("button", { name: "Continue verification" });
+  const before = await outerScrollOffsets(page);
+
+  expect(await frame.locator("body").evaluate((body) => body.scrollHeight > window.innerHeight)).toBe(true);
+  await wheelToEndOfFlow(page, iframe);
+
+  const container = await rectOf(page.locator(CONTAINER));
+  const action = await topLevelRect(iframe, button);
+
+  // The action must land inside what the page actually shows: the visible modal
+  // container, and the top-level viewport itself.
+  expect(action.top).toBeGreaterThanOrEqual(container.top - 1);
+  expect(action.bottom).toBeLessThanOrEqual(container.bottom + 1);
+  expect(action.top).toBeGreaterThanOrEqual(-1);
+  expect(action.bottom).toBeLessThanOrEqual(viewport.height + 1);
+
+  // Normal iframe scrolling must not have moved any outer scroll position.
+  expect(await outerScrollOffsets(page)).toEqual(before);
+
+  // Real pointer interaction, at the coordinates the person would click.
+  await page.mouse.click((action.left + action.right) / 2, (action.top + action.bottom) / 2);
+  await expect(frame.locator("body")).toHaveAttribute("data-continued", "true");
+
+  await expect(page.getByRole("button", { name: "Close verification" })).toBeInViewport();
+});
+
+test("uses the embedded host height without a viewport cap", async ({ page }) => {
+  const iframe = await openFixture(page, { width: 1000, height: 900 }, "?embedded=true&hostHeight=480");
+  const hostContentHeight = await contentHeight(page.locator(HOST));
+
+  await expectHeight(iframe, hostContentHeight);
+  await expectHeight(page.locator(EMBEDDED), hostContentHeight);
+});
+
+test("fills an embedded host taller than the modal cap on a short viewport", async ({ page }) => {
+  const iframe = await openFixture(page, { width: 1366, height: 625 }, "?embedded=true&hostHeight=900");
+  const hostContentHeight = await contentHeight(page.locator(HOST));
+
+  expect(hostContentHeight).toBeGreaterThan(700);
+  await expectHeight(iframe, hostContentHeight);
+  await expectHeight(page.locator(EMBEDDED), hostContentHeight);
+});
+
+test("follows an embedded host resized across the modal cap", async ({ page }) => {
+  const iframe = await openFixture(page, { width: 1366, height: 625 }, "?embedded=true&hostHeight=600");
+  const host = page.locator(HOST);
+
+  await expectHeight(iframe, await contentHeight(host));
+
+  for (const hostHeight of [900, 600, 1200]) {
+    await host.evaluate((element, value) => {
+      element.style.height = `${value}px`;
+    }, hostHeight);
+    await expectHeight(iframe, await contentHeight(host));
+  }
+});
+
+for (const viewport of [{ width: 1366, height: 625 }, { width: 390, height: 844 }]) {
+  test(`keeps exit controls reachable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await openFixture(page, viewport);
+    const close = page.getByRole("button", { name: "Close verification" });
+
+    await expect(close).toBeInViewport();
+    await close.click();
+    await expect(page.getByRole("heading", { name: "Exit verification?" })).toBeInViewport();
+    await expect(page.getByText("Continue", { exact: true })).toBeInViewport();
+  });
+}
+
+// Once the flow posts didit:layout, the modal grows to the handoff card on a
+// computer (960 x 660, at most 90% of the window), follows the content height
+// in a narrow window and stays full screen on a phone.
+const FLOW_LAYOUTS = [
+  { name: "computer", viewport: { width: 1440, height: 900 }, layout: 600, width: 960, height: 660 },
+  { name: "short computer window", viewport: { width: 1440, height: 580 }, layout: 600, width: 960, height: 522 },
+  { name: "computer window at the breakpoint", viewport: { width: 1024, height: 768 }, layout: 600, width: 921.6, height: 660 },
+  { name: "window just under the breakpoint", viewport: { width: 1023, height: 900 }, layout: 560, width: 500, height: 560 },
+  { name: "narrow window", viewport: { width: 800, height: 900 }, layout: 600, width: 500, height: 600 },
+  { name: "narrow window with tall content", viewport: { width: 800, height: 700 }, layout: 1200, width: 500, height: 630 },
+  { name: "phone", viewport: { width: 390, height: 844 }, layout: 600, width: 390, height: 844 }
+];
+
+async function elementSize(locator) {
+  return locator.evaluate((element) => {
+    const { width, height } = element.getBoundingClientRect();
+    return { width, height };
+  });
+}
+
+// postMessage is asynchronous, so sizes are polled until the layout lands.
+async function expectSize(locator, width, height) {
+  await expect
+    .poll(() => elementSize(locator))
+    .toEqual({ width: expect.closeTo(width, 0), height: expect.closeTo(height, 0) });
+}
+
+// Opens the fixture with a flow that reports its layout on load, and waits for the modal to take it.
+async function openFlowFixture(page, viewport, options) {
+  const iframe = await openFixture(page, viewport, options);
+
+  await expect(page.locator(`${CONTAINER}.didit-flow-sized`)).toHaveCount(1);
+  return iframe;
+}
+
+function stepChangedCount(page) {
+  return page.evaluate(() => window.diditEvents.filter((type) => type === "didit:step_changed").length);
+}
+
+// Posts a layout followed by an ordinary flow event; once the event reaches onEvent, the
+// modal has handled the layout too, so an unchanged size is a real result rather than a race.
+async function postLayout(page, iframe, data) {
+  const before = await stepChangedCount(page);
+
+  await iframe.contentFrame().locator("body").evaluate((body, value) => {
+    window.postLayout(value);
+    window.parent.postMessage({ type: "didit:step_changed", data: { step: "face" }, timestamp: Date.now() }, "*");
+  }, data);
+  await expect.poll(() => stepChangedCount(page)).toBe(before + 1);
+}
+
+for (const scenario of FLOW_LAYOUTS) {
+  test(`sizes the flow's layout in a ${scenario.name}`, async ({ page }) => {
+    const iframe = await openFlowFixture(page, scenario.viewport, `?layout=${scenario.layout}`);
+
+    await expectSize(page.locator(CONTAINER), scenario.width, scenario.height);
+    await expectHeight(iframe, scenario.height);
+  });
+}
+
+test("tells the flow it is in a modal with a close button", async ({ page }) => {
+  const iframe = await openFixture(page, { width: 1440, height: 900 });
+  const search = await iframe.contentFrame().locator("body").evaluate(() => window.location.search);
+  const params = new URLSearchParams(search);
+
+  expect(params.get("sdk_presentation")).toBe("modal");
+  expect(params.get("sdk_close_button")).toBe("true");
+});
+
+test("follows the flow's content height in a narrow window, capped at 90%", async ({ page }) => {
+  const iframe = await openFlowFixture(page, { width: 800, height: 900 }, "?layout=600");
+  const container = page.locator(CONTAINER);
+
+  await expectSize(container, 500, 600);
+  await postLayout(page, iframe, { contentHeight: 560 });
+  await expectSize(container, 500, 560);
+  await postLayout(page, iframe, { contentHeight: 2000 });
+  await expectSize(container, 500, 810);
+  expect(await page.evaluate(() => window.diditEvents)).not.toContain("didit:layout");
+});
+
+test("keeps the handoff card size whatever content height the flow reports", async ({ page }) => {
+  const iframe = await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=300");
+  const container = page.locator(CONTAINER);
+
+  await expectSize(container, 960, 660);
+  await postLayout(page, iframe, { contentHeight: 900 });
+  await expectSize(container, 960, 660);
+});
+
+test("switches between the card, the content height and full screen as the window resizes", async ({ page }) => {
+  await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600");
+  const container = page.locator(CONTAINER);
+
+  await expectSize(container, 960, 660);
+  await page.setViewportSize({ width: 800, height: 900 });
+  await expectSize(container, 500, 600);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectSize(container, 390, 844);
+  await page.setViewportSize({ width: 1440, height: 580 });
+  await expectSize(container, 960, 522);
+});
+
+test("keeps the fixed modal when the layout has no content height", async ({ page }) => {
+  const iframe = await openFixture(page, { width: 1440, height: 900 });
+
+  await postLayout(page, iframe, { colorScheme: "dark" });
+  await expect(page.locator(`${CONTAINER}.didit-flow-sized`)).toHaveCount(0);
+  await expectSize(page.locator(CONTAINER), 500, 700);
+});
+
+test("keeps filling the embedded host whatever layout the flow reports", async ({ page }) => {
+  const iframe = await openFixture(page, { width: 1440, height: 900 }, "?embedded=true&hostHeight=480");
+  const hostContentHeight = await contentHeight(page.locator(HOST));
+
+  await postLayout(page, iframe, { contentHeight: 900 });
+  await expectHeight(iframe, hostContentHeight);
+  expect(await page.evaluate(() => window.diditEvents)).not.toContain("didit:layout");
+});
+
+async function closeButtonBox(page) {
+  return page.getByRole("button", { name: "Close verification" }).evaluate((button) => {
+    const box = button.getBoundingClientRect();
+    const frame = button.parentElement.getBoundingClientRect();
+    const style = getComputedStyle(button);
+    return {
+      width: box.width,
+      height: box.height,
+      top: box.top - frame.top,
+      left: box.left - frame.left,
+      right: frame.right - box.right,
+      background: style.backgroundColor,
+      color: style.color,
+      radius: style.borderRadius
+    };
+  });
+}
+
+test("draws the 44 px close button in the flow's top bar, light", async ({ page }) => {
+  await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600");
+  const box = await closeButtonBox(page);
+
+  expect(box).toMatchObject({ width: 44, height: 44, top: 8, right: 8, radius: "50%" });
+  expect(box.background).toBe("rgba(0, 0, 0, 0.06)");
+  expect(box.color).toBe("rgb(26, 26, 26)");
+  await expect(page.locator(`${CONTAINER} .didit-close-icon`)).toBeVisible();
+  await expect(page.locator(`${CONTAINER} .didit-close-icon-legacy`)).toBeHidden();
+});
+
+test("draws the close button with the dark tokens when the flow is dark", async ({ page }) => {
+  await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600&theme=dark");
+  const box = await closeButtonBox(page);
+
+  expect(box.background).toBe("rgba(255, 255, 255, 0.06)");
+  expect(box.color).toBe("rgb(245, 245, 247)");
+});
+
+test("moves the close button to the left for a right-to-left flow", async ({ page }) => {
+  await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600&dir=rtl");
+  const box = await closeButtonBox(page);
+
+  expect(box).toMatchObject({ width: 44, height: 44, top: 8, left: 8 });
+});
+
+test("shows the keyboard focus on the close button", async ({ page, browserName }) => {
+  // WebKit leaves buttons out of the Tab order unless the platform setting is on.
+  test.skip(browserName === "webkit", "WebKit skips buttons when tabbing by default");
+  await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600");
+  const close = page.getByRole("button", { name: "Close verification" });
+
+  await page.keyboard.press("Tab");
+  await expect(close).toBeFocused();
+  expect(await close.evaluate((button) => getComputedStyle(button).outline)).toMatch(/rgb\(37, 103, 255\) solid 2px|2px solid rgb\(37, 103, 255\)/);
+});
+
+for (const viewport of [{ width: 1440, height: 580 }, { width: 800, height: 900 }, { width: 390, height: 844 }]) {
+  test(`keeps the exit confirmation reachable from the flow layout at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await openFlowFixture(page, viewport, "?layout=600");
+    const close = page.getByRole("button", { name: "Close verification" });
+
+    await expect(close).toBeInViewport();
+    await close.click();
+    await expect(page.getByRole("heading", { name: "Exit verification?" })).toBeInViewport();
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Exit verification?" })).toBeHidden();
+  });
+}
+
+async function captureProof(page, name, viewport, options = "") {
+  await openFixture(page, viewport, options);
+  await page.screenshot({ path: `${PROOF_DIR}/${name}.png`, fullPage: true });
+}
+
+async function captureScrolledProof(page, name, viewport, options = "") {
+  const iframe = await openFixture(page, viewport, options);
+
+  await wheelToEndOfFlow(page, iframe);
+  await page.screenshot({ path: `${PROOF_DIR}/${name}.png`, fullPage: true });
+}
+
+test("captures visual proof", async ({ page }) => {
+  await mkdir(PROOF_DIR, { recursive: true });
+  await captureProof(page, "modal-light-desktop", { width: 1366, height: 625 });
+  await captureProof(page, "modal-dark-desktop", { width: 1366, height: 625 }, "?theme=dark");
+  await captureScrolledProof(page, "modal-light-desktop-bottom", { width: 1366, height: 625 });
+  await captureScrolledProof(page, "modal-dark-desktop-bottom", { width: 1366, height: 625 }, "?theme=dark");
+  await captureProof(page, "modal-light-mobile", { width: 390, height: 844 });
+  await captureScrolledProof(page, "modal-light-mobile-bottom", { width: 390, height: 844 });
+  await captureProof(page, "modal-light-embedded-tall", { width: 1366, height: 625 }, "?embedded=true&hostHeight=900");
+});
