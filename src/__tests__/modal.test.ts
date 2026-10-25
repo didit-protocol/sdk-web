@@ -376,4 +376,20 @@ describe("VerificationModal flow layout", () => {
     const styles = document.getElementById("didit-sdk-styles")?.textContent ?? "";
     expect(styles).toMatch(new RegExp(`\\.${CSS_CLASSES.closeIcon} \\{\\s+display: none;`));
   });
+
+  it("opens the exit confirmation at its top after it was scrolled and dismissed", () => {
+    openModal("https://verify.didit.me/session/a", { showExitConfirmation: true });
+    const close = document.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`);
+    const overlay = document.querySelector<HTMLDivElement>(`.${CSS_CLASSES.confirmOverlay}`);
+    if (!close || !overlay) throw new Error("Modal has no exit confirmation");
+
+    close.click();
+    overlay.scrollTop = 240;
+    overlay.querySelector<HTMLButtonElement>('[data-action="continue"]')?.click();
+    expect(overlay.classList.contains("active")).toBe(false);
+
+    close.click();
+    expect(overlay.classList.contains("active")).toBe(true);
+    expect(overlay.scrollTop).toBe(0);
+  });
 });

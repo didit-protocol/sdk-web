@@ -375,6 +375,19 @@ for (const viewport of [{ width: 1440, height: 580 }, { width: 800, height: 900 
   });
 }
 
+// Scrolls the exit confirmation to its end with wheel events over the modal.
+async function wheelToEndOfConfirmation(page, frame) {
+  const overlay = page.locator(".didit-confirm-overlay");
+  const atEnd = () => overlay.evaluate((element) => Math.ceil(element.scrollTop + element.clientHeight) >= element.scrollHeight);
+
+  await page.mouse.move((frame.left + frame.right) / 2, frame.top + 40);
+  for (let attempt = 0; attempt < 40 && !(await atEnd()); attempt += 1) {
+    await page.mouse.wheel(0, 120);
+    await page.waitForTimeout(50);
+  }
+  expect(await atEnd()).toBe(true);
+}
+
 // A short flow reports a small content height, but the exit confirmation is the SDK's own
 // rem-sized dialog, so at a large text size it is taller than the modal. It must scroll
 // inside the modal, by wheel and pointer only, with nothing clipped above or below.
@@ -394,14 +407,7 @@ for (const theme of ["light", "dark"]) {
     expect(box.bottom - box.top).toBeGreaterThan(frame.bottom - frame.top);
     expect((await rectOf(heading)).top).toBeGreaterThanOrEqual(frame.top);
 
-    const overlay = page.locator(".didit-confirm-overlay");
-    const atEnd = () => overlay.evaluate((element) => Math.ceil(element.scrollTop + element.clientHeight) >= element.scrollHeight);
-    await page.mouse.move((frame.left + frame.right) / 2, frame.top + 40);
-    for (let attempt = 0; attempt < 40 && !(await atEnd()); attempt += 1) {
-      await page.mouse.wheel(0, 120);
-      await page.waitForTimeout(50);
-    }
-    expect(await atEnd()).toBe(true);
+    await wheelToEndOfConfirmation(page, frame);
 
     const action = await rectOf(exit);
     expect(action.top).toBeGreaterThanOrEqual(frame.top - 1);
@@ -410,6 +416,56 @@ for (const theme of ["light", "dark"]) {
 
     await page.mouse.click((action.left + action.right) / 2, (action.top + action.bottom) / 2);
     await expect(page.locator(OVERLAY)).toBeHidden();
+  });
+
+  test(`opens a scrolled exit confirmation again at its title at 200% text, ${theme}`, async ({ page }) => {
+    await openFlowFixture(page, { width: 800, height: 900 }, `?layout=300&textSize=200&theme=${theme}`);
+    const heading = page.getByRole("heading", { name: "Exit verification?" });
+    const close = page.getByRole("button", { name: "Close verification" });
+
+    await close.click();
+    await expect(heading).toBeVisible();
+    const frame = await rectOf(page.locator(CONTAINER));
+    await wheelToEndOfConfirmation(page, frame);
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(heading).toBeHidden();
+
+    await close.click();
+    await expect(heading).toBeVisible();
+    expect(await page.locator(".didit-confirm-overlay").evaluate((element) => element.scrollTop)).toBe(0);
+    expect((await rectOf(heading)).top).toBeGreaterThanOrEqual(frame.top);
+  });
+}
+
+// Long translations at 200% text on a phone wrap inside the modal instead of widening the
+// dialog past the screen and scrolling it sideways.
+for (const { locale, theme } of [
+  { locale: "de-DE", theme: "light" },
+  { locale: "bg-BG", theme: "dark" }
+]) {
+  test.describe(`${locale} exit confirmation`, () => {
+    test.use({ locale });
+
+    test(`fits a 390 px phone at 200% text, ${theme}`, async ({ page }) => {
+      const viewport = { width: 390, height: 844 };
+      await openFlowFixture(page, viewport, `?layout=600&textSize=200&theme=${theme}`);
+
+      await page.locator(".didit-close-button").click();
+      const confirmBox = page.locator(".didit-confirm-box");
+      await expect(confirmBox.locator("h3")).toBeVisible();
+
+      const box = await rectOf(confirmBox);
+      expect(box.left).toBeGreaterThanOrEqual(0);
+      expect(box.right).toBeLessThanOrEqual(viewport.width);
+      // Nothing inside the dialog overflows it, and nothing scrolls sideways.
+      for (const selector of [".didit-confirm-box", ".didit-confirm-overlay"]) {
+        const { scrollWidth, clientWidth } = await page
+          .locator(selector)
+          .evaluate((element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
+        expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+    });
   });
 }
 
