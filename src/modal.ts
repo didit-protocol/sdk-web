@@ -376,7 +376,7 @@ export class VerificationModal {
       /*
        * The exit confirmation is sized in rem, so with a large text size it
        * can be taller than a short flow: it scrolls inside the modal instead
-       * of being clipped, and its width and actions follow the text size.
+       * of being clipped, and its width and actions follow a larger text size.
        */
       .${CSS_CLASSES.flowSized} .${CSS_CLASSES.confirmOverlay} {
         padding: 1rem;
@@ -384,7 +384,7 @@ export class VerificationModal {
       }
 
       .${CSS_CLASSES.flowSized} .${CSS_CLASSES.confirmBox} {
-        max-width: 18.75rem;
+        max-width: max(300px, 18.75rem);
         margin: auto;
       }
 

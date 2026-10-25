@@ -368,6 +368,8 @@ for (const viewport of [{ width: 1440, height: 580 }, { width: 800, height: 900 
     await expect(close).toBeInViewport();
     await close.click();
     await expect(page.getByRole("heading", { name: "Exit verification?" })).toBeInViewport();
+    // At the default text size the dialog keeps today's 300 px width.
+    expect(await page.locator(".didit-confirm-box").evaluate((box) => box.getBoundingClientRect().width)).toBeCloseTo(300, 0);
     await page.getByRole("button", { name: "Continue", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Exit verification?" })).toBeHidden();
   });
@@ -392,11 +394,15 @@ for (const theme of ["light", "dark"]) {
     expect(box.bottom - box.top).toBeGreaterThan(frame.bottom - frame.top);
     expect((await rectOf(heading)).top).toBeGreaterThanOrEqual(frame.top);
 
+    const overlay = page.locator(".didit-confirm-overlay");
+    const atEnd = () => overlay.evaluate((element) => Math.ceil(element.scrollTop + element.clientHeight) >= element.scrollHeight);
     await page.mouse.move((frame.left + frame.right) / 2, frame.top + 40);
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+    for (let attempt = 0; attempt < 40 && !(await atEnd()); attempt += 1) {
       await page.mouse.wheel(0, 120);
       await page.waitForTimeout(50);
     }
+    expect(await atEnd()).toBe(true);
+
     const action = await rectOf(exit);
     expect(action.top).toBeGreaterThanOrEqual(frame.top - 1);
     expect(action.bottom).toBeLessThanOrEqual(frame.bottom + 1);
