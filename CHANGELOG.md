@@ -7,6 +7,8 @@ All notable changes to `@didit-protocol/sdk-web` will be documented in this file
 ### Added
 - `DiditSdk.shared.submitEvent()` queues end-user events (sign-up, login, failed login, logout, password reset, MFA, device change) for Didit's event monitoring with a monitoring token minted by your backend. Events are batched to `POST /v1/events/batch/` with the `X-Monitoring-Token` header and the device fingerprint, and sent when 25 are waiting, every 5 seconds and when the page is hidden or closed.
 - Re-exports the `@didit-protocol/signals` API: `submitEvent`, `flush`, `configureEvents`, `DiditEventError`, `DEFAULT_EVENTS_BASE_URL`, `getDeviceFingerprintPayload`, `buildFingerprintHeaders` and their types.
+- The modal grows to the redesigned flow's handoff card once the hosted page reports its layout with a `didit:layout` message: 960px by 660px on windows 1024px and wider (at most 90% of the window), 500px wide and as tall as the page's content (at most 90% of the window) on narrower windows, and full screen at 540px and below. Its close button becomes a 44px circle that follows the page's theme and text direction. Pages that report no layout keep the 500px by 700px modal, and embedded mode keeps filling its host element.
+- The verification URL carries `sdk_presentation` (`modal` or `embedded`) and, in a modal, `sdk_close_button` (`true` or `false`), so the hosted page knows how the SDK shows it.
 
 ### Changed
 - The device fingerprint moved into the new `@didit-protocol/signals` package, now a dependency. Transaction submissions send the same fingerprint as before.
