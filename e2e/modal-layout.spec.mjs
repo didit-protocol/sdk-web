@@ -185,6 +185,194 @@ for (const viewport of [{ width: 1366, height: 625 }, { width: 390, height: 844 
   });
 }
 
+// Once the flow posts didit:layout, the modal grows to the handoff card on a
+// computer (960 x 660, at most 90% of the window), follows the content height
+// in a narrow window and stays full screen on a phone.
+const FLOW_LAYOUTS = [
+  { name: "computer", viewport: { width: 1440, height: 900 }, layout: 600, width: 960, height: 660 },
+  { name: "short computer window", viewport: { width: 1440, height: 580 }, layout: 600, width: 960, height: 522 },
+  { name: "computer window at the breakpoint", viewport: { width: 1024, height: 768 }, layout: 600, width: 921.6, height: 660 },
+  { name: "window just under the breakpoint", viewport: { width: 1023, height: 900 }, layout: 560, width: 500, height: 560 },
+  { name: "narrow window", viewport: { width: 800, height: 900 }, layout: 600, width: 500, height: 600 },
+  { name: "narrow window with tall content", viewport: { width: 800, height: 700 }, layout: 1200, width: 500, height: 630 },
+  { name: "phone", viewport: { width: 390, height: 844 }, layout: 600, width: 390, height: 844 }
+];
+
+async function elementSize(locator) {
+  return locator.evaluate((element) => {
+    const { width, height } = element.getBoundingClientRect();
+    return { width, height };
+  });
+}
+
+// postMessage is asynchronous, so sizes are polled until the layout lands.
+async function expectSize(locator, width, height) {
+  await expect
+    .poll(() => elementSize(locator))
+    .toEqual({ width: expect.closeTo(width, 0), height: expect.closeTo(height, 0) });
+}
+
+// Opens the fixture with a flow that reports its layout on load, and waits for the modal to take it.
+async function openFlowFixture(page, viewport, options) {
+  const iframe = await openFixture(page, viewport, options);
+
+  await expect(page.locator(`${CONTAINER}.didit-flow-sized`)).toHaveCount(1);
+  return iframe;
+}
+
+function stepChangedCount(page) {
+  return page.evaluate(() => window.diditEvents.filter((type) => type === "didit:step_changed").length);
+}
+
+// Posts a layout followed by an ordinary flow event; once the event reaches onEvent, the
+// modal has handled the layout too, so an unchanged size is a real result rather than a race.
+async function postLayout(page, iframe, data) {
+  const before = await stepChangedCount(page);
+
+  await iframe.contentFrame().locator("body").evaluate((body, value) => {
+    window.postLayout(value);
+    window.parent.postMessage({ type: "didit:step_changed", data: { step: "face" }, timestamp: Date.now() }, "*");
+  }, data);
+  await expect.poll(() => stepChangedCount(page)).toBe(before + 1);
+}
+
+for (const scenario of FLOW_LAYOUTS) {
+  test(`sizes the flow's layout in a ${scenario.name}`, async ({ page }) => {
+    const iframe = await openFlowFixture(page, scenario.viewport, `?layout=${scenario.layout}`);
+
+    await expectSize(page.locator(CONTAINER), scenario.width, scenario.height);
+    await expectHeight(iframe, scenario.height);
+  });
+}
+
+test("tells the flow it is in a modal with a close button", async ({ page }) => {
+  const iframe = await openFixture(page, { width: 1440, height: 900 });
+  const search = await iframe.contentFrame().locator("body").evaluate(() => window.location.search);
+  const params = new URLSearchParams(search);
+
+  expect(params.get("sdk_presentation")).toBe("modal");
+  expect(params.get("sdk_close_button")).toBe("true");
+});
+
+test("follows the flow's content height in a narrow window, capped at 90%", async ({ page }) => {
+  const iframe = await openFlowFixture(page, { width: 800, height: 900 }, "?layout=600");
+  const container = page.locator(CONTAINER);
+
+  await expectSize(container, 500, 600);
+  await postLayout(page, iframe, { contentHeight: 560 });
+  await expectSize(container, 500, 560);
+  await postLayout(page, iframe, { contentHeight: 2000 });
+  await expectSize(container, 500, 810);
+  expect(await page.evaluate(() => window.diditEvents)).not.toContain("didit:layout");
+});
+
+test("keeps the handoff card size whatever content height the flow reports", async ({ page }) => {
+  const iframe = await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=300");
+  const container = page.locator(CONTAINER);
+
+  await expectSize(container, 960, 660);
+  await postLayout(page, iframe, { contentHeight: 900 });
+  await expectSize(container, 960, 660);
+});
+
+test("switches between the card, the content height and full screen as the window resizes", async ({ page }) => {
+  await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600");
+  const container = page.locator(CONTAINER);
+
+  await expectSize(container, 960, 660);
+  await page.setViewportSize({ width: 800, height: 900 });
+  await expectSize(container, 500, 600);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectSize(container, 390, 844);
+  await page.setViewportSize({ width: 1440, height: 580 });
+  await expectSize(container, 960, 522);
+});
+
+test("keeps the fixed modal when the layout has no content height", async ({ page }) => {
+  const iframe = await openFixture(page, { width: 1440, height: 900 });
+
+  await postLayout(page, iframe, { colorScheme: "dark" });
+  await expect(page.locator(`${CONTAINER}.didit-flow-sized`)).toHaveCount(0);
+  await expectSize(page.locator(CONTAINER), 500, 700);
+});
+
+test("keeps filling the embedded host whatever layout the flow reports", async ({ page }) => {
+  const iframe = await openFixture(page, { width: 1440, height: 900 }, "?embedded=true&hostHeight=480");
+  const hostContentHeight = await contentHeight(page.locator(HOST));
+
+  await postLayout(page, iframe, { contentHeight: 900 });
+  await expectHeight(iframe, hostContentHeight);
+  expect(await page.evaluate(() => window.diditEvents)).not.toContain("didit:layout");
+});
+
+async function closeButtonBox(page) {
+  return page.getByRole("button", { name: "Close verification" }).evaluate((button) => {
+    const box = button.getBoundingClientRect();
+    const frame = button.parentElement.getBoundingClientRect();
+    const style = getComputedStyle(button);
+    return {
+      width: box.width,
+      height: box.height,
+      top: box.top - frame.top,
+      left: box.left - frame.left,
+      right: frame.right - box.right,
+      background: style.backgroundColor,
+      color: style.color,
+      radius: style.borderRadius
+    };
+  });
+}
+
+test("draws the 44 px close button in the flow's top bar, light", async ({ page }) => {
+  await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600");
+  const box = await closeButtonBox(page);
+
+  expect(box).toMatchObject({ width: 44, height: 44, top: 8, right: 8, radius: "50%" });
+  expect(box.background).toBe("rgba(0, 0, 0, 0.06)");
+  expect(box.color).toBe("rgb(26, 26, 26)");
+  await expect(page.locator(`${CONTAINER} .didit-close-icon`)).toBeVisible();
+  await expect(page.locator(`${CONTAINER} .didit-close-icon-legacy`)).toBeHidden();
+});
+
+test("draws the close button with the dark tokens when the flow is dark", async ({ page }) => {
+  await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600&theme=dark");
+  const box = await closeButtonBox(page);
+
+  expect(box.background).toBe("rgba(255, 255, 255, 0.06)");
+  expect(box.color).toBe("rgb(245, 245, 247)");
+});
+
+test("moves the close button to the left for a right-to-left flow", async ({ page }) => {
+  await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600&dir=rtl");
+  const box = await closeButtonBox(page);
+
+  expect(box).toMatchObject({ width: 44, height: 44, top: 8, left: 8 });
+});
+
+test("shows the keyboard focus on the close button", async ({ page, browserName }) => {
+  // WebKit leaves buttons out of the Tab order unless the platform setting is on.
+  test.skip(browserName === "webkit", "WebKit skips buttons when tabbing by default");
+  await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600");
+  const close = page.getByRole("button", { name: "Close verification" });
+
+  await page.keyboard.press("Tab");
+  await expect(close).toBeFocused();
+  expect(await close.evaluate((button) => getComputedStyle(button).outline)).toMatch(/rgb\(37, 103, 255\) solid 2px|2px solid rgb\(37, 103, 255\)/);
+});
+
+for (const viewport of [{ width: 1440, height: 580 }, { width: 800, height: 900 }, { width: 390, height: 844 }]) {
+  test(`keeps the exit confirmation reachable from the flow layout at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await openFlowFixture(page, viewport, "?layout=600");
+    const close = page.getByRole("button", { name: "Close verification" });
+
+    await expect(close).toBeInViewport();
+    await close.click();
+    await expect(page.getByRole("heading", { name: "Exit verification?" })).toBeInViewport();
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Exit verification?" })).toBeHidden();
+  });
+}
+
 async function captureProof(page, name, viewport, options = "") {
   await openFixture(page, viewport, options);
   await page.screenshot({ path: `${PROOF_DIR}/${name}.png`, fullPage: true });

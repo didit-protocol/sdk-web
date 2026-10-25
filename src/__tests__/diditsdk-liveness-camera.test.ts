@@ -40,8 +40,10 @@ describe("startVerification defaultLivenessCamera", () => {
     expect(loaded.searchParams.get("vendor_data")).toBe("user-1");
   });
 
-  it("loads the verification URL as given when no camera is configured", async () => {
+  it("loads the verification URL with only the presentation parameters when no camera is configured", async () => {
     await DiditSdk.shared.startVerification({ url: "https://verify.didit.me/session/token" });
-    expect(verificationIframeUrl(DiditSdk.shared).toString()).toBe("https://verify.didit.me/session/token");
+    expect(verificationIframeUrl(DiditSdk.shared).toString()).toBe(
+      "https://verify.didit.me/session/token?sdk_presentation=modal&sdk_close_button=true"
+    );
   });
 });
