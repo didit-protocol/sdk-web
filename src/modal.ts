@@ -282,6 +282,112 @@ export class VerificationModal {
         }
       }
 
+      /*
+       * Once the hosted flow reports its layout (didit:layout), the modal
+       * grows to the handoff card on a computer (960 x 660, at most 90% of
+       * the window) and follows the flow's content height in a narrow
+       * window. Colours are the design system tokens named beside them.
+       */
+      .${CSS_CLASSES.container}.${CSS_CLASSES.flowSized} {
+        --didit-ground: #ffffff; /* site-ground */
+        --didit-heading: #1a1a1a; /* c-heading */
+        --didit-accent: #2567ff; /* c-accent */
+        --didit-hover: rgba(120, 120, 128, 0.08); /* c-hover */
+        --didit-close-fill: rgba(0, 0, 0, 0.06);
+        --didit-drop: rgba(17, 24, 39, 0.35);
+        --didit-ring: rgba(0, 0, 0, 0.06);
+        max-width: 500px;
+        background: var(--didit-ground);
+        box-shadow: 0 30px 80px -24px var(--didit-drop), 0 0 0 1px var(--didit-ring);
+      }
+
+      .${CSS_CLASSES.container}.${CSS_CLASSES.flowSized}[data-didit-theme="dark"] {
+        --didit-ground: #0b0b0d;
+        --didit-heading: #f5f5f7;
+        --didit-accent: #4d8bff;
+        --didit-hover: rgba(255, 255, 255, 0.06);
+        --didit-close-fill: rgba(255, 255, 255, 0.06);
+        --didit-drop: rgba(0, 0, 0, 0.55); /* c-shadow-pop, dark */
+        --didit-ring: rgba(255, 255, 255, 0.08); /* c-shadow-pop, dark */
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.iframe} {
+        height: var(--didit-flow-height);
+        max-height: 90vh;
+        max-height: 90dvh;
+      }
+
+      .${CSS_CLASSES.closeIcon} {
+        display: none;
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeButton} {
+        top: 8px;
+        right: 8px;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: var(--didit-close-fill);
+        color: var(--didit-heading);
+      }
+
+      .${CSS_CLASSES.flowSized}[data-didit-dir="rtl"] .${CSS_CLASSES.closeButton} {
+        right: auto;
+        left: 8px;
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeButton}:hover,
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeButton}:focus {
+        background: var(--didit-close-fill);
+        opacity: 1;
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeButton}:hover {
+        background-image: linear-gradient(var(--didit-hover), var(--didit-hover));
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeButton}:focus-visible {
+        outline: 2px solid var(--didit-accent);
+        outline-offset: 2px;
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeIconLegacy} {
+        display: none;
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeButton} .${CSS_CLASSES.closeIcon} {
+        display: block;
+        stroke: currentColor;
+        stroke-width: 1.75;
+        stroke-linejoin: round;
+      }
+
+      @media (min-width: 1024px) {
+        .${CSS_CLASSES.container}.${CSS_CLASSES.flowSized} {
+          max-width: min(960px, 90vw);
+        }
+
+        .${CSS_CLASSES.flowSized} .${CSS_CLASSES.iframe} {
+          height: 660px;
+        }
+      }
+
+      @media (max-width: 540px) {
+        .${CSS_CLASSES.container}.${CSS_CLASSES.flowSized} {
+          max-width: 100%;
+          box-shadow: none;
+        }
+
+        .${CSS_CLASSES.flowSized} .${CSS_CLASSES.iframe} {
+          height: 100vh;
+          height: 100dvh;
+          max-height: none;
+        }
+      }
+
       .${CSS_CLASSES.embedded} {
         position: relative;
         width: 100%;
