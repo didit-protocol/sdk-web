@@ -373,6 +373,40 @@ for (const viewport of [{ width: 1440, height: 580 }, { width: 800, height: 900 
   });
 }
 
+// A short flow reports a small content height, but the exit confirmation is the SDK's own
+// rem-sized dialog, so at a large text size it is taller than the modal. It must scroll
+// inside the modal, by wheel and pointer only, with nothing clipped above or below.
+for (const theme of ["light", "dark"]) {
+  test(`scrolls an exit confirmation taller than a short flow at 200% text, ${theme}`, async ({ page }) => {
+    await openFlowFixture(page, { width: 800, height: 900 }, `?layout=300&textSize=200&theme=${theme}`);
+    const container = page.locator(CONTAINER);
+    const heading = page.getByRole("heading", { name: "Exit verification?" });
+    const exit = page.getByText("Exit", { exact: true });
+
+    await expectSize(container, 500, 300);
+    await page.getByRole("button", { name: "Close verification" }).click();
+    await expect(heading).toBeVisible();
+
+    const frame = await rectOf(container);
+    const box = await rectOf(page.locator(".didit-confirm-box"));
+    expect(box.bottom - box.top).toBeGreaterThan(frame.bottom - frame.top);
+    expect((await rectOf(heading)).top).toBeGreaterThanOrEqual(frame.top);
+
+    await page.mouse.move((frame.left + frame.right) / 2, frame.top + 40);
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await page.mouse.wheel(0, 120);
+      await page.waitForTimeout(50);
+    }
+    const action = await rectOf(exit);
+    expect(action.top).toBeGreaterThanOrEqual(frame.top - 1);
+    expect(action.bottom).toBeLessThanOrEqual(frame.bottom + 1);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+    await page.mouse.click((action.left + action.right) / 2, (action.top + action.bottom) / 2);
+    await expect(page.locator(OVERLAY)).toBeHidden();
+  });
+}
+
 async function captureProof(page, name, viewport, options = "") {
   await openFixture(page, viewport, options);
   await page.screenshot({ path: `${PROOF_DIR}/${name}.png`, fullPage: true });
