@@ -373,6 +373,25 @@ export class VerificationModal {
         stroke-linejoin: round;
       }
 
+      /*
+       * The exit confirmation is sized in rem, so with a large text size it
+       * can be taller than a short flow: it scrolls inside the modal instead
+       * of being clipped, and its width and actions follow the text size.
+       */
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.confirmOverlay} {
+        padding: 1rem;
+        overflow-y: auto;
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.confirmBox} {
+        max-width: 18.75rem;
+        margin: auto;
+      }
+
+      .${CSS_CLASSES.flowSized} .didit-confirm-actions {
+        flex-wrap: wrap;
+      }
+
       @media (min-width: 1024px) {
         .${CSS_CLASSES.container}.${CSS_CLASSES.flowSized} {
           width: 90vw;
