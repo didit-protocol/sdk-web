@@ -377,7 +377,6 @@ export class VerificationModal {
        * The exit confirmation is sized in rem, so with a large text size it
        * can be taller than a short flow: it scrolls inside the modal instead
        * of being clipped, and its width and actions follow a larger text size.
-       * It never grows wider than the modal: a long word wraps instead.
        */
       .${CSS_CLASSES.flowSized} .${CSS_CLASSES.confirmOverlay} {
         padding: 1rem;
@@ -385,10 +384,8 @@ export class VerificationModal {
       }
 
       .${CSS_CLASSES.flowSized} .${CSS_CLASSES.confirmBox} {
-        min-width: 0;
         max-width: max(300px, 18.75rem);
         margin: auto;
-        overflow-wrap: anywhere;
       }
 
       .${CSS_CLASSES.flowSized} .didit-confirm-actions {
@@ -722,8 +719,6 @@ export class VerificationModal {
   private showConfirmation(): void {
     this.state.showConfirmation = true;
     this.confirmOverlay?.classList.add("active");
-    // A confirmation scrolled at a large text size opens again at its title.
-    if (this.confirmOverlay) this.confirmOverlay.scrollTop = 0;
     this.callbacks.onClose();
   }
 
