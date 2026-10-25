@@ -722,6 +722,8 @@ export class VerificationModal {
   private showConfirmation(): void {
     this.state.showConfirmation = true;
     this.confirmOverlay?.classList.add("active");
+    // A confirmation scrolled at a large text size opens again at its title.
+    if (this.confirmOverlay) this.confirmOverlay.scrollTop = 0;
     this.callbacks.onClose();
   }
 

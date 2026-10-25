@@ -375,6 +375,19 @@ for (const viewport of [{ width: 1440, height: 580 }, { width: 800, height: 900 
   });
 }
 
+// Scrolls the exit confirmation to its end with wheel events over the modal.
+async function wheelToEndOfConfirmation(page, frame) {
+  const overlay = page.locator(".didit-confirm-overlay");
+  const atEnd = () => overlay.evaluate((element) => Math.ceil(element.scrollTop + element.clientHeight) >= element.scrollHeight);
+
+  await page.mouse.move((frame.left + frame.right) / 2, frame.top + 40);
+  for (let attempt = 0; attempt < 40 && !(await atEnd()); attempt += 1) {
+    await page.mouse.wheel(0, 120);
+    await page.waitForTimeout(50);
+  }
+  expect(await atEnd()).toBe(true);
+}
+
 // A short flow reports a small content height, but the exit confirmation is the SDK's own
 // rem-sized dialog, so at a large text size it is taller than the modal. It must scroll
 // inside the modal, by wheel and pointer only, with nothing clipped above or below.
@@ -394,14 +407,7 @@ for (const theme of ["light", "dark"]) {
     expect(box.bottom - box.top).toBeGreaterThan(frame.bottom - frame.top);
     expect((await rectOf(heading)).top).toBeGreaterThanOrEqual(frame.top);
 
-    const overlay = page.locator(".didit-confirm-overlay");
-    const atEnd = () => overlay.evaluate((element) => Math.ceil(element.scrollTop + element.clientHeight) >= element.scrollHeight);
-    await page.mouse.move((frame.left + frame.right) / 2, frame.top + 40);
-    for (let attempt = 0; attempt < 40 && !(await atEnd()); attempt += 1) {
-      await page.mouse.wheel(0, 120);
-      await page.waitForTimeout(50);
-    }
-    expect(await atEnd()).toBe(true);
+    await wheelToEndOfConfirmation(page, frame);
 
     const action = await rectOf(exit);
     expect(action.top).toBeGreaterThanOrEqual(frame.top - 1);
