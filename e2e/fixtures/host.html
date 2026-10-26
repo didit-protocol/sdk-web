@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Web SDK modal fixture</title>
+    <link rel="stylesheet" href="colors_and_type.css">
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+        background: var(--soft);
+      }
+
+      body[data-theme="dark"] {
+        background: var(--black);
+      }
+
+      #verification-container {
+        width: min(500px, 100%);
+        height: var(--host-height, 480px);
+        overflow: hidden;
+        border: 1px solid var(--mid);
+        border-radius: var(--radius-xs);
+        box-shadow: var(--shadow-lg);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="verification-container"></div>
+    <script type="module">
+      import { DiditSdk } from "../../dist/didit-sdk.esm.js";
+
+      const params = new URLSearchParams(window.location.search);
+      const embedded = params.get("embedded") === "true";
+      const theme = params.get("theme") === "dark" ? "dark" : "light";
+      const flowUrl = new URL("./verification-flow.html", window.location.href);
+      const configuration = embedded
+        ? { embedded: true, embeddedContainerId: "verification-container" }
+        : undefined;
+
+      document.body.dataset.theme = theme;
+      document.body.style.setProperty("--host-height", `${params.get("hostHeight") ?? "480"}px`);
+      // A larger browser text size, which the SDK's own rem-sized dialogs follow.
+      if (params.has("textSize")) document.documentElement.style.fontSize = `${params.get("textSize")}%`;
+      flowUrl.searchParams.set("theme", theme);
+      // The flow fixture posts didit:layout only when a test asks for it.
+      for (const name of ["layout", "dir"]) {
+        if (params.has(name)) flowUrl.searchParams.set(name, params.get(name));
+      }
+      window.diditEvents = [];
+      DiditSdk.shared.onEvent = (event) => window.diditEvents.push(event.type);
+      DiditSdk.shared.startVerification({ url: flowUrl.href, configuration });
+    </script>
+  </body>
+</html>
