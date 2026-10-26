@@ -771,13 +771,12 @@ export class VerificationModal {
       : this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`) ?? this.iframe);
     this.state.showConfirmation = true;
     this.confirmOverlay.classList.add("active");
-    if (this.iframe) this.iframe.tabIndex = -1;
+    if (this.iframe) this.iframe.inert = true;
     const close = this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`);
     if (close) close.inert = true;
     // A confirmation scrolled at a large text size opens again at its title.
     this.confirmOverlay.scrollTop = 0;
     if (this.isTopmost()) this.focusConfirmation();
-    this.iframe?.setAttribute("aria-hidden", "true");
     this.callbacks.onClose();
   }
 
@@ -789,16 +788,12 @@ export class VerificationModal {
     if (!this.state.showConfirmation) return;
     this.state.showConfirmation = false;
     this.confirmOverlay?.classList.remove("active");
-    this.iframe?.removeAttribute("tabindex");
-    this.iframe?.removeAttribute("aria-hidden");
+    if (this.iframe) this.iframe.inert = false;
     const close = this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`);
     if (close) close.inert = false;
     const trigger = this.confirmationTrigger;
     this.confirmationTrigger = null;
-    if (restoreFocus && this.isTopmost() && trigger?.isConnected) {
-      if (trigger === this.iframe) this.iframe.contentWindow?.focus();
-      else trigger.focus({ preventScroll: true });
-    }
+    if (restoreFocus && this.isTopmost() && trigger?.isConnected) trigger.focus({ preventScroll: true });
   }
 
   private confirmExit(): void {

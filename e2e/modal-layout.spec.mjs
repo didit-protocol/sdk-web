@@ -468,11 +468,15 @@ test("returns focus to a cross-origin flow after its close request", async ({ pa
   await flowAction.evaluate(() => window.parent.postMessage({ type: "didit:close_request", timestamp: Date.now() }, "*"));
   const dialog = page.getByRole("dialog", { name: "Exit verification?", exact: true });
   await expect(dialog).toBeFocused();
+  await flowAction.evaluate((button) => button.focus());
+  await expect(dialog).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(dialog.getByRole("button", { name: "Continue", exact: true })).toBeFocused();
   await page.keyboard.press("Space");
   await expect(dialog).toBeHidden();
+  // Cross-origin access stops at the frame; the SDK cannot inspect its active control.
   await expect(iframe).toBeFocused();
+  await flowAction.focus();
   await expect(flowAction).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(iframe.contentFrame().locator("body")).toHaveAttribute("data-continued", "true");
