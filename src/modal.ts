@@ -52,7 +52,8 @@ export class VerificationModal {
 
   private boundHandleMessage: ((event: MessageEvent) => void) | null = null;
   private boundHandleKeydown: ((event: KeyboardEvent) => void) | null = null;
-  private boundHandleFocusin: (() => void) | null = null;
+  private boundHandleFocusChange: (() => void) | null = null;
+  private confirmationFocusTimeout: number | null = null;
 
   private embedded: boolean = false;
   private embeddedContainer: HTMLElement | null = null;
@@ -580,18 +581,21 @@ export class VerificationModal {
     this.boundHandleKeydown = this.handleKeydown.bind(this);
     document.addEventListener("keydown", this.boundHandleKeydown);
 
-    this.boundHandleFocusin = () => {
+    this.boundHandleFocusChange = () => {
+      if (!this.state.showConfirmation || !this.isTopmost()) return;
       // An iframe can take focus without a focusin event in its parent document.
-      // Check after focusout too, once the browser has updated activeElement.
-      queueMicrotask(() => {
+      // Wait until its focus transition finishes before moving focus back.
+      if (this.confirmationFocusTimeout !== null) window.clearTimeout(this.confirmationFocusTimeout);
+      this.confirmationFocusTimeout = window.setTimeout(() => {
+        this.confirmationFocusTimeout = null;
         if (this.state.showConfirmation && this.isTopmost() && !this.confirmOverlay?.contains(document.activeElement)) {
           this.focusConfirmation();
         }
-      });
+      }, 0);
     };
-    document.addEventListener("focusin", this.boundHandleFocusin);
-    document.addEventListener("focusout", this.boundHandleFocusin);
-    window.addEventListener("blur", this.boundHandleFocusin);
+    document.addEventListener("focusin", this.boundHandleFocusChange);
+    document.addEventListener("focusout", this.boundHandleFocusChange);
+    window.addEventListener("blur", this.boundHandleFocusChange);
   }
 
   private removeEventListeners(): void {
@@ -603,11 +607,11 @@ export class VerificationModal {
       document.removeEventListener("keydown", this.boundHandleKeydown);
       this.boundHandleKeydown = null;
     }
-    if (this.boundHandleFocusin) {
-      document.removeEventListener("focusin", this.boundHandleFocusin);
-      document.removeEventListener("focusout", this.boundHandleFocusin);
-      window.removeEventListener("blur", this.boundHandleFocusin);
-      this.boundHandleFocusin = null;
+    if (this.boundHandleFocusChange) {
+      document.removeEventListener("focusin", this.boundHandleFocusChange);
+      document.removeEventListener("focusout", this.boundHandleFocusChange);
+      window.removeEventListener("blur", this.boundHandleFocusChange);
+      this.boundHandleFocusChange = null;
     }
   }
 
@@ -788,6 +792,10 @@ export class VerificationModal {
 
   private hideConfirmation(restoreFocus = true): void {
     if (!this.state.showConfirmation) return;
+    if (this.confirmationFocusTimeout !== null) {
+      window.clearTimeout(this.confirmationFocusTimeout);
+      this.confirmationFocusTimeout = null;
+    }
     this.state.showConfirmation = false;
     this.confirmOverlay?.classList.remove("active");
     if (this.iframe) this.iframe.inert = false;
