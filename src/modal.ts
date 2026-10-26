@@ -581,11 +581,16 @@ export class VerificationModal {
     document.addEventListener("keydown", this.boundHandleKeydown);
 
     this.boundHandleFocusin = () => {
-      if (this.state.showConfirmation && this.isTopmost() && !this.confirmOverlay?.contains(document.activeElement)) {
-        this.focusConfirmation();
-      }
+      // An iframe can take focus without a focusin event in its parent document.
+      // Check after focusout too, once the browser has updated activeElement.
+      queueMicrotask(() => {
+        if (this.state.showConfirmation && this.isTopmost() && !this.confirmOverlay?.contains(document.activeElement)) {
+          this.focusConfirmation();
+        }
+      });
     };
     document.addEventListener("focusin", this.boundHandleFocusin);
+    document.addEventListener("focusout", this.boundHandleFocusin);
   }
 
   private removeEventListeners(): void {
@@ -599,6 +604,7 @@ export class VerificationModal {
     }
     if (this.boundHandleFocusin) {
       document.removeEventListener("focusin", this.boundHandleFocusin);
+      document.removeEventListener("focusout", this.boundHandleFocusin);
       this.boundHandleFocusin = null;
     }
   }

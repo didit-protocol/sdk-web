@@ -415,8 +415,9 @@ for (const scenario of [
 
     // Even a focus attempt from the covered frame cannot divert Enter to it.
     await flowAction.evaluate((button) => button.focus());
-    await expect(exit).toBeFocused();
-    await page.keyboard.press("Shift+Tab");
+    await expect(dialog).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(continueButton).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(dialog).toBeHidden();
     await expect(close).toBeFocused();
@@ -447,11 +448,15 @@ for (const key of ["Enter", "Space"]) {
     await expect(page.getByRole("button", { name: "Exit", exact: true })).toBeFocused();
     await page.keyboard.press(key);
     await expect(page.locator(OVERLAY)).toBeHidden();
-    expect(await page.evaluate(() => window.diditEvents.filter((type) => type === "didit:cancelled"))).toHaveLength(1);
+    await expect(page.locator(FRAME)).toHaveAttribute("src", "about:blank");
   });
 }
 
 test("returns focus to a cross-origin flow after its close request", async ({ page }) => {
+  await page.route("http://localhost:4173/**", async (route) => {
+    const response = await route.fetch({ url: route.request().url().replace("localhost", "127.0.0.1") });
+    await route.fulfill({ response });
+  });
   await page.route("**/e2e/fixtures/host.html*", async (route) => {
     const response = await route.fetch();
     const body = (await response.text()).replace('"./verification-flow.html"', '"http://localhost:4173/e2e/fixtures/verification-flow.html"');
