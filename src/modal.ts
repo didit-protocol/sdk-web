@@ -47,10 +47,13 @@ export class VerificationModal {
   private iframe: HTMLIFrameElement | null = null;
   private loadingEl: HTMLDivElement | null = null;
   private confirmOverlay: HTMLDivElement | null = null;
+  private confirmationTrigger: HTMLElement | null = null;
   private containerElement: HTMLElement;
 
   private boundHandleMessage: ((event: MessageEvent) => void) | null = null;
   private boundHandleKeydown: ((event: KeyboardEvent) => void) | null = null;
+  private boundHandleFocusChange: (() => void) | null = null;
+  private confirmationFocusTimeout: number | null = null;
 
   private embedded: boolean = false;
   private embeddedContainer: HTMLElement | null = null;
@@ -216,6 +219,7 @@ export class VerificationModal {
         transform: scale(0.95);
         transition: transform 0.15s ease-out;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        outline: none;
       }
 
       .${CSS_CLASSES.confirmOverlay}.active .${CSS_CLASSES.confirmBox} {
@@ -243,7 +247,7 @@ export class VerificationModal {
         gap: 1rem;
       }
 
-      .didit-confirm-actions button {
+      .didit-confirm-actions [data-action="continue"] {
         background: #2563eb;
         color: #fff;
         border: none;
@@ -255,11 +259,16 @@ export class VerificationModal {
         transition: background 0.15s ease;
       }
 
-      .didit-confirm-actions button:hover {
+      .didit-confirm-actions [data-action="continue"]:hover {
         background: #1d4ed8;
       }
 
-      .didit-confirm-actions span {
+      .didit-confirm-actions [data-action="exit"] {
+        background: transparent;
+        border: none;
+        font-family: inherit;
+        font-weight: inherit;
+        line-height: inherit;
         color: #666;
         font-size: 0.875rem;
         cursor: pointer;
@@ -267,8 +276,13 @@ export class VerificationModal {
         transition: color 0.15s ease;
       }
 
-      .didit-confirm-actions span:hover {
+      .didit-confirm-actions [data-action="exit"]:hover {
         color: #1a1a2e;
+      }
+
+      .didit-confirm-actions button:focus-visible {
+        outline: 2px solid #2567ff;
+        outline-offset: 2px;
       }
 
       @media (max-width: 540px) {
@@ -481,7 +495,7 @@ export class VerificationModal {
           <path d="M7.03968 17L16.9619 7" />
         </svg>
       `;
-      closeBtn.addEventListener("click", () => this.handleCloseRequest());
+      closeBtn.addEventListener("click", () => this.handleCloseRequest(closeBtn));
       this.container.appendChild(closeBtn);
     }
 
@@ -494,12 +508,13 @@ export class VerificationModal {
     this.confirmOverlay = document.createElement("div");
     this.confirmOverlay.className = CSS_CLASSES.confirmOverlay;
     this.confirmOverlay.innerHTML = `
-      <div class="${CSS_CLASSES.confirmBox}">
-        <h3>${t.exitTitle}</h3>
-        <p>${t.exitMessage}</p>
+      <div class="${CSS_CLASSES.confirmBox}" role="dialog" aria-modal="true" tabindex="-1"
+        aria-labelledby="${this.modalId}-exit-title" aria-describedby="${this.modalId}-exit-message">
+        <h3 id="${this.modalId}-exit-title">${t.exitTitle}</h3>
+        <p id="${this.modalId}-exit-message">${t.exitMessage}</p>
         <div class="didit-confirm-actions">
           <button type="button" data-action="continue">${t.continueButton}</button>
-          <span data-action="exit">${t.exitButton}</span>
+          <button type="button" data-action="exit">${t.exitButton}</button>
         </div>
       </div>
     `;
@@ -565,6 +580,22 @@ export class VerificationModal {
 
     this.boundHandleKeydown = this.handleKeydown.bind(this);
     document.addEventListener("keydown", this.boundHandleKeydown);
+
+    this.boundHandleFocusChange = () => {
+      if (!this.state.showConfirmation || !this.isTopmost()) return;
+      // An iframe can take focus without a focusin event in its parent document.
+      // Wait until its focus transition finishes before moving focus back.
+      if (this.confirmationFocusTimeout !== null) window.clearTimeout(this.confirmationFocusTimeout);
+      this.confirmationFocusTimeout = window.setTimeout(() => {
+        this.confirmationFocusTimeout = null;
+        if (this.state.showConfirmation && this.isTopmost() && !this.confirmOverlay?.contains(document.activeElement)) {
+          this.focusConfirmation();
+        }
+      }, 0);
+    };
+    document.addEventListener("focusin", this.boundHandleFocusChange);
+    document.addEventListener("focusout", this.boundHandleFocusChange);
+    window.addEventListener("blur", this.boundHandleFocusChange);
   }
 
   private removeEventListeners(): void {
@@ -575,6 +606,12 @@ export class VerificationModal {
     if (this.boundHandleKeydown) {
       document.removeEventListener("keydown", this.boundHandleKeydown);
       this.boundHandleKeydown = null;
+    }
+    if (this.boundHandleFocusChange) {
+      document.removeEventListener("focusin", this.boundHandleFocusChange);
+      document.removeEventListener("focusout", this.boundHandleFocusChange);
+      window.removeEventListener("blur", this.boundHandleFocusChange);
+      this.boundHandleFocusChange = null;
     }
   }
 
@@ -693,6 +730,19 @@ export class VerificationModal {
     // of the verification modal underneath it).
     if (!this.isTopmost()) return;
 
+    if (event.key === "Tab" && this.state.showConfirmation) {
+      const buttons = Array.from(this.confirmOverlay?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+      if (buttons.length) {
+        event.preventDefault();
+        const current = buttons.findIndex((button) => button === document.activeElement);
+        const next = event.shiftKey
+          ? (current <= 0 ? buttons.length - 1 : current - 1)
+          : (current + 1) % buttons.length;
+        buttons[next].focus();
+      }
+      return;
+    }
+
     if (event.key === "Escape") {
       event.preventDefault();
       if (this.state.showConfirmation) {
@@ -711,25 +761,49 @@ export class VerificationModal {
     }
   }
 
-  private handleCloseRequest(): void {
+  private handleCloseRequest(trigger?: HTMLElement): void {
     if (this.config.showExitConfirmation) {
-      this.showConfirmation();
+      this.showConfirmation(trigger);
     } else {
       this.callbacks.onCloseConfirmed();
     }
   }
 
-  private showConfirmation(): void {
+  private showConfirmation(trigger?: HTMLElement): void {
+    if (!this.confirmOverlay || this.state.showConfirmation) return;
+    const activeElement = document.activeElement;
+    this.confirmationTrigger = trigger ?? (activeElement instanceof HTMLElement && activeElement !== document.body
+      ? activeElement
+      : this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`) ?? this.iframe);
     this.state.showConfirmation = true;
-    this.confirmOverlay?.classList.add("active");
+    this.confirmOverlay.classList.add("active");
+    if (this.iframe) this.iframe.inert = true;
+    const close = this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`);
+    if (close) close.inert = true;
     // A confirmation scrolled at a large text size opens again at its title.
-    if (this.confirmOverlay) this.confirmOverlay.scrollTop = 0;
+    this.confirmOverlay.scrollTop = 0;
+    if (this.isTopmost()) this.focusConfirmation();
     this.callbacks.onClose();
   }
 
-  private hideConfirmation(): void {
+  private focusConfirmation(): void {
+    this.confirmOverlay?.querySelector<HTMLDivElement>(`.${CSS_CLASSES.confirmBox}`)?.focus({ preventScroll: true });
+  }
+
+  private hideConfirmation(restoreFocus = true): void {
+    if (!this.state.showConfirmation) return;
+    if (this.confirmationFocusTimeout !== null) {
+      window.clearTimeout(this.confirmationFocusTimeout);
+      this.confirmationFocusTimeout = null;
+    }
     this.state.showConfirmation = false;
     this.confirmOverlay?.classList.remove("active");
+    if (this.iframe) this.iframe.inert = false;
+    const close = this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`);
+    if (close) close.inert = false;
+    const trigger = this.confirmationTrigger;
+    this.confirmationTrigger = null;
+    if (restoreFocus && this.isTopmost() && trigger?.isConnected) trigger.focus({ preventScroll: true });
   }
 
   private confirmExit(): void {
@@ -757,9 +831,8 @@ export class VerificationModal {
     SDKLogger.log("Opening with URL:", verificationUrl);
 
     this.state.isLoading = true;
-    this.state.showConfirmation = false;
+    this.hideConfirmation();
     this.loadingEl?.classList.remove("hidden");
-    this.confirmOverlay?.classList.remove("active");
     this.resetFlowLayout();
 
     if (this.iframe) {
@@ -789,6 +862,7 @@ export class VerificationModal {
   close(): void {
     SDKLogger.log("Closing");
 
+    this.hideConfirmation(false);
     this.state.isOpen = false;
     this.state.isLoading = true;
     this.state.showConfirmation = false;

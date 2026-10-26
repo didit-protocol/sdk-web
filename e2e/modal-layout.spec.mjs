@@ -375,6 +375,113 @@ for (const viewport of [{ width: 1440, height: 580 }, { width: 800, height: 900 
   });
 }
 
+for (const scenario of [
+  { name: "desktop light", viewport: { width: 1440, height: 900 }, options: "?layout=600" },
+  { name: "short desktop dark", viewport: { width: 1440, height: 580 }, options: "?layout=600&theme=dark" },
+  { name: "narrow at 200% text", viewport: { width: 800, height: 900 }, options: "?layout=300&textSize=200" },
+  { name: "phone dark RTL at 200% text", viewport: { width: 390, height: 844 }, options: "?layout=600&theme=dark&dir=rtl&textSize=200" }
+]) {
+  test(`contains confirmation keyboard focus, ${scenario.name}`, async ({ page }) => {
+    const iframe = await openFlowFixture(page, scenario.viewport, scenario.options);
+    const close = page.getByRole("button", { name: "Close verification" });
+    const dialog = page.getByRole("dialog", { name: "Exit verification?", exact: true });
+    const continueButton = dialog.getByRole("button", { name: "Continue", exact: true });
+    const exit = dialog.getByRole("button", { name: "Exit", exact: true });
+    const flowAction = iframe.contentFrame().getByRole("button", { name: "Continue verification" });
+    const flowBody = iframe.contentFrame().locator("body");
+
+    await close.focus();
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeFocused();
+    expect(await page.locator(".didit-confirm-overlay").evaluate((element) => element.scrollTop)).toBe(0);
+
+    // Every forward and backward wrap stays in the dialog, including WebKit's
+    // default keyboard settings. The covered frame's real action stays untouched.
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      await page.keyboard.press("Tab");
+      await expect(continueButton).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(exit).toBeFocused();
+      await expect(exit).toBeInViewport();
+    }
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      await page.keyboard.press("Shift+Tab");
+      await expect(continueButton).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await expect(exit).toBeFocused();
+    }
+    expect(await exit.evaluate((button) => getComputedStyle(button).outlineStyle)).toBe("solid");
+    await expect(flowBody).not.toHaveAttribute("data-continued", "true");
+
+    // Even a focus attempt from the covered frame cannot divert Enter to it.
+    await flowAction.evaluate((button) => button.focus());
+    await expect(dialog).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(continueButton).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeHidden();
+    await expect(close).toBeFocused();
+    await expect(flowBody).not.toHaveAttribute("data-continued", "true");
+
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeFocused();
+    expect(await page.locator(".didit-confirm-overlay").evaluate((element) => element.scrollTop)).toBe(0);
+    await page.keyboard.press("Shift+Tab");
+    await expect(exit).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(close).toBeFocused();
+    // Dismissing the confirmation restores normal flow interaction.
+    await flowAction.focus();
+    await page.keyboard.press("Enter");
+    await expect(flowBody).toHaveAttribute("data-continued", "true");
+  });
+}
+
+for (const key of ["Enter", "Space"]) {
+  test(`confirms exit with ${key} from the keyboard`, async ({ page }) => {
+    await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600");
+    const close = page.getByRole("button", { name: "Close verification" });
+    await close.focus();
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Shift+Tab");
+    await expect(page.getByRole("button", { name: "Exit", exact: true })).toBeFocused();
+    await page.keyboard.press(key);
+    await expect(page.locator(OVERLAY)).toBeHidden();
+    await expect(page.locator(FRAME)).toHaveAttribute("src", "about:blank");
+  });
+}
+
+test("returns focus to a cross-origin flow after its close request", async ({ page }) => {
+  await page.route("http://localhost:4173/**", async (route) => {
+    const response = await route.fetch({ url: route.request().url().replace("localhost", "127.0.0.1") });
+    await route.fulfill({ response });
+  });
+  await page.route("**/e2e/fixtures/host.html*", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.text()).replace('"./verification-flow.html"', '"http://localhost:4173/e2e/fixtures/verification-flow.html"');
+    await route.fulfill({ response, body });
+  });
+  const iframe = await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600");
+  const flowAction = iframe.contentFrame().getByRole("button", { name: "Continue verification" });
+  await flowAction.focus();
+  await flowAction.evaluate(() => window.parent.postMessage({ type: "didit:close_request", timestamp: Date.now() }, "*"));
+  const dialog = page.getByRole("dialog", { name: "Exit verification?", exact: true });
+  await expect(dialog).toBeFocused();
+  await flowAction.evaluate((button) => button.focus());
+  await expect(dialog).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("button", { name: "Continue", exact: true })).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(dialog).toBeHidden();
+  // Cross-origin access stops at the frame; the SDK cannot inspect its active control.
+  await expect(iframe).toBeFocused();
+  await flowAction.focus();
+  await expect(flowAction).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(iframe.contentFrame().locator("body")).toHaveAttribute("data-continued", "true");
+});
+
 // Scrolls the exit confirmation to its end with wheel events over the modal.
 async function wheelToEndOfConfirmation(page, frame) {
   const overlay = page.locator(".didit-confirm-overlay");

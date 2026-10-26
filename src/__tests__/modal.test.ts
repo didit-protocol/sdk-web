@@ -157,6 +157,120 @@ describe("VerificationModal cross-modal isolation", () => {
   });
 });
 
+describe("VerificationModal confirmation focus", () => {
+  const openModals: VerificationModal[] = [];
+
+  afterEach(() => {
+    openModals.forEach((modal) => modal.destroy());
+    openModals.length = 0;
+    document.getElementById("didit-sdk-styles")?.remove();
+    document.body.style.overflow = "";
+  });
+
+  function openModal(configuration: DiditSdkConfiguration = {}) {
+    const created = createModal({ showExitConfirmation: true, ...configuration });
+    openModals.push(created.modal);
+    created.modal.open("https://verify.didit.me/session");
+    const container = getContainer(created.modal);
+    const close = container.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`)!;
+    const dialog = container.querySelector<HTMLDivElement>(`.${CSS_CLASSES.confirmBox}`)!;
+    const continueButton = dialog.querySelector<HTMLButtonElement>('[data-action="continue"]')!;
+    const exitButton = dialog.querySelector<HTMLButtonElement>('[data-action="exit"]')!;
+    return { ...created, close, dialog, continueButton, exitButton, iframe: getIframe(created.modal) };
+  }
+
+  it("focuses a labelled confirmation and removes the covered flow from keyboard navigation", () => {
+    const { close, dialog, exitButton, iframe } = openModal();
+    // Pointer clicks do not focus buttons in every browser.
+    close.click();
+
+    expect(document.activeElement).toBe(dialog);
+    expect(dialog.getAttribute("role")).toBe("dialog");
+    expect(document.getElementById(dialog.getAttribute("aria-labelledby")!)?.textContent).toBe("Exit verification?");
+    expect(exitButton.tagName).toBe("BUTTON");
+    expect(exitButton.type).toBe("button");
+    expect(iframe.inert).toBe(true);
+    expect(close.inert).toBe(true);
+  });
+
+  it.each(["Continue", "Escape"])("restores focus to the trigger after %s", (action) => {
+    const { close, dialog, continueButton, iframe, onCloseConfirmed } = openModal();
+    close.click();
+    if (action === "Continue") continueButton.click();
+    else document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+    expect(document.activeElement).toBe(close);
+    expect(dialog.parentElement?.classList.contains("active")).toBe(false);
+    expect(iframe.inert).toBe(false);
+    expect(close.inert).toBe(false);
+    expect(onCloseConfirmed).not.toHaveBeenCalled();
+  });
+
+  it("keeps the original trigger when the flow repeats its close request", () => {
+    const { close, iframe, continueButton } = openModal();
+    close.click();
+    continueButton.focus();
+    dispatchMessage(iframe.contentWindow, { type: "didit:close_request", timestamp: 1 });
+    continueButton.click();
+
+    expect(document.activeElement).toBe(close);
+  });
+
+  it("restores iframe focus after a flow close request with no SDK close button", () => {
+    const { iframe, dialog, continueButton } = openModal({ showCloseButton: false });
+    iframe.focus();
+    dispatchMessage(iframe.contentWindow, { type: "didit:close_request", timestamp: 1 });
+    expect(document.activeElement).toBe(dialog);
+    continueButton.click();
+
+    expect(document.activeElement).toBe(iframe);
+    expect(iframe.inert).toBe(false);
+  });
+
+  it("clears containment on reopen, close and destroy", () => {
+    const { modal, close, iframe, dialog } = openModal();
+    close.click();
+    modal.open("https://verify.didit.me/session");
+    expect(iframe.inert).toBe(false);
+    expect(close.inert).toBe(false);
+    iframe.focus();
+    expect(document.activeElement).toBe(iframe);
+
+    close.click();
+    expect(document.activeElement).toBe(dialog);
+    modal.close();
+    expect(iframe.inert).toBe(false);
+    modal.open("https://verify.didit.me/session");
+    close.click();
+    modal.destroy();
+    expect(dialog.isConnected).toBe(false);
+    const next = openModal();
+    next.close.focus();
+    expect(document.activeElement).toBe(next.close);
+  });
+
+  it("only contains focus and handles keys in the topmost confirmation", () => {
+    const first = openModal();
+    first.close.click();
+    const second = openModal();
+    second.close.focus();
+    expect(document.activeElement).toBe(second.close);
+    second.close.click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", cancelable: true }));
+    expect(document.activeElement).toBe(second.continueButton);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(document.activeElement).toBe(second.close);
+    expect(first.dialog.parentElement?.classList.contains("active")).toBe(true);
+
+    second.modal.close();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", cancelable: true }));
+    expect(document.activeElement).toBe(first.continueButton);
+    first.exitButton.click();
+    expect(first.onCloseConfirmed).toHaveBeenCalledTimes(1);
+    expect(second.onCloseConfirmed).not.toHaveBeenCalled();
+  });
+});
+
 describe("VerificationModal iframe sizing", () => {
   const openModals: VerificationModal[] = [];
 
