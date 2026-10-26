@@ -591,6 +591,7 @@ export class VerificationModal {
     };
     document.addEventListener("focusin", this.boundHandleFocusin);
     document.addEventListener("focusout", this.boundHandleFocusin);
+    window.addEventListener("blur", this.boundHandleFocusin);
   }
 
   private removeEventListeners(): void {
@@ -605,6 +606,7 @@ export class VerificationModal {
     if (this.boundHandleFocusin) {
       document.removeEventListener("focusin", this.boundHandleFocusin);
       document.removeEventListener("focusout", this.boundHandleFocusin);
+      window.removeEventListener("blur", this.boundHandleFocusin);
       this.boundHandleFocusin = null;
     }
   }
