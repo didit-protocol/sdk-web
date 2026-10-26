@@ -791,11 +791,11 @@ export class VerificationModal {
   }
 
   private hideConfirmation(restoreFocus = true): void {
-    if (!this.state.showConfirmation) return;
     if (this.confirmationFocusTimeout !== null) {
       window.clearTimeout(this.confirmationFocusTimeout);
       this.confirmationFocusTimeout = null;
     }
+    if (!this.state.showConfirmation) return;
     this.state.showConfirmation = false;
     this.confirmOverlay?.classList.remove("active");
     if (this.iframe) this.iframe.inert = false;
@@ -803,7 +803,19 @@ export class VerificationModal {
     if (close) close.inert = false;
     const trigger = this.confirmationTrigger;
     this.confirmationTrigger = null;
-    if (restoreFocus && this.isTopmost() && trigger?.isConnected) trigger.focus({ preventScroll: true });
+    if (restoreFocus && this.isTopmost() && trigger?.isConnected) {
+      if (trigger === this.iframe) {
+        // Firefox needs a browser task to reactivate an inert cross-origin frame.
+        this.confirmationFocusTimeout = window.setTimeout(() => {
+          this.confirmationFocusTimeout = null;
+          if (this.state.isOpen && !this.state.showConfirmation && this.isTopmost() && trigger.isConnected) {
+            trigger.focus({ preventScroll: true });
+          }
+        }, 0);
+      } else {
+        trigger.focus({ preventScroll: true });
+      }
+    }
   }
 
   private confirmExit(): void {

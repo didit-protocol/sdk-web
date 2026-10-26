@@ -464,18 +464,21 @@ test("returns focus to a cross-origin flow after its close request", async ({ pa
   });
   const iframe = await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600");
   const flowAction = iframe.contentFrame().getByRole("button", { name: "Continue verification" });
-  await flowAction.focus();
-  await flowAction.evaluate(() => window.parent.postMessage({ type: "didit:close_request", timestamp: Date.now() }, "*"));
   const dialog = page.getByRole("dialog", { name: "Exit verification?", exact: true });
-  await expect(dialog).toBeFocused();
-  await flowAction.evaluate((button) => button.focus());
-  await expect(dialog).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(dialog.getByRole("button", { name: "Continue", exact: true })).toBeFocused();
-  await page.keyboard.press("Space");
-  await expect(dialog).toBeHidden();
-  // Cross-origin access stops at the frame; the SDK cannot inspect its active control.
-  await expect(iframe).toBeFocused();
+  for (const dismissal of ["Continue", "Escape"]) {
+    await flowAction.focus();
+    await flowAction.evaluate(() => window.parent.postMessage({ type: "didit:close_request", timestamp: Date.now() }, "*"));
+    await expect(dialog).toBeFocused();
+    await flowAction.evaluate((button) => button.focus());
+    await expect(dialog).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(dialog.getByRole("button", { name: "Continue", exact: true })).toBeFocused();
+    await page.keyboard.press(dismissal === "Continue" ? "Space" : "Escape");
+    await expect(dialog).toBeHidden();
+    // Cross-origin access stops at the frame; the SDK cannot inspect its active control.
+    await expect(iframe).toBeFocused();
+    await expect(iframe.contentFrame().locator("body")).not.toHaveAttribute("data-continued", "true");
+  }
   await flowAction.focus();
   await expect(flowAction).toBeFocused();
   await page.keyboard.press("Enter");
