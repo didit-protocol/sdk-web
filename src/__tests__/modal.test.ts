@@ -216,16 +216,43 @@ describe("VerificationModal confirmation focus", () => {
     expect(document.activeElement).toBe(close);
   });
 
-  it("restores iframe focus after a flow close request with no SDK close button", () => {
+  it("restores iframe focus after a flow close request with no SDK close button", async () => {
     const { iframe, dialog, continueButton } = openModal({ showCloseButton: false });
     iframe.focus();
     dispatchMessage(iframe.contentWindow, { type: "didit:close_request", timestamp: 1 });
     expect(document.activeElement).toBe(dialog);
     continueButton.click();
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
 
     expect(document.activeElement).toBe(iframe);
     expect(iframe.inert).toBe(false);
   });
+
+  it.each(["reopen", "close", "destroy", "confirmation", "stacked modal"])(
+    "does not restore deferred iframe focus after %s",
+    (action) => {
+      jest.useFakeTimers();
+      try {
+        const { modal, iframe, close, continueButton } = openModal();
+        iframe.focus();
+        dispatchMessage(iframe.contentWindow, { type: "didit:close_request", timestamp: 1 });
+        continueButton.click();
+
+        if (action === "reopen") modal.open("https://verify.didit.me/session");
+        else if (action === "close") modal.close();
+        else if (action === "destroy") modal.destroy();
+        else if (action === "confirmation") close.click();
+        else openModal().close.focus();
+
+        const activeElement = document.activeElement;
+        jest.runOnlyPendingTimers();
+        expect(document.activeElement).toBe(activeElement);
+        expect(document.activeElement).not.toBe(iframe);
+      } finally {
+        jest.useRealTimers();
+      }
+    }
+  );
 
   it("clears containment on reopen, close and destroy", () => {
     const { modal, close, iframe, dialog } = openModal();
