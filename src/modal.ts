@@ -795,7 +795,10 @@ export class VerificationModal {
     if (close) close.inert = false;
     const trigger = this.confirmationTrigger;
     this.confirmationTrigger = null;
-    if (restoreFocus && this.isTopmost() && trigger?.isConnected) trigger.focus({ preventScroll: true });
+    if (restoreFocus && this.isTopmost() && trigger?.isConnected) {
+      if (trigger === this.iframe) this.iframe.contentWindow?.focus();
+      else trigger.focus({ preventScroll: true });
+    }
   }
 
   private confirmExit(): void {
