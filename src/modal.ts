@@ -1,6 +1,6 @@
 import type { DiditSdkConfiguration, VerificationEvent } from "./types";
-import { DEFAULT_CONFIG, CSS_CLASSES } from "./constants";
-import { SDKLogger, generateModalId, isAllowedOrigin, detectLanguageFromUrl } from "./utils";
+import { DEFAULT_CONFIG, CSS_CLASSES, LAYOUT_MESSAGE_TYPE } from "./constants";
+import { SDKLogger, generateModalId, isAllowedOrigin, detectLanguageFromUrl, isRtlLanguage } from "./utils";
 import { getTranslations } from "./translations";
 
 export interface ModalState {
@@ -14,6 +14,14 @@ export interface ModalCallbacks {
   onCloseConfirmed: () => void;
   onMessage: (event: VerificationEvent) => void;
   onIframeLoad: () => void;
+}
+
+/** The layout the hosted flow reports in a didit:layout message. */
+export interface FlowLayout {
+  /** Height of the flow's content in CSS pixels, its top bar included. */
+  contentHeight: number;
+  colorScheme: "light" | "dark";
+  dir: "ltr" | "rtl";
 }
 
 export class VerificationModal {
@@ -39,10 +47,13 @@ export class VerificationModal {
   private iframe: HTMLIFrameElement | null = null;
   private loadingEl: HTMLDivElement | null = null;
   private confirmOverlay: HTMLDivElement | null = null;
+  private confirmationTrigger: HTMLElement | null = null;
   private containerElement: HTMLElement;
 
   private boundHandleMessage: ((event: MessageEvent) => void) | null = null;
   private boundHandleKeydown: ((event: KeyboardEvent) => void) | null = null;
+  private boundHandleFocusChange: (() => void) | null = null;
+  private confirmationFocusTimeout: number | null = null;
 
   private embedded: boolean = false;
   private embeddedContainer: HTMLElement | null = null;
@@ -208,6 +219,7 @@ export class VerificationModal {
         transform: scale(0.95);
         transition: transform 0.15s ease-out;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        outline: none;
       }
 
       .${CSS_CLASSES.confirmOverlay}.active .${CSS_CLASSES.confirmBox} {
@@ -235,7 +247,7 @@ export class VerificationModal {
         gap: 1rem;
       }
 
-      .didit-confirm-actions button {
+      .didit-confirm-actions [data-action="continue"] {
         background: #2563eb;
         color: #fff;
         border: none;
@@ -247,11 +259,16 @@ export class VerificationModal {
         transition: background 0.15s ease;
       }
 
-      .didit-confirm-actions button:hover {
+      .didit-confirm-actions [data-action="continue"]:hover {
         background: #1d4ed8;
       }
 
-      .didit-confirm-actions span {
+      .didit-confirm-actions [data-action="exit"] {
+        background: transparent;
+        border: none;
+        font-family: inherit;
+        font-weight: inherit;
+        line-height: inherit;
         color: #666;
         font-size: 0.875rem;
         cursor: pointer;
@@ -259,8 +276,13 @@ export class VerificationModal {
         transition: color 0.15s ease;
       }
 
-      .didit-confirm-actions span:hover {
+      .didit-confirm-actions [data-action="exit"]:hover {
         color: #1a1a2e;
+      }
+
+      .didit-confirm-actions button:focus-visible {
+        outline: 2px solid #2567ff;
+        outline-offset: 2px;
       }
 
       @media (max-width: 540px) {
@@ -276,6 +298,135 @@ export class VerificationModal {
         }
 
         .${CSS_CLASSES.iframe} {
+          height: 100vh;
+          height: 100dvh;
+          max-height: none;
+        }
+      }
+
+      /*
+       * Once the hosted flow reports its layout (didit:layout), the modal
+       * grows to the handoff card on a computer (960 x 660, at most 90% of
+       * the window) and follows the flow's content height in a narrow
+       * window. Colours are the design system tokens named beside them.
+       */
+      .${CSS_CLASSES.container}.${CSS_CLASSES.flowSized} {
+        --didit-ground: #ffffff; /* site-ground */
+        --didit-heading: #1a1a1a; /* c-heading */
+        --didit-accent: #2567ff; /* c-accent */
+        --didit-hover: rgba(120, 120, 128, 0.08); /* c-hover */
+        --didit-close-fill: rgba(0, 0, 0, 0.06);
+        --didit-drop: rgba(17, 24, 39, 0.35);
+        --didit-ring: rgba(0, 0, 0, 0.06);
+        max-width: 500px;
+        background: var(--didit-ground);
+        box-shadow: 0 30px 80px -24px var(--didit-drop), 0 0 0 1px var(--didit-ring);
+      }
+
+      .${CSS_CLASSES.container}.${CSS_CLASSES.flowSized}[data-didit-theme="dark"] {
+        --didit-ground: #0b0b0d;
+        --didit-heading: #f5f5f7;
+        --didit-accent: #4d8bff;
+        --didit-hover: rgba(255, 255, 255, 0.06);
+        --didit-close-fill: rgba(255, 255, 255, 0.06);
+        --didit-drop: rgba(0, 0, 0, 0.55); /* c-shadow-pop, dark */
+        --didit-ring: rgba(255, 255, 255, 0.08); /* c-shadow-pop, dark */
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.iframe} {
+        height: var(--didit-flow-height);
+        max-height: 90vh;
+        max-height: 90dvh;
+      }
+
+      .${CSS_CLASSES.closeIcon} {
+        display: none;
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeButton} {
+        top: 8px;
+        right: 8px;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: var(--didit-close-fill);
+        color: var(--didit-heading);
+      }
+
+      .${CSS_CLASSES.flowSized}[data-didit-dir="rtl"] .${CSS_CLASSES.closeButton} {
+        right: auto;
+        left: 8px;
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeButton}:hover,
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeButton}:focus {
+        background: var(--didit-close-fill);
+        opacity: 1;
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeButton}:hover {
+        background-image: linear-gradient(var(--didit-hover), var(--didit-hover));
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeButton}:focus-visible {
+        outline: 2px solid var(--didit-accent);
+        outline-offset: 2px;
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeIconLegacy} {
+        display: none;
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeButton} .${CSS_CLASSES.closeIcon} {
+        display: block;
+        stroke: currentColor;
+        stroke-width: 1.75;
+        stroke-linejoin: round;
+      }
+
+      /*
+       * The exit confirmation is sized in rem, so with a large text size it
+       * can be taller than a short flow: it scrolls inside the modal instead
+       * of being clipped, and its width and actions follow a larger text size.
+       * It never grows wider than the modal: a long word wraps instead.
+       */
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.confirmOverlay} {
+        padding: 1rem;
+        overflow-y: auto;
+      }
+
+      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.confirmBox} {
+        min-width: 0;
+        max-width: max(300px, 18.75rem);
+        margin: auto;
+        overflow-wrap: anywhere;
+      }
+
+      .${CSS_CLASSES.flowSized} .didit-confirm-actions {
+        flex-wrap: wrap;
+      }
+
+      @media (min-width: 1024px) {
+        .${CSS_CLASSES.container}.${CSS_CLASSES.flowSized} {
+          width: 90vw;
+          max-width: 960px;
+        }
+
+        .${CSS_CLASSES.flowSized} .${CSS_CLASSES.iframe} {
+          height: 660px;
+        }
+      }
+
+      @media (max-width: 540px) {
+        .${CSS_CLASSES.container}.${CSS_CLASSES.flowSized} {
+          max-width: 100%;
+          box-shadow: none;
+        }
+
+        .${CSS_CLASSES.flowSized} .${CSS_CLASSES.iframe} {
           height: 100vh;
           height: 100dvh;
           max-height: none;
@@ -335,12 +486,16 @@ export class VerificationModal {
       closeBtn.className = CSS_CLASSES.closeButton;
       closeBtn.setAttribute("aria-label", t.ariaLabelClose);
       closeBtn.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 14 14">
+        <svg class="${CSS_CLASSES.closeIconLegacy}" width="14" height="14" viewBox="0 0 14 14">
           <line x1="1" y1="1" x2="13" y2="13" />
           <line x1="13" y1="1" x2="1" y2="13" />
         </svg>
+        <svg class="${CSS_CLASSES.closeIcon}" width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path d="M7 7.03882L17 16.9611" />
+          <path d="M7.03968 17L16.9619 7" />
+        </svg>
       `;
-      closeBtn.addEventListener("click", () => this.handleCloseRequest());
+      closeBtn.addEventListener("click", () => this.handleCloseRequest(closeBtn));
       this.container.appendChild(closeBtn);
     }
 
@@ -353,12 +508,13 @@ export class VerificationModal {
     this.confirmOverlay = document.createElement("div");
     this.confirmOverlay.className = CSS_CLASSES.confirmOverlay;
     this.confirmOverlay.innerHTML = `
-      <div class="${CSS_CLASSES.confirmBox}">
-        <h3>${t.exitTitle}</h3>
-        <p>${t.exitMessage}</p>
+      <div class="${CSS_CLASSES.confirmBox}" role="dialog" aria-modal="true" tabindex="-1"
+        aria-labelledby="${this.modalId}-exit-title" aria-describedby="${this.modalId}-exit-message">
+        <h3 id="${this.modalId}-exit-title">${t.exitTitle}</h3>
+        <p id="${this.modalId}-exit-message">${t.exitMessage}</p>
         <div class="didit-confirm-actions">
           <button type="button" data-action="continue">${t.continueButton}</button>
-          <span data-action="exit">${t.exitButton}</span>
+          <button type="button" data-action="exit">${t.exitButton}</button>
         </div>
       </div>
     `;
@@ -424,6 +580,22 @@ export class VerificationModal {
 
     this.boundHandleKeydown = this.handleKeydown.bind(this);
     document.addEventListener("keydown", this.boundHandleKeydown);
+
+    this.boundHandleFocusChange = () => {
+      if (!this.state.showConfirmation || !this.isTopmost()) return;
+      // An iframe can take focus without a focusin event in its parent document.
+      // Wait until its focus transition finishes before moving focus back.
+      if (this.confirmationFocusTimeout !== null) window.clearTimeout(this.confirmationFocusTimeout);
+      this.confirmationFocusTimeout = window.setTimeout(() => {
+        this.confirmationFocusTimeout = null;
+        if (this.state.showConfirmation && this.isTopmost() && !this.confirmOverlay?.contains(document.activeElement)) {
+          this.focusConfirmation();
+        }
+      }, 0);
+    };
+    document.addEventListener("focusin", this.boundHandleFocusChange);
+    document.addEventListener("focusout", this.boundHandleFocusChange);
+    window.addEventListener("blur", this.boundHandleFocusChange);
   }
 
   private removeEventListeners(): void {
@@ -434,6 +606,12 @@ export class VerificationModal {
     if (this.boundHandleKeydown) {
       document.removeEventListener("keydown", this.boundHandleKeydown);
       this.boundHandleKeydown = null;
+    }
+    if (this.boundHandleFocusChange) {
+      document.removeEventListener("focusin", this.boundHandleFocusChange);
+      document.removeEventListener("focusout", this.boundHandleFocusChange);
+      window.removeEventListener("blur", this.boundHandleFocusChange);
+      this.boundHandleFocusChange = null;
     }
   }
 
@@ -492,7 +670,55 @@ export class VerificationModal {
       return;
     }
 
+    if ((messageData.type as string) === LAYOUT_MESSAGE_TYPE) {
+      const layout = this.readFlowLayout(messageData.data);
+      if (layout) {
+        this.applyFlowLayout(layout);
+      } else {
+        SDKLogger.warn("Ignoring a layout message without a positive contentHeight:", messageData.data);
+      }
+      return;
+    }
+
     this.callbacks.onMessage(messageData);
+  }
+
+  /**
+   * Reads a didit:layout message's data. Without a positive contentHeight the
+   * message is ignored; a missing or unknown colorScheme follows the device,
+   * and a missing or unknown dir follows the verification URL's language.
+   */
+  private readFlowLayout(data: unknown): FlowLayout | null {
+    const fields = typeof data === "object" && data !== null ? (data as Record<string, unknown>) : {};
+    const { contentHeight, colorScheme, dir } = fields;
+    if (typeof contentHeight !== "number" || !Number.isFinite(contentHeight) || contentHeight <= 0) {
+      return null;
+    }
+    const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+    return {
+      contentHeight: Math.ceil(contentHeight),
+      colorScheme: colorScheme === "light" || colorScheme === "dark" ? colorScheme : prefersDark ? "dark" : "light",
+      dir: dir === "ltr" || dir === "rtl" ? dir : isRtlLanguage(this.language) ? "rtl" : "ltr"
+    };
+  }
+
+  /** Embedded mode keeps filling the integrator's host element, whatever the flow reports. */
+  private applyFlowLayout(layout: FlowLayout): void {
+    if (this.embedded || !this.container) return;
+    SDKLogger.log("Flow layout:", layout);
+    this.container.classList.add(CSS_CLASSES.flowSized);
+    this.container.style.setProperty("--didit-flow-height", `${layout.contentHeight}px`);
+    this.container.dataset.diditTheme = layout.colorScheme;
+    this.container.dataset.diditDir = layout.dir;
+  }
+
+  /** Back to the fixed 500 x 700 modal until the newly loaded flow reports its layout. */
+  private resetFlowLayout(): void {
+    if (this.embedded || !this.container) return;
+    this.container.classList.remove(CSS_CLASSES.flowSized);
+    this.container.style.removeProperty("--didit-flow-height");
+    delete this.container.dataset.diditTheme;
+    delete this.container.dataset.diditDir;
   }
 
   private handleKeydown(event: KeyboardEvent): void {
@@ -503,6 +729,19 @@ export class VerificationModal {
     // transaction action modal must not also trigger the exit confirmation
     // of the verification modal underneath it).
     if (!this.isTopmost()) return;
+
+    if (event.key === "Tab" && this.state.showConfirmation) {
+      const buttons = Array.from(this.confirmOverlay?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+      if (buttons.length) {
+        event.preventDefault();
+        const current = buttons.findIndex((button) => button === document.activeElement);
+        const next = event.shiftKey
+          ? (current <= 0 ? buttons.length - 1 : current - 1)
+          : (current + 1) % buttons.length;
+        buttons[next].focus();
+      }
+      return;
+    }
 
     if (event.key === "Escape") {
       event.preventDefault();
@@ -522,23 +761,61 @@ export class VerificationModal {
     }
   }
 
-  private handleCloseRequest(): void {
+  private handleCloseRequest(trigger?: HTMLElement): void {
     if (this.config.showExitConfirmation) {
-      this.showConfirmation();
+      this.showConfirmation(trigger);
     } else {
       this.callbacks.onCloseConfirmed();
     }
   }
 
-  private showConfirmation(): void {
+  private showConfirmation(trigger?: HTMLElement): void {
+    if (!this.confirmOverlay || this.state.showConfirmation) return;
+    const activeElement = document.activeElement;
+    this.confirmationTrigger = trigger ?? (activeElement instanceof HTMLElement && activeElement !== document.body
+      ? activeElement
+      : this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`) ?? this.iframe);
     this.state.showConfirmation = true;
-    this.confirmOverlay?.classList.add("active");
+    this.confirmOverlay.classList.add("active");
+    if (this.iframe) this.iframe.inert = true;
+    const close = this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`);
+    if (close) close.inert = true;
+    // A confirmation scrolled at a large text size opens again at its title.
+    this.confirmOverlay.scrollTop = 0;
+    if (this.isTopmost()) this.focusConfirmation();
     this.callbacks.onClose();
   }
 
-  private hideConfirmation(): void {
+  private focusConfirmation(): void {
+    this.confirmOverlay?.querySelector<HTMLDivElement>(`.${CSS_CLASSES.confirmBox}`)?.focus({ preventScroll: true });
+  }
+
+  private hideConfirmation(restoreFocus = true): void {
+    if (this.confirmationFocusTimeout !== null) {
+      window.clearTimeout(this.confirmationFocusTimeout);
+      this.confirmationFocusTimeout = null;
+    }
+    if (!this.state.showConfirmation) return;
     this.state.showConfirmation = false;
     this.confirmOverlay?.classList.remove("active");
+    if (this.iframe) this.iframe.inert = false;
+    const close = this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`);
+    if (close) close.inert = false;
+    const trigger = this.confirmationTrigger;
+    this.confirmationTrigger = null;
+    if (restoreFocus && this.isTopmost() && trigger?.isConnected) {
+      if (trigger === this.iframe) {
+        // Firefox needs a browser task to reactivate an inert cross-origin frame.
+        this.confirmationFocusTimeout = window.setTimeout(() => {
+          this.confirmationFocusTimeout = null;
+          if (this.state.isOpen && !this.state.showConfirmation && this.isTopmost() && trigger.isConnected) {
+            trigger.focus({ preventScroll: true });
+          }
+        }, 0);
+      } else {
+        trigger.focus({ preventScroll: true });
+      }
+    }
   }
 
   private confirmExit(): void {
@@ -566,9 +843,9 @@ export class VerificationModal {
     SDKLogger.log("Opening with URL:", verificationUrl);
 
     this.state.isLoading = true;
-    this.state.showConfirmation = false;
+    this.hideConfirmation();
     this.loadingEl?.classList.remove("hidden");
-    this.confirmOverlay?.classList.remove("active");
+    this.resetFlowLayout();
 
     if (this.iframe) {
       this.iframe.src = verificationUrl;
@@ -597,11 +874,13 @@ export class VerificationModal {
   close(): void {
     SDKLogger.log("Closing");
 
+    this.hideConfirmation(false);
     this.state.isOpen = false;
     this.state.isLoading = true;
     this.state.showConfirmation = false;
     this.removeFromStack();
     this.removeEventListeners();
+    this.resetFlowLayout();
 
     if (this.iframe) {
       this.iframe.src = "about:blank";

@@ -48,7 +48,15 @@
 
       document.body.dataset.theme = theme;
       document.body.style.setProperty("--host-height", `${params.get("hostHeight") ?? "480"}px`);
+      // A larger browser text size, which the SDK's own rem-sized dialogs follow.
+      if (params.has("textSize")) document.documentElement.style.fontSize = `${params.get("textSize")}%`;
       flowUrl.searchParams.set("theme", theme);
+      // The flow fixture posts didit:layout only when a test asks for it.
+      for (const name of ["layout", "dir"]) {
+        if (params.has(name)) flowUrl.searchParams.set(name, params.get(name));
+      }
+      window.diditEvents = [];
+      DiditSdk.shared.onEvent = (event) => window.diditEvents.push(event.type);
       DiditSdk.shared.startVerification({ url: flowUrl.href, configuration });
     </script>
   </body>

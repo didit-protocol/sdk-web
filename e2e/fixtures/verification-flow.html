@@ -177,6 +177,16 @@
       document.querySelector(".didit-btn").addEventListener("click", () => {
         document.body.dataset.continued = "true";
       });
+
+      // What the hosted flow posts when it lays itself out for the SDK modal.
+      window.postLayout = (data) => {
+        window.parent.postMessage({ type: "didit:layout", data, timestamp: Date.now() }, "*");
+      };
+      if (params.has("layout")) {
+        const dir = params.get("dir") === "rtl" ? "rtl" : "ltr";
+        document.documentElement.dir = dir;
+        window.postLayout({ contentHeight: Number(params.get("layout")), colorScheme: theme, dir });
+      }
     </script>
   </body>
 </html>

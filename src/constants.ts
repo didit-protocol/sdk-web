@@ -12,6 +12,9 @@ export const CSS_CLASSES = {
   content: "didit-modal-content",
   iframe: "didit-verification-iframe",
   closeButton: "didit-close-button",
+  closeIcon: "didit-close-icon",
+  closeIconLegacy: "didit-close-icon-legacy",
+  flowSized: "didit-flow-sized",
   loading: "didit-loading",
   confirmOverlay: "didit-confirm-overlay",
   confirmBox: "didit-confirm-box",
@@ -29,6 +32,28 @@ export const CAMERA_QUERY_PARAMS = {
 } as const;
 
 export const CAMERA_LENSES = ["front", "back"] as const;
+
+/**
+ * The verification-URL query parameters that tell the hosted flow how the SDK
+ * presents it: `sdk_presentation=modal|embedded` and, in a modal,
+ * `sdk_close_button=true|false` (whether the SDK draws its close button over
+ * the flow's top bar).
+ */
+export const PRESENTATION_QUERY_PARAMS = {
+  presentation: "sdk_presentation",
+  closeButton: "sdk_close_button"
+} as const;
+
+/**
+ * Posted by the hosted flow when it lays itself out for the modal, with
+ * `data: { contentHeight, colorScheme?, dir? }`. The modal then grows to the
+ * handoff card on a computer and follows the content height in a narrow
+ * window. Handled by the modal and never delivered to `onEvent`.
+ */
+export const LAYOUT_MESSAGE_TYPE = "didit:layout";
+
+/** Languages the hosted flow lays out right to left. */
+export const RTL_LANGUAGES = ["ar", "fa", "he"];
 
 export const languages  = [
     "ar",

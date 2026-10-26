@@ -8,11 +8,37 @@ describe("buildVerificationUrl", () => {
     SDKLogger.isEnabled = false;
   });
 
-  it("returns the URL untouched when no camera option is configured", () => {
+  it("adds only the presentation parameters when no camera option is configured", () => {
     const url = "https://verify.didit.me/session/token";
-    expect(buildVerificationUrl(url)).toBe(url);
-    expect(buildVerificationUrl(url, {})).toBe(url);
-    expect(buildVerificationUrl(url, { embedded: true })).toBe(url);
+    const modal = "https://verify.didit.me/session/token?sdk_presentation=modal&sdk_close_button=true";
+    expect(buildVerificationUrl(url)).toBe(modal);
+    expect(buildVerificationUrl(url, {})).toBe(modal);
+    expect(buildVerificationUrl(url, { embedded: true })).toBe(
+      "https://verify.didit.me/session/token?sdk_presentation=embedded"
+    );
+  });
+
+  it("tells the flow when the modal draws no close button", () => {
+    const parsed = new URL(buildVerificationUrl("https://verify.didit.me/session/token", { showCloseButton: false }));
+    expect(parsed.searchParams.get("sdk_presentation")).toBe("modal");
+    expect(parsed.searchParams.get("sdk_close_button")).toBe("false");
+  });
+
+  it("sends no close button parameter in embedded mode, which never draws one", () => {
+    const parsed = new URL(
+      buildVerificationUrl("https://verify.didit.me/session/token", { embedded: true, showCloseButton: true })
+    );
+    expect(parsed.searchParams.get("sdk_presentation")).toBe("embedded");
+    expect(parsed.searchParams.has("sdk_close_button")).toBe(false);
+  });
+
+  it("lets the presentation win over a value already on the URL", () => {
+    const parsed = new URL(
+      buildVerificationUrl("https://verify.didit.me/u/abc?sdk_presentation=embedded&sdk_close_button=false#top")
+    );
+    expect(parsed.searchParams.getAll("sdk_presentation")).toEqual(["modal"]);
+    expect(parsed.searchParams.getAll("sdk_close_button")).toEqual(["true"]);
+    expect(parsed.hash).toBe("#top");
   });
 
   it("forwards defaultLivenessCamera as the liveness_camera query parameter", () => {
@@ -81,7 +107,7 @@ describe("buildVerificationUrl", () => {
     const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
     const url = "https://verify.didit.me/session/token";
     const configuration = { defaultLivenessCamera: "rear" } as unknown as DiditSdkConfiguration;
-    expect(buildVerificationUrl(url, configuration)).toBe(url);
+    expect(new URL(buildVerificationUrl(url, configuration)).searchParams.has("liveness_camera")).toBe(false);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0][1])).toContain("defaultLivenessCamera");
   });
