@@ -179,7 +179,7 @@ describe("VerificationModal confirmation focus", () => {
     return { ...created, close, dialog, continueButton, exitButton, iframe: getIframe(created.modal) };
   }
 
-  it("focuses a labelled confirmation and makes Exit a button while the flow is inert", () => {
+  it("focuses a labelled confirmation and removes the covered flow from keyboard navigation", () => {
     const { close, dialog, exitButton, iframe } = openModal();
     // Pointer clicks do not focus buttons in every browser.
     close.click();
@@ -189,7 +189,8 @@ describe("VerificationModal confirmation focus", () => {
     expect(document.getElementById(dialog.getAttribute("aria-labelledby")!)?.textContent).toBe("Exit verification?");
     expect(exitButton.tagName).toBe("BUTTON");
     expect(exitButton.type).toBe("button");
-    expect(iframe.inert).toBe(true);
+    expect(iframe.tabIndex).toBe(-1);
+    expect(iframe.getAttribute("aria-hidden")).toBe("true");
     expect(close.inert).toBe(true);
   });
 
@@ -201,7 +202,8 @@ describe("VerificationModal confirmation focus", () => {
 
     expect(document.activeElement).toBe(close);
     expect(dialog.parentElement?.classList.contains("active")).toBe(false);
-    expect(iframe.inert).toBe(false);
+    expect(iframe.hasAttribute("tabindex")).toBe(false);
+    expect(iframe.hasAttribute("aria-hidden")).toBe(false);
     expect(close.inert).toBe(false);
     expect(onCloseConfirmed).not.toHaveBeenCalled();
   });
@@ -224,14 +226,14 @@ describe("VerificationModal confirmation focus", () => {
     continueButton.click();
 
     expect(document.activeElement).toBe(iframe);
-    expect(iframe.inert).toBe(false);
+    expect(iframe.hasAttribute("tabindex")).toBe(false);
   });
 
   it("clears containment on reopen, close and destroy", () => {
     const { modal, close, iframe, dialog } = openModal();
     close.click();
     modal.open("https://verify.didit.me/session");
-    expect(iframe.inert).toBe(false);
+    expect(iframe.hasAttribute("tabindex")).toBe(false);
     expect(close.inert).toBe(false);
     iframe.focus();
     expect(document.activeElement).toBe(iframe);
@@ -239,7 +241,7 @@ describe("VerificationModal confirmation focus", () => {
     close.click();
     expect(document.activeElement).toBe(dialog);
     modal.close();
-    expect(iframe.inert).toBe(false);
+    expect(iframe.hasAttribute("tabindex")).toBe(false);
     modal.open("https://verify.didit.me/session");
     close.click();
     modal.destroy();

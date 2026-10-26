@@ -473,8 +473,6 @@ test("returns focus to a cross-origin flow after its close request", async ({ pa
   await page.keyboard.press("Space");
   await expect(dialog).toBeHidden();
   await expect(iframe).toBeFocused();
-  // The SDK can restore the cross-origin frame, then normal tabbing resumes inside it.
-  await page.keyboard.press("Tab");
   await expect(flowAction).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(iframe.contentFrame().locator("body")).toHaveAttribute("data-continued", "true");
