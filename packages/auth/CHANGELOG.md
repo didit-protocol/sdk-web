@@ -2,7 +2,10 @@
 
 All notable changes to `@didit-protocol/auth` are documented in this file.
 
-## [Unreleased]
+## [0.1.0] - 2026-10-27
+
+First release of the headless Didit Authentication client for the browser, with
+server-side token verification.
 
 ### Added
 

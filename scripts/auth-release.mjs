@@ -108,7 +108,7 @@ export function readPackages(root) {
 
 function publishedVersion(name, spec) {
   try {
-    return execFileSync("npm", ["view", `${name}@${spec}`, "version"], { encoding: "utf8" }).trim();
+    return execFileSync("npm", ["view", `${name}@${spec}`, "version"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   } catch {
     return "";
   }
