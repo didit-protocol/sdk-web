@@ -2,7 +2,7 @@
 
 All notable changes to `@didit-protocol/signals` will be documented in this file.
 
-## [Unreleased]
+## [0.1.0] - 2026-11-01
 
 ### Added
 - First release: `submitEvent`, `flush` and `configureEvents` send end-user events to `POST /v1/events/batch/` with the `X-Monitoring-Token` header, in batches of 25, every 5 seconds and with `fetch` `keepalive` when the page is hidden or closed.
