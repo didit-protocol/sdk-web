@@ -1,5 +1,5 @@
 import type { DiditSdkConfiguration, VerificationEvent } from "./types";
-import { DEFAULT_CONFIG, CSS_CLASSES, LAYOUT_MESSAGE_TYPE } from "./constants";
+import { DEFAULT_CONFIG, CSS_CLASSES, IFRAME_ALLOW, LAYOUT_MESSAGE_TYPE } from "./constants";
 import { SDKLogger, generateModalId, isAllowedOrigin, detectLanguageFromUrl, isRtlLanguage } from "./utils";
 import { getTranslations } from "./translations";
 
@@ -501,7 +501,7 @@ export class VerificationModal {
 
     this.iframe = document.createElement("iframe");
     this.iframe.className = CSS_CLASSES.iframe;
-    this.iframe.setAttribute("allow", "camera; microphone; fullscreen; autoplay; encrypted-media; geolocation");
+    this.iframe.setAttribute("allow", IFRAME_ALLOW);
     this.iframe.setAttribute("title", t.ariaLabelModal);
     this.iframe.addEventListener("load", () => this.handleIframeLoad());
 
@@ -558,7 +558,7 @@ export class VerificationModal {
 
     this.iframe = document.createElement("iframe");
     this.iframe.className = CSS_CLASSES.iframe;
-    this.iframe.setAttribute("allow", "camera; microphone; fullscreen; autoplay; encrypted-media; geolocation");
+    this.iframe.setAttribute("allow", IFRAME_ALLOW);
     this.iframe.setAttribute("title", getTranslations(this.language).ariaLabelModal);
     this.iframe.addEventListener("load", () => this.handleIframeLoad());
 

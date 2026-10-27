@@ -351,6 +351,38 @@ describe("VerificationModal iframe sizing", () => {
   });
 });
 
+describe("VerificationModal iframe permissions", () => {
+  const openModals: VerificationModal[] = [];
+  const allow = "camera; microphone; fullscreen; autoplay; encrypted-media; geolocation; clipboard-write";
+
+  afterEach(() => {
+    openModals.forEach((modal) => modal.destroy());
+    openModals.length = 0;
+    document.getElementById("host")?.remove();
+    document.body.style.overflow = "";
+  });
+
+  it("lets the modal iframe use the camera and write to the clipboard", () => {
+    const { modal } = createModal();
+    openModals.push(modal);
+    modal.open("https://verify.didit.me/session/a");
+
+    expect(getIframe(modal).getAttribute("allow")).toBe(allow);
+  });
+
+  it("gives the embedded iframe the same permissions", () => {
+    const host = document.createElement("div");
+    host.id = "host";
+    document.body.appendChild(host);
+    const { modal } = createModal({ embedded: true, embeddedContainerId: "host" });
+    openModals.push(modal);
+    modal.open("https://verify.didit.me/session/a");
+
+    expect(host.querySelector(`.${CSS_CLASSES.embedded}`)).not.toBeNull();
+    expect(getIframe(modal).getAttribute("allow")).toBe(allow);
+  });
+});
+
 describe("VerificationModal flow layout", () => {
   const openModals: VerificationModal[] = [];
 
