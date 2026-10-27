@@ -23,6 +23,13 @@ export const CSS_CLASSES = {
 
 export const SDK_VERSION = "__SDK_PACKAGE_VERSION__";
 
+/**
+ * The permissions the verification iframe gets, in a modal and embedded:
+ * camera and microphone for capture, and clipboard-write for the flow's copy
+ * buttons.
+ */
+export const IFRAME_ALLOW = "camera; microphone; fullscreen; autoplay; encrypted-media; geolocation; clipboard-write";
+
 /** The verification-URL query parameter each camera option is forwarded as. */
 export const CAMERA_QUERY_PARAMS = {
   defaultDocumentCamera: "document_camera",
