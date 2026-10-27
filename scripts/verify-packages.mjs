@@ -6,6 +6,39 @@ import { join, resolve } from "node:path";
 
 const root = process.cwd();
 const destination = await mkdtemp(join(tmpdir(), "signals-package-"));
+// Exactly what npm publishes, so a missing or stray build file fails before a release tag does.
+const PUBLISHED_FILES = {
+  "@didit-protocol/sdk-web": [
+    "LICENSE",
+    "README.md",
+    "dist/didit-sdk.cjs",
+    "dist/didit-sdk.cjs.js",
+    "dist/didit-sdk.cjs.js.map",
+    "dist/didit-sdk.cjs.map",
+    "dist/didit-sdk.esm.js",
+    "dist/didit-sdk.esm.js.map",
+    "dist/didit-sdk.module.js",
+    "dist/didit-sdk.module.js.map",
+    "dist/didit-sdk.umd.js",
+    "dist/didit-sdk.umd.js.map",
+    "dist/didit-sdk.umd.min.js",
+    "dist/didit-sdk.umd.min.js.map",
+    "dist/index.d.ts",
+    "package.json",
+  ],
+  "@didit-protocol/signals": [
+    "LICENSE",
+    "README.md",
+    "dist/didit-signals.cjs",
+    "dist/didit-signals.cjs.map",
+    "dist/didit-signals.esm.js",
+    "dist/didit-signals.esm.js.map",
+    "dist/didit-signals.umd.min.js",
+    "dist/didit-signals.umd.min.js.map",
+    "dist/index.d.ts",
+    "package.json",
+  ],
+};
 
 function run(command, args, cwd = destination) {
   const result = spawnSync(command, args, { cwd, encoding: "utf8" });
@@ -19,6 +52,9 @@ function pack(cwd) {
   const [archive] = JSON.parse(run("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", destination], cwd));
 
   assert.ok(archive.files.every(({ path }) => !/recovery|__tests__|\.env|proof/.test(path)));
+  if (PUBLISHED_FILES[archive.name]) {
+    assert.deepEqual(archive.files.map(({ path }) => path).sort(), PUBLISHED_FILES[archive.name], `${archive.name} packs unexpected files`);
+  }
 
   return join(destination, archive.filename);
 }

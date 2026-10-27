@@ -2,7 +2,7 @@
 
 All notable changes to `@didit-protocol/sdk-web` will be documented in this file.
 
-## [Unreleased]
+## [0.5.0] - 2026-11-01
 
 ### Added
 - `DiditSdk.shared.submitEvent()` queues end-user events (sign-up, login, failed login, logout, password reset, MFA, device change) for Didit's event monitoring with a monitoring token minted by your backend. Events are batched to `POST /v1/events/batch/` with the `X-Monitoring-Token` header and the device fingerprint, and sent when 25 are waiting, every 5 seconds and when the page is hidden or closed.
@@ -13,6 +13,10 @@ All notable changes to `@didit-protocol/sdk-web` will be documented in this file
 ### Changed
 - The device fingerprint moved into the new `@didit-protocol/signals` package, now a dependency. Transaction submissions send the same fingerprint as before.
 - npm ES module and CommonJS imports share `@didit-protocol/signals`. Existing standalone `dist/didit-sdk.esm.js` and script-tag URLs remain self-contained. The CommonJS package entry uses a `.cjs` extension for Node compatibility.
+- The verification iframe, in a modal and embedded, also allows `clipboard-write`, so the hosted flow's copy buttons work inside the SDK.
+
+### Fixed
+- The exit confirmation is announced as a dialog, and its Exit control is a button that works from the keyboard. Focus stays inside the confirmation while it is open and goes back to where it was when the user continues. In the redesigned flow's modal, a confirmation taller than the modal at a large text size scrolls, wraps long words and opens again at its title.
 
 ## [0.4.0] - 2026-09-19
 
