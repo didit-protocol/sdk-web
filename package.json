@@ -1,0 +1,85 @@
+{
+  "name": "@didit-protocol/sdk-web",
+  "version": "0.5.0",
+  "description": "Didit Identity Verification SDK for Web Applications",
+  "main": "dist/didit-sdk.cjs",
+  "module": "dist/didit-sdk.module.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/didit-sdk.module.js",
+      "require": "./dist/didit-sdk.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @didit-protocol/signals && rollup -c",
+    "build:watch": "rollup -c -w",
+    "dev": "node examples/server.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:build-version": "npm run build && node scripts/verify-build-version.mjs",
+    "test:e2e": "npm run build && playwright test --project=chromium --project=firefox --project=webkit",
+    "test:visual": "npm run build && playwright test --project=chrome-visual",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p packages/signals",
+    "clean": "rm -rf dist packages/signals/dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "test:size": "npm run test:size -w @didit-protocol/signals",
+    "test:packages": "npm run build -w @didit-protocol/auth && node scripts/verify-packages.mjs",
+    "build:auth": "npm run build -w @didit-protocol/signals -w @didit-protocol/auth -w @didit-protocol/auth-react -w @didit-protocol/auth-nextjs",
+    "test:auth": "npm run test -w @didit-protocol/auth-react -w @didit-protocol/auth-nextjs",
+    "typecheck:auth": "npm run typecheck -w @didit-protocol/auth-react -w @didit-protocol/auth-nextjs",
+    "lint": "eslint packages/auth-react/src packages/auth-nextjs/src examples/nextjs examples/react examples/shared"
+  },
+  "keywords": [
+    "didit",
+    "kyc",
+    "identity-verification",
+    "verification",
+    "iframe",
+    "sdk"
+  ],
+  "author": "Didit",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/didit-protocol/sdk-web.git"
+  },
+  "homepage": "https://docs.didit.me",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "dependencies": {
+    "@didit-protocol/signals": "^0.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.0",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^1.0.0",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "@types/jest": "^29.5.12",
+    "eslint": "^9.39.5",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "rollup": "^4.59.0",
+    "rollup-plugin-dts": "^6.1.0",
+    "terser": "^5.31.0",
+    "ts-jest": "^29.1.2",
+    "tslib": "^2.6.2",
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^8.71.1",
+    "vite": "^7.3.7"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
