@@ -1,0 +1,127 @@
+{
+  "scenario": "mfa-enrollment-required",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "first": "mfa_enrollment_required",
+  "code": "473088",
+  "result": "signed_in",
+  "recoveryCodes": 10,
+  "events": [],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "zWaaQGyqKae0xAamgHyMXQ",
+          "code_challenge": "BjdGjR7nPc4Oq-ZHFlahx6JlO_emJOtcPAQflfv0zbo",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "AKYWgZ-QpCTAq77x-EJpCo6CRTEBIGfMOUz5SaRXd8o",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "AKYWgZ-QpCTAq77x-EJpCo6CRTEBIGfMOUz5SaRXd8o",
+          "email": "setup-person@example.com",
+          "password": "Correct-horse-battery-91"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "challenge": "qnixxzhy3X0AJhKkXSmXrRWaDA_54RoXZxE7hLh5gf4",
+          "uri": "otpauth://totp/Local%20Test%20App:setup-person%40example.com?secret=XLR6MWJP2CPGIB6LKGR6SXT2M5C46HZE&issuer=Local%20Test%20App",
+          "mfa_enrollment_required": true
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "mfa/setup/",
+        "body": {
+          "challenge": "qnixxzhy3X0AJhKkXSmXrRWaDA_54RoXZxE7hLh5gf4",
+          "code": "473088"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "code": "b-cSA9Vc4sLM-7XukIm3Es7aS3_UhJqDfIFV12rpm5Y",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "zWaaQGyqKae0xAamgHyMXQ",
+          "recovery_codes": [
+            "tIPGeNdtwGLGwYflCkGcld9G",
+            "kqBmAHAtSZvFu1EOHiO3jKGi",
+            "V53ligIAKISBHi5XeJ7oF1S2",
+            "GMW1QaM1fnaBuwypH9sHVsbP",
+            "cneCO7C2ciersVmuAC1Lhznz",
+            "St_HhfsCroaMuF9Wn0y2vSpb",
+            "qT04u0JYhNPAWE-j-_6o2kIL",
+            "_ZxjRH1RTM-uYMCrQUBqw70n",
+            "x62WtshjDOEUb6fPMNLZtmQ6",
+            "oz9CtoqVDTTQLqU9OTU8p1-I"
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "b-cSA9Vc4sLM-7XukIm3Es7aS3_UhJqDfIFV12rpm5Y",
+          "code_verifier": "tXYFvWFJK1-iwgw8NrjINISBsqOqJ9Hp0DbJjEfvZWQ",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "rZcm0ZM0S1IAthOOUzN7i2S7DAv0xJgYCLnMMgBYPag",
+          "refresh_token": "V9Kk_qChNKhUDz-uOuCAxY-HN0woTKKHm0gn_VqwCMdIBBHkjPgbnuNoEeREYFn2",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "1853345a-b9e2-407b-98af-e5de6108cfe8"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer rZcm0ZM0S1IAthOOUzN7i2S7DAv0xJgYCLnMMgBYPag"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "d61ee5f4-2bcd-481c-a562-acb61bde82a0",
+          "sid": "1853345a-b9e2-407b-98af-e5de6108cfe8",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": true,
+          "email": "setup-person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T08:14:25.862376Z",
+          "organizations": []
+        }
+      }
+    }
+  ]
+}
