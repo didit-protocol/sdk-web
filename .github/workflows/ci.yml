@@ -26,6 +26,8 @@ jobs:
       - run: npm run test:build-version
       - run: npm run test:size
       - run: npm run test:packages
+      - run: npm pack --dry-run
+      - run: npm pack --dry-run -w @didit-protocol/signals
       - run: npm run test:e2e
       - run: npm run lint
       - run: npm run build:auth
