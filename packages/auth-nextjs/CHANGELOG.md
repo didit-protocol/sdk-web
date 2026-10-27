@@ -1,6 +1,11 @@
 # Changelog
 
-## [0.1.0] - Unreleased
+All notable changes to `@didit-protocol/auth-nextjs` are documented in this file.
+
+## [0.1.0] - 2026-10-27
+
+First release of Didit Authentication for the Next.js App Router, with
+session cookies the browser cannot read.
 
 ### Added
 - `diditAuthProxy()` for `proxy.ts` (Next.js 16) or `middleware.ts`: hosted sign-in with PKCE, the callback, sign-out, httpOnly session cookies, refresh and protected paths.

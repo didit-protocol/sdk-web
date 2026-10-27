@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -63,9 +64,15 @@ try {
   const signals = pack(join(root, "packages/signals"));
   const sdk = pack(root);
   const auth = pack(join(root, "packages/auth"));
+  const authReact = pack(join(root, "packages/auth-react"));
+  const authNextjs = pack(join(root, "packages/auth-nextjs"));
 
   await writeFile(join(destination, "package.json"), '{"private":true,"type":"module"}');
-  run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", signals, sdk, auth]);
+  // npm also installs the peers (react, next), so `npm ls` fails if any dependency would not resolve.
+  run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", signals, sdk, auth, authReact, authNextjs]);
+  run("npm", ["ls", "--all"]);
+  // auth-nextjs pins the auth and auth-react of its release: the packed copies, not a second install.
+  assert.ok(!existsSync(join(destination, "node_modules/@didit-protocol/auth-nextjs/node_modules")), "auth-nextjs installs its own auth or auth-react");
   run(process.execPath, ["--input-type=module", "-e", `
     import assert from 'node:assert/strict';
     import sdk, * as web from '@didit-protocol/sdk-web';

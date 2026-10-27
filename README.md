@@ -579,6 +579,18 @@ The `codeSize` field in `code_sent` indicates the OTP code length (e.g., 4 or 6 
 - Edge 79+
 
 
+## Releasing
+
+Each release starts from a tag pushed to a commit on `master`. The workflow checks that the tag matches the package versions and that each package's `CHANGELOG.md` has a section for that version, then creates the GitHub release and publishes to npm with trusted publishing.
+
+| Tag | Publishes | Workflow |
+| --- | --- | --- |
+| `signals-v<version>` | `@didit-protocol/signals` | `release-signals.yml` |
+| `auth-v<version>` | `@didit-protocol/auth`, then `@didit-protocol/auth-react`, then `@didit-protocol/auth-nextjs`, all at the same version | `release-auth.yml` |
+| `v<version>` | `@didit-protocol/sdk-web` | `release.yml` |
+
+When versions depend on each other, release in this order and wait for each to reach npm: signals, then auth, then sdk-web. The auth and sdk-web workflows stop before publishing if the `@didit-protocol/signals` version they depend on is not on npm yet. `@didit-protocol/auth-nextjs` pins `@didit-protocol/auth` and `@didit-protocol/auth-react` at exactly its own version, so bump all three together; `npm run test:release` checks that before a tag does.
+
 ## License
 
 Copyright © 2026 Didit. All rights reserved.
