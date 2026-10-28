@@ -25,10 +25,12 @@ export const SDK_VERSION = "__SDK_PACKAGE_VERSION__";
 
 /**
  * The permissions the verification iframe gets, in a modal and embedded:
- * camera and microphone for capture, and clipboard-write for the flow's copy
- * buttons.
+ * camera and microphone for capture, clipboard-write for the flow's copy
+ * buttons, and digital-credentials-get so the flow can ask a digital ID wallet
+ * (Google Wallet) through the W3C Digital Credentials API from inside the iframe.
  */
-export const IFRAME_ALLOW = "camera; microphone; fullscreen; autoplay; encrypted-media; geolocation; clipboard-write";
+export const IFRAME_ALLOW =
+  "camera; microphone; fullscreen; autoplay; encrypted-media; geolocation; clipboard-write; digital-credentials-get";
 
 /** The verification-URL query parameter each camera option is forwarded as. */
 export const CAMERA_QUERY_PARAMS = {
