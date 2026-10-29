@@ -353,7 +353,8 @@ describe("VerificationModal iframe sizing", () => {
 
 describe("VerificationModal iframe permissions", () => {
   const openModals: VerificationModal[] = [];
-  const allow = "camera; microphone; fullscreen; autoplay; encrypted-media; geolocation; clipboard-write";
+  const allow =
+    "camera; microphone; fullscreen; autoplay; encrypted-media; geolocation; clipboard-write; digital-credentials-get";
 
   afterEach(() => {
     openModals.forEach((modal) => modal.destroy());
@@ -362,7 +363,7 @@ describe("VerificationModal iframe permissions", () => {
     document.body.style.overflow = "";
   });
 
-  it("lets the modal iframe use the camera and write to the clipboard", () => {
+  it("lets the modal iframe use the camera, write to the clipboard and ask a digital ID wallet", () => {
     const { modal } = createModal();
     openModals.push(modal);
     modal.open("https://verify.didit.me/session/a");
