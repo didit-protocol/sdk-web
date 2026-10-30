@@ -221,6 +221,7 @@ test.describe("web SDK permitted origins and handoff", () => {
       "http://127.0.0.1:4173/e2e/fixtures/sdk-session.html?flow=http://localhost:4173/e2e/fixtures/verification-flow.html"
     );
     const frame = page.frames().find((candidate) => candidate.url().startsWith("http://localhost:4173/"));
+    console.log("FRAMES", JSON.stringify(page.frames().map((candidate) => candidate.url())));
     expect(frame).toBeTruthy();
     await expect(page.locator(FRAME).contentFrame().getByRole("heading", { name: "Verify your identity" })).toBeVisible();
 
