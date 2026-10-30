@@ -46,7 +46,6 @@ describe("DiditSdk verification lifecycle", () => {
     document.getElementById("didit-sdk-styles")?.remove();
     document.getElementById("embedded-host")?.remove();
     document.body.style.overflow = "";
-    window.dispatchEvent(new Event("blur"));
   });
 
   it("reports completed to the integrator and keeps the modal open", async () => {
