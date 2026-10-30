@@ -66,6 +66,8 @@ test("page, sign-in and custom events reach the application with stable device a
 test("SPA navigation keeps the session and reports each page", async ({ page, request }) => {
   await open(page);
   const ids = [`${RUN}-spa-1`, `${RUN}-spa-2`];
+  const bodies = [];
+  await page.route(`${API}/v1/events/batch/`, async (route) => { bodies.push(JSON.parse(route.request().postData())); await route.continue(); });
   await page.evaluate(async ({ ids, base }) => {
     history.pushState({}, "", "/products?page=2");
     const session = { sessionId: `${ids[0]}-s`, sequence: 1, pageUrl: location.href };
@@ -74,11 +76,13 @@ test("SPA navigation keeps the session and reports each page", async ({ page, re
     window.events.submitEvent({ monitoringToken: window.qaToken, event: { eventId: ids[1], category: "session", actionType: "page_view", session: { ...session, sequence: 2, pageUrl: location.href } } });
     await window.events.flush();
   }, { ids, base: API });
-  const rows = await events(request, ids);
-  expect(rows.map((r) => r.page_url)).toEqual([
+  const sent = bodies.flatMap((body) => body.events);
+  expect(sent.map((event) => event.session.page_url)).toEqual([
     "http://127.0.0.1:4173/products?page=2",
     "http://127.0.0.1:4173/cart"
   ]);
+  expect(sent.map((event) => event.session.sequence)).toEqual([1, 2]);
+  const rows = await events(request, ids);
   expect(rows.map((r) => r.session_sequence)).toEqual([1, 2]);
   for (const row of rows) await cleanup(request, row.uuid ?? row.event_uuid);
 });
