@@ -257,6 +257,10 @@ export class DiditSdk {
    */
   public close(): void {
     SDKLogger.log("Closing verification programmatically");
+    // Nothing on screen means nothing to dismiss: a second close() (or one
+    // called defensively by the integrator before launching) must not deliver
+    // another cancelled result for a session that already ended.
+    if (!this._modal?.isOpen() && !this._actionModal?.isOpen()) return;
     this._actionModalSettle?.("aborted");
     this.handleModalCloseConfirmed();
   }
