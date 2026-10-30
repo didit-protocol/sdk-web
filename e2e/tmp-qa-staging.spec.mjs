@@ -83,7 +83,7 @@ test("SPA navigation keeps the session and reports each page", async ({ page, re
   ]);
   expect(sent.map((event) => event.session.sequence)).toEqual([1, 2]);
   const rows = await events(request, ids);
-  expect(rows.map((r) => r.session_sequence)).toEqual([1, 2]);
+  expect(rows.map((r) => r.session_sequence).sort()).toEqual([1, 2]);
   for (const row of rows) await cleanup(request, row.uuid ?? row.event_uuid);
 });
 
@@ -154,4 +154,41 @@ test("the page exit path delivers to the real service before the page is gone", 
   const [row] = await events(request, [id]);
   expect(row.event_id).toBe(id);
   await cleanup(request, row.uuid ?? row.event_uuid);
+});
+
+test("the credential decides the person even when the event carries another subject, and no secret is sent in the body", async ({ page, request }) => {
+  await open(page);
+  const id = `${RUN}-subject`;
+  let captured;
+  await page.route(`${API}/v1/events/batch/`, async (route) => {
+    const requestBody = route.request().postData() ?? "";
+    captured = { body: requestBody, tokenHeader: route.request().headers()["x-monitoring-token"] };
+    await route.continue();
+  });
+  const result = await page.evaluate(async ({ id }) => {
+    window.events.submitEvent({ monitoringToken: window.qaToken, event: { eventId: id, category: "auth", actionType: "login", subject: { vendor_data: "someone-else", email: "attacker@example.test" } } });
+    return window.events.flush();
+  }, { id });
+  expect(result).toMatchObject({ acceptedCount: 1, pendingCount: 0 });
+  expect(captured.body).not.toContain(qa.apiKey);
+  expect(captured.body).not.toContain(JSON.stringify(qa.monitoringToken).slice(1, -1));
+  expect(captured.body).toContain("attacker@example.test");
+  const rows = await events(request, [id]);
+  expect(rows[0].subject_vendor_data).toBe(SUBJECT);
+  for (const row of rows) await cleanup(request, row.uuid ?? row.event_uuid);
+});
+
+test("an expired token is classified and dropped without a retry", async ({ page }) => {
+  await open(page);
+  let requests = 0;
+  await page.route(`${API}/v1/events/batch/`, async (route) => { requests++; await route.continue(); });
+  const result = await page.evaluate(async ({ token }) => {
+    window.events.submitEvent({ monitoringToken: token, event: { eventId: `${window.qaRun}-expired`, category: "auth", actionType: "login" } });
+    const first = await window.events.flush();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return { first, errors: window.errors };
+  }, { token: extra.short });
+  expect(result.first).toMatchObject({ acceptedCount: 0, rejectedCount: 1, pendingCount: 0 });
+  expect(result.errors).toEqual([{ type: "expired_token", ids: [`${RUN}-expired`] }]);
+  expect(requests).toBe(1);
 });

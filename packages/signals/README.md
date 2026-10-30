@@ -74,7 +74,7 @@ The person an event belongs to always comes from the token: Didit overwrites any
 | `validation` | The event failed validation; `error.errors` has Didit's per-field details |
 | `dropped` | The queue was full and the event was dropped before it was sent |
 
-`submitEvent` itself throws a `DiditEventError` only for a missing token (`invalid_token`), a missing `category` or `actionType` (`validation`), or an environment without `fetch` (`network`).
+`submitEvent` itself throws a `DiditEventError` only for a missing token (`invalid_token`), a missing `category` or `actionType` or an unusable `occurredAt` Date (`validation`), or an environment without `fetch` (`network`).
 
 ## API
 

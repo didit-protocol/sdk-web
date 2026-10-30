@@ -111,12 +111,6 @@ function newEventId(): string {
     : randomBase64Url(16);
 }
 
-function isoTime(value: DiditEvent["occurredAt"]): string {
-  const time = value ? new Date(value) : new Date();
-  // An unusable date must not crash the caller's sign-in flow; send it as now.
-  return (Number.isNaN(time.getTime()) ? new Date() : time).toISOString();
-}
-
 /** Maps the SDK-friendly camelCase event onto the snake_case wire contract of /v1/events/. */
 export function buildEventRequestBody(event: DiditEvent, eventId: string): Record<string, unknown> {
   const { session, transactionContext, subject, occurredAt } = event;
@@ -124,7 +118,7 @@ export function buildEventRequestBody(event: DiditEvent, eventId: string): Recor
     event_id: eventId,
     event_category: event.category,
     action_type: event.actionType,
-    occurred_at: isoTime(occurredAt),
+    occurred_at: occurredAt instanceof Date ? occurredAt.toISOString() : occurredAt ?? new Date().toISOString(),
     time_zone: event.timeZone ?? browserTimeZone(),
     subject:
       subject &&
@@ -439,6 +433,9 @@ export function submitEvent(options: SubmitEventOptions): string {
   }
   if (!isRecord(event) || !event.category || typeof event.actionType !== "string" || !event.actionType.trim()) {
     throw new DiditEventError("validation", "event.category and event.actionType are required.");
+  }
+  if (event.occurredAt instanceof Date && Number.isNaN(event.occurredAt.getTime())) {
+    throw new DiditEventError("validation", "event.occurredAt must be a valid date.");
   }
   if (typeof fetch !== "function") {
     throw new DiditEventError("network", "fetch is not available in this environment.");
