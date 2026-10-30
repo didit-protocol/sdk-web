@@ -109,12 +109,8 @@ export class DiditSdk {
       this._modal.destroy();
       this._modal = null;
     }
-    this._modal = new VerificationModal(config, {
-      onClose: () => this.handleModalClose(),
-      onCloseConfirmed: () => this.handleModalCloseConfirmed(),
-      onMessage: (event) => this.handleVerificationEvent(event),
-      onIframeLoad: () => this.handleIframeLoad()
-    });
+    // A new launch is not in an error state any more, whatever the last one did.
+    this._errorMessage = undefined;
 
     try {
       const { url } = options;
@@ -122,6 +118,14 @@ export class DiditSdk {
       if (!url || typeof url !== "string") {
         throw new Error("Invalid options: url is required");
       }
+      assertEmbeddedHostExists(config);
+
+      this._modal = new VerificationModal(config, {
+        onClose: () => this.handleModalClose(),
+        onCloseConfirmed: () => this.handleModalCloseConfirmed(),
+        onMessage: (event) => this.handleVerificationEvent(event),
+        onIframeLoad: () => this.handleIframeLoad()
+      });
 
       this._url = buildVerificationUrl(url, config);
       this.setState("loading");
