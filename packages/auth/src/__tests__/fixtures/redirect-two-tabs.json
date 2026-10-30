@@ -1,0 +1,132 @@
+{
+  "scenario": "redirect-two-tabs",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "signIns": [
+    {
+      "email": "person@example.com",
+      "signInUrl": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db/sign-in/?redirect_uri=http%3A%2F%2Flocalhost%3A4174%2Fe2e%2Ffixtures%2Fapp.html&state=qTzX7S0qijZ6NFsRK2gPDg&code_challenge=4DT8q8MxZUtmozWo6FOhvWIAGgnAtOaBTF-3Bds4njA&code_challenge_method=S256&language=en",
+      "callbackUrl": "http://localhost:4174/e2e/fixtures/app.html?code=MN_hj-aV4rhckTwe5vUD5NR0zfoMMF2zo62Xe9EgINk&state=qTzX7S0qijZ6NFsRK2gPDg",
+      "sessionId": "d0d403b4-80b5-48c6-a07f-ed3f7866b238"
+    },
+    {
+      "email": "second-person@example.com",
+      "signInUrl": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db/sign-in/?redirect_uri=http%3A%2F%2Flocalhost%3A4174%2Fe2e%2Ffixtures%2Fapp.html&state=GHvKCQkRQP9ylsGUOkcTXg&code_challenge=ESthZemkWB6JClDWR0AWAkTZ5RoFL2KXZU1Jza-6RsI&code_challenge_method=S256&language=en",
+      "callbackUrl": "http://localhost:4174/e2e/fixtures/app.html?code=QMTR9tCj_7R6t8UmUXAjk7VUolyb9Yyz41LgNpIPUGI&state=GHvKCQkRQP9ylsGUOkcTXg",
+      "sessionId": "fd61a024-33e1-4bcc-8638-ff4eb0ed2a39"
+    }
+  ],
+  "completionOrder": [
+    0,
+    1
+  ],
+  "replacedSessionRevoked": true,
+  "keptSessionActive": true,
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "MN_hj-aV4rhckTwe5vUD5NR0zfoMMF2zo62Xe9EgINk",
+          "code_verifier": "BKXUvtUUGn53k5V-xMl8eeWyWwF8OC2t0GoGgAHQrpI",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "wiPwkAzcHrhMVyU8DQ0GFXVFEjcCzfOmf0cTCq1w3vs",
+          "refresh_token": "v6ulyS29E2mWHKbHILWbjLhZTwaK1zWcZFizXpKwD9S7EA8Wgo7wBMk5qjGjV2Ba",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "d0d403b4-80b5-48c6-a07f-ed3f7866b238"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer wiPwkAzcHrhMVyU8DQ0GFXVFEjcCzfOmf0cTCq1w3vs"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "2be90252-f374-4c18-a12a-aa96f1c37b43",
+          "sid": "d0d403b4-80b5-48c6-a07f-ed3f7866b238",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T11:59:24.031375Z",
+          "organizations": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "QMTR9tCj_7R6t8UmUXAjk7VUolyb9Yyz41LgNpIPUGI",
+          "code_verifier": "Frjuu-IIU7TbeHLHMKDIJG4SBXUavm-WKfGcIGyzKD0",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "TR0otEFDrlKK3uZPeFEmcWbO8BmiDxv0xuWpaxrsUTk",
+          "refresh_token": "cS876Rxh55jtnwim63pXy_NW8TPYExWWZEil51zNSNLGsXej9Yu56GxVfPPCXXqR",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "fd61a024-33e1-4bcc-8638-ff4eb0ed2a39"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer TR0otEFDrlKK3uZPeFEmcWbO8BmiDxv0xuWpaxrsUTk"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "7f851c4f-a2a3-4cbb-b926-75b77aba0550",
+          "sid": "fd61a024-33e1-4bcc-8638-ff4eb0ed2a39",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "second-person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T11:59:24.130815Z",
+          "organizations": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "path": "session/",
+        "authorization": "Bearer wiPwkAzcHrhMVyU8DQ0GFXVFEjcCzfOmf0cTCq1w3vs"
+      },
+      "response": {
+        "status": 204,
+        "body": null
+      }
+    }
+  ]
+}
