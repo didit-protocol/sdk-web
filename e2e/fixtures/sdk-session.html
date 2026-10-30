@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Web SDK integration fixture</title>
+    <link rel="stylesheet" href="colors_and_type.css">
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+        background: var(--soft);
+      }
+
+      #embedded-host {
+        width: min(500px, 100%);
+        height: 480px;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="embedded-host"></div>
+    <script type="module">
+      import { DiditSdk } from "../../dist/didit-sdk.esm.js";
+
+      // Everything the integrator's page can observe, in order, so a test can
+      // assert the callbacks a real customer would receive.
+      window.records = { events: [], states: [], results: [] };
+      window.bootErrors = [];
+
+      const parameters = new URLSearchParams(window.location.search);
+      const embedded = parameters.get("embedded") === "true";
+      const flow = new URL(parameters.get("flow") ?? "./verification-flow.html", window.location.href);
+
+      DiditSdk.shared.onEvent = (event) => window.records.events.push(event);
+      DiditSdk.shared.onStateChange = (state, error) =>
+        window.records.states.push({ state, error: error ?? null });
+      DiditSdk.shared.onComplete = (result) => window.records.results.push(result);
+
+      function configuration() {
+        return embedded
+          ? { embedded: true, embeddedContainerId: "embedded-host" }
+          : { closeModalOnComplete: parameters.get("closeModalOnComplete") === "true" };
+      }
+
+      window.startSdk = (url = flow.href) => DiditSdk.shared.startVerification({ url, configuration: configuration() });
+      window.closeSdk = () => DiditSdk.shared.close();
+
+      try {
+        window.startSdk();
+      } catch (error) {
+        window.bootErrors.push(String(error));
+      }
+    </script>
+  </body>
+</html>
