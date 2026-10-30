@@ -8,7 +8,7 @@ const HOST = "#embedded-host";
 // A flow stand-in served at a Didit-hosted address (and, for a handoff, at
 // another Didit subdomain or a foreign origin) without touching the real one.
 function flowPage() {
-  return `<!doctype html><html><body><main>hosted flow</main></body></html>`;
+  return `<!doctype html><html><body><main><h1>Verify your identity</h1></main></body></html>`;
 }
 
 async function openSdk(page, query = "") {
@@ -95,7 +95,7 @@ test.describe("web SDK integration", () => {
     await expect.poll(async () => (await records(page)).results).toEqual([
       { type: "cancelled", session: { sessionId: "ses_3", status: "Pending" } }
     ]);
-    await expect.poll(async () => (await records(page)).states).toContain("idle");
+    await expect.poll(async () => states(page)).toContain("idle");
   });
 
   test("keeps the attempt open on a recoverable error and only reports it as an event", async ({ page }) => {
@@ -133,7 +133,7 @@ test.describe("web SDK integration", () => {
     await postFromFrame(iframe, { type: "didit:completed", data: { sessionId: "ses_c", status: "Approved" }, timestamp: 1 });
 
     await expect(page.locator(OVERLAY)).not.toHaveClass(/active/);
-    await expect.poll(async () => (await records(page)).states).toEqual(["loading", "idle"]);
+    await expect.poll(async () => states(page)).toEqual(["loading", "idle"]);
 
     await page.evaluate(() => window.startSdk());
     await expect(page.locator(OVERLAY)).toHaveClass(/active/);
@@ -167,15 +167,20 @@ test.describe("web SDK integration", () => {
       window.postMessage({ type: "didit:close_request" }, "*");
     });
     // A foreign iframe on another origin is not the verification frame either.
+    await page.route("http://app.example.test/**", (route) =>
+      route.fulfill({ contentType: "text/html", body: flowPage() })
+    );
     await page.evaluate(() => {
       const sibling = document.createElement("iframe");
       sibling.id = "foreign-frame";
-      sibling.src = "http://localhost:4173/e2e/fixtures/host.html";
+      sibling.src = "http://app.example.test/foreign";
       document.body.appendChild(sibling);
     });
-    const sibling = page.locator("#foreign-frame");
-    await expect(sibling.contentFrame().getByRole("heading", { name: "Verify your identity" })).toBeVisible();
-    await sibling.contentFrame().locator("body").evaluate(() => {
+    await expect
+      .poll(() => page.frames().some((candidate) => candidate.url().startsWith("http://app.example.test/")))
+      .toBe(true);
+    const sibling = page.frames().find((candidate) => candidate.url().startsWith("http://app.example.test/"));
+    await sibling.locator("body").evaluate(() => {
       window.parent.postMessage({ type: "didit:completed", data: { status: "Approved" } }, "*");
       window.parent.postMessage({ type: "didit:close_request" }, "*");
     });
