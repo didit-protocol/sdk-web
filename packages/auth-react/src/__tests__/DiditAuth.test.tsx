@@ -111,6 +111,16 @@ describe("createCoreAuthClient", () => {
     expect(core.protection.verify).toHaveBeenCalledWith({ code: "123456" });
   });
 
+  it("keeps the session when a token refresh has none cached yet", async () => {
+    const client = createCoreAuthClient({ publishableKey: "pk_test_example" });
+    await client.load();
+    const listener = core.onAuthStateChange.mock.calls[0][0] as (event: string, value: unknown) => void;
+
+    listener("SIGNED_IN", coreSession);
+    listener("TOKEN_REFRESHED", null);
+    expect(client.getSnapshot()).toEqual({ status: "signed-in", session });
+  });
+
   it("follows the core's auth state changes", async () => {
     const client = createCoreAuthClient({ publishableKey: "pk_test_example" });
     await client.load();

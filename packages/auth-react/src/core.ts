@@ -65,8 +65,13 @@ export function createCoreAuthClient(options: CoreClientOptions): AuthClient {
   function getCore() {
     if (core) return core;
     core = createDiditAuth(options);
-    core.onAuthStateChange((_event, session) => {
-      store.set(snapshotOf(toSession(session)));
+    core.onAuthStateChange((event, session) => {
+      const next = toSession(session);
+
+      // A refresh keeps the session it renewed; it reports null only while the core has no
+      // cached session yet (a token renewed before the first read), which must not sign out.
+      if (event === "TOKEN_REFRESHED" && !next) return;
+      store.set(snapshotOf(next));
       announceSessionChange(refreshFromPage);
     });
 
