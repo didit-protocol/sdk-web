@@ -200,12 +200,14 @@ test.describe("web SDK permitted origins and handoff", () => {
     await page.route("https://business.didit.me/**", (route) =>
       route.fulfill({ contentType: "text/html", body: flowPage() })
     );
-    await openSdk(page, "?flow=https://verify.didit.me/session/ses_5");
-    const frame = page.frames().find((candidate) => candidate.url().startsWith("https://verify.didit.me/"));
-    expect(frame).toBeTruthy();
+    const iframe = await openSdk(page, "?flow=https://verify.didit.me/session/ses_5");
+    const flow = iframe.contentFrame();
 
-    await frame.goto("https://business.didit.me/handoff/ses_5");
-    await frame.locator("body").evaluate(() => {
+    await flow.locator("body").evaluate(() => {
+      window.location.href = "https://business.didit.me/handoff/ses_5";
+    });
+    await expect(flow.getByRole("heading", { name: "Verify your identity" })).toBeVisible();
+    await flow.locator("body").evaluate(() => {
       window.parent.postMessage({ type: "didit:completed", data: { sessionId: "ses_5", status: "Approved" }, timestamp: 1 }, "*");
     });
 
@@ -220,12 +222,10 @@ test.describe("web SDK permitted origins and handoff", () => {
     await page.goto(
       "http://127.0.0.1:4173/e2e/fixtures/sdk-session.html?flow=http://localhost:4173/e2e/fixtures/verification-flow.html"
     );
-    const frame = page.frames().find((candidate) => candidate.url().startsWith("http://localhost:4173/"));
-    console.log("FRAMES", JSON.stringify(page.frames().map((candidate) => candidate.url())));
-    expect(frame).toBeTruthy();
-    await expect(page.locator(FRAME).contentFrame().getByRole("heading", { name: "Verify your identity" })).toBeVisible();
+    const flow = page.locator(FRAME).contentFrame();
+    await expect(flow.getByRole("heading", { name: "Verify your identity" })).toBeVisible();
 
-    await frame.locator("body").evaluate(() => {
+    await flow.locator("body").evaluate(() => {
       window.parent.postMessage({ type: "didit:completed", data: { sessionId: "ses_6", status: "Approved" }, timestamp: 1 }, "*");
     });
 
@@ -238,13 +238,14 @@ test.describe("web SDK permitted origins and handoff", () => {
     await page.route("http://app.example.test/**", (route) =>
       route.fulfill({ contentType: "text/html", body: flowPage() })
     );
-    await openSdk(page);
-    const frame = page.frames().find((candidate) => candidate.url().includes("/e2e/fixtures/verification-flow.html"));
-    expect(frame).toBeTruthy();
+    const iframe = await openSdk(page);
+    const flow = iframe.contentFrame();
 
-    await page.route("http://localhost:4173/**", (route) => route.continue());
-    await frame.goto("http://app.example.test/handoff");
-    await frame.locator("body").evaluate(() => {
+    await flow.locator("body").evaluate(() => {
+      window.location.href = "http://app.example.test/handoff";
+    });
+    await expect(flow.getByRole("heading", { name: "Verify your identity" })).toBeVisible();
+    await flow.locator("body").evaluate(() => {
       window.parent.postMessage({ type: "didit:completed", data: { sessionId: "ses_7", status: "Approved" }, timestamp: 1 }, "*");
       window.parent.postMessage({ type: "didit:close_request" }, "*");
     });
