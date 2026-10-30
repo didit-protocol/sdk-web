@@ -428,6 +428,12 @@ export class DiditSdk {
   private handleVerificationEvent(event: VerificationEvent): void {
     SDKLogger.log("Verification event:", event);
 
+    // Keep the session the flow told us about so a modal the user closes by
+    // hand still reports the session it belongs to in the cancelled result.
+    if (event.data?.sessionId) {
+      this._sessionId = event.data.sessionId;
+    }
+
     this.onEvent?.(event);
 
     switch (event.type) {
