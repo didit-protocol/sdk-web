@@ -253,7 +253,8 @@ export class DiditSdk {
    * Dismisses everything currently on screen in one deterministic call: a
    * pending transaction action modal is treated as an abort (no follow-up
    * poll, no onActionCompleted) and the verification modal is always closed
-   * afterwards, regardless of whether an action modal was present.
+   * afterwards, regardless of whether an action modal was present. When
+   * nothing is on screen there is nothing to dismiss and close() does nothing.
    */
   public close(): void {
     SDKLogger.log("Closing verification programmatically");
