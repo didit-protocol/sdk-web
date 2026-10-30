@@ -1,0 +1,1035 @@
+{
+  "source": "Recorded from a local sandbox application with 101 grants. Identifiers and dates replaced with synthetic fixtures; other fields and pagination unchanged.",
+  "pages": [
+    {
+      "status": 200,
+      "body": {
+        "count": 101,
+        "next": "http://localhost:8000/auth/v2/authentication/00000000-0000-4000-8000-000000000003/grants/?limit=100&offset=100",
+        "previous": null,
+        "results": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000003",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000004",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000005",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000006",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000007",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000010",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000011",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000012",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000013",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000014",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000015",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000016",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000017",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000018",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000019",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000020",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000021",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000022",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000023",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000024",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000025",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000026",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000027",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000028",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000029",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000030",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000031",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000032",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000033",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000034",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000035",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000036",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000037",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000038",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000039",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000040",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000041",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000042",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000043",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000044",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000045",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000046",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000047",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000048",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000049",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000050",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000051",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000052",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000053",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000054",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000055",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000056",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000057",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000058",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000059",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000060",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000061",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000062",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000063",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000064",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000065",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000066",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000067",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000068",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000069",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000070",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000071",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000072",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000073",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000074",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000075",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000076",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000077",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000078",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000079",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000080",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000081",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000082",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000083",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000084",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000085",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000086",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000087",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000088",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000089",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000090",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000091",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000092",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000093",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000094",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000095",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000096",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000097",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000098",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000099",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          },
+          {
+            "id": "00000000-0000-4000-8000-000000000100",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          }
+        ]
+      }
+    },
+    {
+      "status": 200,
+      "body": {
+        "count": 101,
+        "next": null,
+        "previous": "http://localhost:8000/auth/v2/authentication/00000000-0000-4000-8000-000000000003/grants/?limit=100",
+        "results": [
+          {
+            "id": "00000000-0000-4000-8000-000000000101",
+            "agent_id": "00000000-0000-4000-8000-000000001001",
+            "agent__name": "Example agent",
+            "scopes": [
+              "balance:read"
+            ],
+            "expires_at": "2099-01-01T00:00:00Z",
+            "revoked_at": null
+          }
+        ]
+      }
+    }
+  ]
+}
