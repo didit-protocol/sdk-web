@@ -315,6 +315,29 @@ test("an access token the API has already rejected is refreshed once, and the se
   expect((await requestsSeen(request)).filter((entry) => entry.mismatch)).toEqual([]);
 });
 
+test("a session whose refresh token was already used loses access and signs the browser out", async ({ page, request }) => {
+  await loadRecording(request, "refresh-reuse");
+  await openApp(page, { scenario: "refresh-reuse" });
+  await page.evaluate(
+    (password) => window.auth.password.signIn({ email: "person@example.com", password }),
+    PASSWORD
+  );
+  expect(await storedTokens(page)).not.toBeNull();
+
+  // The access token expired, and a refresh presents a token another client already used: Didit revokes the session.
+  const result = await page.evaluate(async () => {
+    window.clockOffset = 5 * 60_000;
+    const token = await window.auth.getToken();
+    const session = await window.auth.getSession();
+    return { token, session };
+  });
+
+  expect(result).toEqual({ token: null, session: null });
+  expect(await storedTokens(page)).toBeNull();
+  expect(await events(page)).toEqual([["SIGNED_IN", "person@example.com"], ["SIGNED_OUT", null]]);
+  expect((await requestsSeen(request)).filter((entry) => entry.mismatch)).toEqual([]);
+});
+
 test("neither storage nor a reported error keeps the password, a code or a used sign-in", async ({ page, request }) => {
   await loadRecording(request, "wrong-password");
   await openApp(page, { scenario: "wrong-password" });
