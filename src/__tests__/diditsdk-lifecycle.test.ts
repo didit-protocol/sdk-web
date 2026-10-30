@@ -49,7 +49,7 @@ describe("DiditSdk verification lifecycle", () => {
     window.dispatchEvent(new Event("blur"));
   });
 
-  it("reports completed, then the idle state, to the integrator", async () => {
+  it("reports completed to the integrator and keeps the modal open", async () => {
     const states: Array<{ state: string; error?: string }> = [];
     const onComplete = jest.fn();
     DiditSdk.shared.onStateChange = (state, error) => states.push({ state, error });
@@ -62,8 +62,8 @@ describe("DiditSdk verification lifecycle", () => {
       type: "completed",
       session: { sessionId: "ses_1", status: "Approved" }
     });
-    expect(states.map((entry) => entry.state)).toEqual(["loading", "idle"]);
-    expect(DiditSdk.shared.state).toBe("idle");
+    expect(states.map((entry) => entry.state)).toEqual(["loading"]);
+    expect(DiditSdk.shared.isPresented).toBe(true);
   });
 
   it("closes the modal on completion only when configured, still reporting idle", async () => {
