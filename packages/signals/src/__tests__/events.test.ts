@@ -567,6 +567,25 @@ describe("buildEventRequestBody", () => {
     expect(buildEventRequestBody(event, recorded.event_id)).toEqual(recorded);
   });
 
+  it("falls back to now for an unusable occurredAt instead of throwing", () => {
+    const before = Date.now();
+    const body = buildEventRequestBody(
+      { category: "auth", actionType: "login", occurredAt: new Date("not a date") },
+      "evt-invalid"
+    );
+
+    expect(Date.parse(String(body.occurred_at))).toBeGreaterThanOrEqual(before);
+  });
+
+  it("normalizes an ISO string without an offset to the same instant the browser reads", () => {
+    const body = buildEventRequestBody(
+      { category: "auth", actionType: "login", occurredAt: "2026-10-12T08:00:00" },
+      "evt-local"
+    );
+
+    expect(body.occurred_at).toBe(new Date("2026-10-12T08:00:00").toISOString());
+  });
+
   it("defaults the time to now and the time zone to the browser's", () => {
     const before = Date.now();
     const body = buildEventRequestBody({ category: "auth", actionType: "logout" }, "evt-2");
