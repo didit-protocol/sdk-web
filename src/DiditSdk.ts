@@ -29,6 +29,23 @@ import {
 
 type TransactionActionOutcome = "finished" | "aborted";
 
+/**
+ * Embedded mode renders inside an element that already exists on the
+ * integrator's page. Without it the modal never shows anything (embedded mode
+ * never activates the overlay), so the launch fails with a message the
+ * integrator can act on instead of silently presenting nothing.
+ */
+function assertEmbeddedHostExists(configuration: DiditSdkConfiguration | undefined): void {
+  if (!configuration?.embedded) return;
+  const containerId = configuration.embeddedContainerId;
+  if (!containerId) {
+    throw new Error("Embedded mode requires embeddedContainerId: the id of the element that hosts the verification.");
+  }
+  if (typeof document === "undefined" || !document.getElementById(containerId)) {
+    throw new Error(`Embedded container "#${containerId}" was not found in the page.`);
+  }
+}
+
 export class DiditSdk {
   private static _instance: DiditSdk | null = null;
 
@@ -109,12 +126,8 @@ export class DiditSdk {
       this._modal.destroy();
       this._modal = null;
     }
-    this._modal = new VerificationModal(config, {
-      onClose: () => this.handleModalClose(),
-      onCloseConfirmed: () => this.handleModalCloseConfirmed(),
-      onMessage: (event) => this.handleVerificationEvent(event),
-      onIframeLoad: () => this.handleIframeLoad()
-    });
+    // A new launch is not in an error state any more, whatever the last one did.
+    this._errorMessage = undefined;
 
     try {
       const { url } = options;
@@ -122,6 +135,14 @@ export class DiditSdk {
       if (!url || typeof url !== "string") {
         throw new Error("Invalid options: url is required");
       }
+      assertEmbeddedHostExists(config);
+
+      this._modal = new VerificationModal(config, {
+        onClose: () => this.handleModalClose(),
+        onCloseConfirmed: () => this.handleModalCloseConfirmed(),
+        onMessage: (event) => this.handleVerificationEvent(event),
+        onIframeLoad: () => this.handleIframeLoad()
+      });
 
       this._url = buildVerificationUrl(url, config);
       this.setState("loading");
@@ -249,6 +270,7 @@ export class DiditSdk {
     this._modal?.destroy();
     this._modal = null;
     this.reset();
+    this.setState("idle");
   }
 
   private async runTransactionAction(
@@ -376,6 +398,7 @@ export class DiditSdk {
 
     this._modal?.close();
     this.reset();
+    this.setState("idle");
 
     const result: VerificationResult = {
       type: "cancelled",
@@ -402,6 +425,12 @@ export class DiditSdk {
 
   private handleVerificationEvent(event: VerificationEvent): void {
     SDKLogger.log("Verification event:", event);
+
+    // Keep the session the flow told us about so a modal the user closes by
+    // hand still reports the session it belongs to in the cancelled result.
+    if (event.data?.sessionId) {
+      this._sessionId = event.data.sessionId;
+    }
 
     this.onEvent?.(event);
 
@@ -479,6 +508,7 @@ export class DiditSdk {
     if (this._configuration?.closeModalOnComplete) {
       this._modal?.close();
       this.reset();
+      this.setState("idle");
     }
 
     const result: VerificationResult = {
@@ -496,6 +526,7 @@ export class DiditSdk {
 
     this._modal?.close();
     this.reset();
+    this.setState("idle");
 
     const result: VerificationResult = {
       type: "cancelled",
@@ -520,11 +551,14 @@ export class DiditSdk {
       verificationError = createVerificationError("unknown", "An unknown error occurred");
     }
 
+    this._modal?.close();
+    this._modal = null;
+    // Clear what the failed launch left behind, then report the error as the
+    // state the SDK is in: reset() alone would leave callers reading "idle"
+    // with no error message right after onStateChange("error").
+    this.reset();
     this._errorMessage = verificationError.message;
     this.setState("error");
-
-    this._modal?.close();
-    this.reset();
 
     const result: VerificationResult = {
       type: "failed",
@@ -545,7 +579,6 @@ export class DiditSdk {
   }
 
   private reset(): void {
-    this._state = "idle";
     this._sessionId = undefined;
     this._url = undefined;
     this._errorMessage = undefined;
