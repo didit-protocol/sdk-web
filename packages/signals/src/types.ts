@@ -71,7 +71,7 @@ export interface DiditEvent {
    * same content is a harmless replay; with different content it is rejected.
    */
   eventId?: string;
-  /** When it happened. @default the time submitEvent was called */
+  /** When it happened. An invalid Date is refused with a "validation" error. @default the time submitEvent was called */
   occurredAt?: Date | string;
   /** IANA time zone of the end user. @default the browser's time zone */
   timeZone?: string;
