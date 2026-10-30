@@ -47,7 +47,7 @@ describe("<DiditAuthProvider>", () => {
 
   it("reads as signed out when the client cannot load the session", async () => {
     jest.spyOn(console, "error").mockImplementation(() => undefined);
-    const { client } = testClient();
+    const { client } = testClient({ session: "loading" });
     const failing = { ...client, load: async () => { throw new Error("network down"); } };
 
     render(
