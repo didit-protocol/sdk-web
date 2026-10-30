@@ -8,6 +8,7 @@ module.exports = {
     "^.+\\.tsx?$": ["ts-jest", { tsconfig: "<rootDir>/tsconfig.test.json" }]
   },
   moduleNameMapper: {
+    "^react-dom/server$": "<rootDir>/../../node_modules/react-dom/server.node.js",
     "^(\\.{1,2}/.*)\\.js$": "$1"
   }
 };

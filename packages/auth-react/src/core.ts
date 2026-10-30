@@ -14,17 +14,6 @@ export interface CoreClientOptions {
   language?: "en" | "es" | "fr" | "de" | "ja";
 }
 
-// Every client mounted on this page shares the browser's one session. When one of them restores,
-// signs in or signs out, it tells the others to re-read the session, so two provider scopes on the
-// same page never disagree about who is signed in. A client adds its listener once mounted.
-const pagePeers = new Set<() => void>();
-
-function announceSessionChange(source: () => void): void {
-  pagePeers.forEach((refresh) => {
-    if (refresh !== source) refresh();
-  });
-}
-
 function toSession(session: CoreSession): DiditSession;
 function toSession(session: CoreSession | null): DiditSession | null;
 function toSession(session: CoreSession | null): DiditSession | null {
@@ -50,25 +39,11 @@ export function createCoreAuthClient(options: CoreClientOptions): AuthClient {
   const store = createAuthStore({ status: "loading", session: null });
   let core: ReturnType<typeof createDiditAuth> | undefined;
   let loading: Promise<void> | null = null;
-  let subscribers = 0;
-
-  // Re-reads the shared browser session, so this client follows a sign-in or sign-out another
-  // client on the same page just made (a second provider scope, or one that armed after it).
-  function refreshFromPage(): void {
-    if (!core) return;
-    core.getSession().then(
-      (session) => store.set(snapshotOf(toSession(session))),
-      () => undefined
-    );
-  }
 
   function getCore() {
     if (core) return core;
     core = createDiditAuth(options);
-    core.onAuthStateChange((_event, session) => {
-      store.set(snapshotOf(toSession(session)));
-      announceSessionChange(refreshFromPage);
-    });
+    core.onAuthStateChange((_event, session) => store.set(snapshotOf(toSession(session))));
 
     return core;
   }
@@ -79,30 +54,17 @@ export function createCoreAuthClient(options: CoreClientOptions): AuthClient {
     const callback = query.has("state") && (query.has("code") || query.has("error"))
       ? await client.handleRedirectCallback() : null;
     const target = safeReturnTo(callback?.returnTo);
-    const next = snapshotOf(toSession(callback?.session ?? await client.getSession()));
 
-    // A peer may have established the session while this client was behind; never undo it with a
-    // stale "no session" read.
-    if (next.status === "signed-in" || store.get().status !== "signed-in") store.set(next);
-    announceSessionChange(refreshFromPage);
+    store.set(snapshotOf(toSession(callback?.session ?? await client.getSession())));
     if (target) window.history.replaceState(window.history.state, "", target);
   }
 
   return {
     getSnapshot: store.get,
-    subscribe(listener) {
-      const unsubscribe = store.subscribe(listener);
-      if (subscribers++ === 0) pagePeers.add(refreshFromPage);
-
-      return () => {
-        unsubscribe();
-        if (--subscribers === 0) pagePeers.delete(refreshFromPage);
-      };
-    },
+    subscribe: store.subscribe,
     load() {
       loading ??= restore().catch(() => {
-        // A peer may have established the session while this restore was failing: keep it.
-        if (store.get().status !== "signed-in") store.set(snapshotOf(null));
+        store.set(snapshotOf(null));
         console.error("[didit-auth] Could not restore the session.");
       });
 
