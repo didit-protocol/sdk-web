@@ -198,7 +198,11 @@ test("reports a cancelled passkey prompt and keeps nothing", async ({ page, requ
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "credentials", {
       configurable: true,
-      value: { get: async () => void (() => { throw new DOMException("The operation was not allowed.", "NotAllowedError"); })() }
+      value: {
+        get: async () => {
+          throw new DOMException("The operation was not allowed.", "NotAllowedError");
+        }
+      }
     });
     window.PublicKeyCredential = function PublicKeyCredential() {};
   });
