@@ -274,6 +274,7 @@ export class DiditSdk {
     this._modal?.destroy();
     this._modal = null;
     this.reset();
+    this.setState("idle");
   }
 
   private async runTransactionAction(
@@ -401,6 +402,7 @@ export class DiditSdk {
 
     this._modal?.close();
     this.reset();
+    this.setState("idle");
 
     const result: VerificationResult = {
       type: "cancelled",
@@ -510,6 +512,7 @@ export class DiditSdk {
     if (this._configuration?.closeModalOnComplete) {
       this._modal?.close();
       this.reset();
+      this.setState("idle");
     }
 
     const result: VerificationResult = {
@@ -527,6 +530,7 @@ export class DiditSdk {
 
     this._modal?.close();
     this.reset();
+    this.setState("idle");
 
     const result: VerificationResult = {
       type: "cancelled",
@@ -551,11 +555,14 @@ export class DiditSdk {
       verificationError = createVerificationError("unknown", "An unknown error occurred");
     }
 
+    this._modal?.close();
+    this._modal = null;
+    // Clear what the failed launch left behind, then report the error as the
+    // state the SDK is in: reset() alone would leave callers reading "idle"
+    // with no error message right after onStateChange("error").
+    this.reset();
     this._errorMessage = verificationError.message;
     this.setState("error");
-
-    this._modal?.close();
-    this.reset();
 
     const result: VerificationResult = {
       type: "failed",
@@ -576,7 +583,6 @@ export class DiditSdk {
   }
 
   private reset(): void {
-    this._state = "idle";
     this._sessionId = undefined;
     this._url = undefined;
     this._errorMessage = undefined;
