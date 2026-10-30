@@ -76,10 +76,14 @@ test("probe redirect to another origin", async ({ page }) => {
   await iframe.contentFrame().evaluate(() => {
     window.location.href = "http://localhost:4173/e2e/fixtures/verification-flow.html?redirected=1";
   });
-  const redirected = page.locator(FRAME);
-  await expect(redirected.contentFrame().getByRole("heading", { name: "Verify your identity" })).toBeVisible();
-  console.log("SRC", await redirected.getAttribute("src"));
-  await post(redirected, { type: "didit:completed", data: { sessionId: "ses_1", status: "Approved" }, timestamp: 2 });
+  await page.waitForTimeout(800);
+  const frames = page.frames().map((frame) => frame.url());
+  console.log("FRAMES", JSON.stringify(frames));
+  const redirected = page.frames().find((frame) => frame.url().includes("localhost:4173"));
+  console.log("HASREDIRECT", Boolean(redirected));
+  if (redirected) {
+    await redirected.locator("body").evaluate(() => window.parent.postMessage({ type: "didit:completed", data: { sessionId: "ses_1", status: "Approved" }, timestamp: 2 }, "*"));
+  }
   await page.waitForTimeout(300);
   console.log("RECORDS", JSON.stringify(await page.evaluate(() => window.records)));
 });

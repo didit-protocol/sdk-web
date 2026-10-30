@@ -51,6 +51,7 @@
           : { closeModalOnComplete: parameters.get("closeModalOnComplete") === "true" };
       }
 
+      window.sdk = DiditSdk.shared;
       window.startSdk = (url = flow.href) => DiditSdk.shared.startVerification({ url, configuration: configuration() });
       window.closeSdk = () => DiditSdk.shared.close();
 
