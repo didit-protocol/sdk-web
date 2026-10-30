@@ -434,6 +434,9 @@ export function submitEvent(options: SubmitEventOptions): string {
   if (!isRecord(event) || !event.category || typeof event.actionType !== "string" || !event.actionType.trim()) {
     throw new DiditEventError("validation", "event.category and event.actionType are required.");
   }
+  if (event.occurredAt instanceof Date && Number.isNaN(event.occurredAt.getTime())) {
+    throw new DiditEventError("validation", "event.occurredAt must be a valid date.");
+  }
   if (typeof fetch !== "function") {
     throw new DiditEventError("network", "fetch is not available in this environment.");
   }
