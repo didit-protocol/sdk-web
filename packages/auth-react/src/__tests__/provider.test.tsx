@@ -1,4 +1,6 @@
-import { act, render, renderHook, screen } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import type { ReactNode } from "react";
 
 import { DiditAuthProvider, useDiditAuthContext } from "../context";
@@ -40,6 +42,57 @@ describe("<DiditAuthProvider>", () => {
   it("refuses hooks outside the provider", () => {
     jest.spyOn(console, "error").mockImplementation(() => undefined);
     expect(() => renderHook(() => useAuth())).toThrow(/inside <DiditAuth>/);
+    jest.restoreAllMocks();
+  });
+
+  it("reads as signed out when the client cannot load the session", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const { client } = testClient();
+    const failing = { ...client, load: async () => { throw new Error("network down"); } };
+
+    render(
+      <DiditAuthProvider client={failing}>
+        <SignedIn>member area</SignedIn>
+        <SignedOut>please sign in</SignedOut>
+      </DiditAuthProvider>
+    );
+
+    await screen.findByText("please sign in");
+    expect(screen.queryByText("member area")).toBeNull();
+    jest.restoreAllMocks();
+  });
+
+  it("hydrates with the default language without a mismatch, then follows the browser", async () => {
+    const { client } = testClient();
+    const original = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    const errors = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const Language = () => <span>{useDiditAuthContext().locale}</span>;
+
+    Object.defineProperty(globalThis, "navigator", { value: undefined, configurable: true });
+    const html = renderToString(
+      <DiditAuthProvider client={client}>
+        <Language />
+      </DiditAuthProvider>
+    );
+    Object.defineProperty(globalThis, "navigator", { value: { language: "es-MX" }, configurable: true });
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.append(container);
+
+    await act(async () => {
+      hydrateRoot(
+        container,
+        <DiditAuthProvider client={client}>
+          <Language />
+        </DiditAuthProvider>
+      );
+    });
+
+    expect(errors.mock.calls.map((call) => String(call[0])).filter((text) => /hydrat/i.test(text))).toEqual([]);
+    expect(container.textContent).toBe("en");
+    await waitFor(() => expect(container.textContent).toBe("es"));
+    container.remove();
+    if (original) Object.defineProperty(globalThis, "navigator", original);
     jest.restoreAllMocks();
   });
 
