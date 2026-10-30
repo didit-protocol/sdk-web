@@ -158,7 +158,18 @@ async function startHostedSignIn(request: NextRequest, config: DiditAuthConfig):
   const reauthenticating = request.nextUrl.pathname === `${config.basePath}/reauthenticate`;
   const current = reauthenticating ? await resolve(request, config, true) : null;
 
-  if (reauthenticating && !current?.session) return json({ error: "signed_out" }, 401);
+  if (reauthenticating && !current?.session) {
+    // The session this page asked about has already ended. A browser that arrives here is signing in, so
+    // it goes on to the sign-in page rather than being answered with JSON it cannot read.
+    if (fromClient(request)) return json({ error: "signed_out" }, 401);
+    const signIn = new URL(`${config.basePath}/sign-in`, config.redirectUri);
+
+    signIn.searchParams.set("redirect_url", returnTo);
+    const response = noStore(NextResponse.redirect(signIn));
+
+    writeUpdate(response, config, current?.update ?? null);
+    return response;
+  }
   const verifier = randomString();
   const state = randomString();
   // The hosted page opens on sign-in and links to sign-up and password reset itself.
@@ -242,11 +253,17 @@ async function storeSession(
 
   // Signing in again in this browser (for example to confirm it is you) replaces the earlier session.
   const old = readCookies(request, cookieNames(config));
-  const previous = old.access ?? (old.refresh ? (await refreshOnce(config, old.refresh.token))?.accessToken : null);
 
-  if (previous && previous !== tokens.accessToken) {
-    forgetSession(config, previous);
-    await endSession(config, previous);
+  try {
+    const previous = old.access ?? (old.refresh ? (await refreshOnce(config, old.refresh.token))?.accessToken : null);
+
+    if (previous && previous !== tokens.accessToken) {
+      forgetSession(config, previous);
+      await endSession(config, previous);
+    }
+  } catch {
+    // Didit could not end the earlier session: that is no reason to refuse the new one.
+    console.warn("[didit-auth] Could not end the earlier session of this browser at Didit.");
   }
   writeUpdate(response, config, { kind: "set", tokens, sessionEnd: Math.floor(Date.parse(session.expiresAt) / 1000) });
 }
@@ -341,15 +358,30 @@ function completeStepUp(request: NextRequest, config: DiditAuthConfig): NextResp
   return response;
 }
 
+/** The access token behind a refresh cookie, or `null` when Didit cannot supply one. */
+async function refreshedAccess(config: DiditAuthConfig, refreshToken: string): Promise<string | null> {
+  try {
+    return (await refreshOnce(config, refreshToken))?.accessToken ?? null;
+  } catch {
+    console.warn("[didit-auth] Could not rotate the refresh token while signing out.");
+
+    return null;
+  }
+}
+
 async function signOut(request: NextRequest, config: DiditAuthConfig, options: DiditAuthProxyOptions): Promise<NextResponse> {
   if (!sameOrigin(request, config)) return json({ error: "forbidden" }, 403);
   const { access, refresh } = readCookies(request, cookieNames(config));
   let token = access;
 
-  if (!token && refresh) token = (await refreshOnce(config, refresh.token))?.accessToken ?? null;
-  if (token) {
-    forgetSession(config, token);
-    await endSession(config, token);
+  if (!token && refresh) token = await refreshedAccess(config, refresh.token);
+  if (token) forgetSession(config, token);
+  try {
+    if (token) await endSession(config, token);
+  } catch {
+    // Didit could not be reached: this browser still signs out, and the session there ends when it
+    // expires or is ended from the console. Keeping the cookies would leave the person signed in.
+    console.warn("[didit-auth] Could not end the session at Didit; signing this browser out anyway.");
   }
   const target = safeReturnTo(request.nextUrl.searchParams.get("redirect_url")) ?? options.afterSignOutUrl ?? "/";
   const response = fromClient(request)
