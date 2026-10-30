@@ -11,7 +11,13 @@ const RUN = `qa-${Date.now()}`;
 async function events(request, ids) {
   const rows = await listSubject(request);
   const wanted = new Set(ids);
-  return rows.filter((row) => wanted.has(row.event_id));
+  const matched = rows.filter((row) => wanted.has(row.event_id));
+  const detail = [];
+  for (const row of matched) {
+    const r = await request.get(`${API}/v3/events/${row.event_uuid}/`, { headers: { "x-api-key": KEY } });
+    if (r.ok()) detail.push(await r.json());
+  }
+  return detail;
 }
 
 async function listSubject(request) {
@@ -54,7 +60,7 @@ test("page, sign-in and custom events reach the application with stable device a
   expect(rows.map((r) => r.session_id)).toEqual([ids[0] + "-session", ids[0] + "-session", ids[0] + "-session"]);
   const pids = new Set(rows.map((r) => r.device_context?.fingerprint_v2?.persistentId ?? r.device_context?.persistent_id));
   expect(pids.size).toBe(1);
-  for (const row of rows) await cleanup(request, row.uuid);
+  for (const row of rows) await cleanup(request, row.uuid ?? row.event_uuid);
 });
 
 test("SPA navigation keeps the session and reports each page", async ({ page, request }) => {
@@ -74,7 +80,7 @@ test("SPA navigation keeps the session and reports each page", async ({ page, re
     "http://127.0.0.1:4173/cart"
   ]);
   expect(rows.map((r) => r.session_sequence)).toEqual([1, 2]);
-  for (const row of rows) await cleanup(request, row.uuid);
+  for (const row of rows) await cleanup(request, row.uuid ?? row.event_uuid);
 });
 
 test("a network failure retries the same bytes and the service stores one event", async ({ page, request }) => {
@@ -96,7 +102,7 @@ test("a network failure retries the same bytes and the service stores one event"
   const rows = await events(request, [id]);
   expect(rows).toHaveLength(1);
   expect(rows[0].event_id).toBe(id);
-  for (const row of rows) await cleanup(request, row.uuid);
+  for (const row of rows) await cleanup(request, row.uuid ?? row.event_uuid);
 });
 
 test("25 waiting events leave in one request", async ({ page, request }) => {
@@ -110,7 +116,7 @@ test("25 waiting events leave in one request", async ({ page, request }) => {
   expect(requests).toBe(1);
   expect(result.pendingCount).toBe(0);
   const rows = await listSubject(request);
-  for (const row of rows.filter((r) => r.event_id.startsWith(`${RUN}-batch-`))) await cleanup(request, row.uuid);
+  for (const row of rows.filter((r) => r.event_id.startsWith(`${RUN}-batch-`))) await cleanup(request, row.event_uuid);
 });
 
 test("an expired token, a foreign origin and a used-up token fail safely", async ({ page, request }) => {
@@ -143,5 +149,5 @@ test("the page exit path delivers to the real service before the page is gone", 
   await expect.poll(async () => (await events(request, [id])).length, { timeout: 5000 }).toBe(1);
   const [row] = await events(request, [id]);
   expect(row.event_id).toBe(id);
-  await cleanup(request, row.uuid);
+  await cleanup(request, row.uuid ?? row.event_uuid);
 });
