@@ -358,30 +358,15 @@ function completeStepUp(request: NextRequest, config: DiditAuthConfig): NextResp
   return response;
 }
 
-/** The access token behind a refresh cookie, or `null` when Didit cannot supply one. */
-async function refreshedAccess(config: DiditAuthConfig, refreshToken: string): Promise<string | null> {
-  try {
-    return (await refreshOnce(config, refreshToken))?.accessToken ?? null;
-  } catch {
-    console.warn("[didit-auth] Could not rotate the refresh token while signing out.");
-
-    return null;
-  }
-}
-
 async function signOut(request: NextRequest, config: DiditAuthConfig, options: DiditAuthProxyOptions): Promise<NextResponse> {
   if (!sameOrigin(request, config)) return json({ error: "forbidden" }, 403);
   const { access, refresh } = readCookies(request, cookieNames(config));
   let token = access;
 
-  if (!token && refresh) token = await refreshedAccess(config, refresh.token);
-  if (token) forgetSession(config, token);
-  try {
-    if (token) await endSession(config, token);
-  } catch {
-    // Didit could not be reached: this browser still signs out, and the session there ends when it
-    // expires or is ended from the console. Keeping the cookies would leave the person signed in.
-    console.warn("[didit-auth] Could not end the session at Didit; signing this browser out anyway.");
+  if (!token && refresh) token = (await refreshOnce(config, refresh.token))?.accessToken ?? null;
+  if (token) {
+    forgetSession(config, token);
+    await endSession(config, token);
   }
   const target = safeReturnTo(request.nextUrl.searchParams.get("redirect_url")) ?? options.afterSignOutUrl ?? "/";
   const response = fromClient(request)
