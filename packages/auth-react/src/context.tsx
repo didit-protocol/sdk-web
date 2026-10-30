@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 
 import { resolveLocale } from "./i18n.js";
 import { stylesheet } from "./styles.js";
@@ -10,6 +10,8 @@ interface DiditAuthContextValue {
   client: AuthClient;
   appearance: Appearance;
   locale: string;
+  /** The client could not load the session: components read as signed out instead of waiting forever. */
+  sessionUnavailable: boolean;
 }
 
 const DiditAuthContext = createContext<DiditAuthContextValue | null>(null);
@@ -26,17 +28,36 @@ export interface DiditAuthProviderProps {
 
 /** Makes an authentication client available to every Didit component and hook below it. */
 export function DiditAuthProvider({ client, appearance, locale, nonce, children }: DiditAuthProviderProps) {
+  const [sessionUnavailable, setSessionUnavailable] = useState(false);
+  // The browser language is read after mount, so server rendering and hydration agree on English.
+  const [browserLocale, setBrowserLocale] = useState("en");
+
   useEffect(function loadSession() {
-    client.load().catch(() => console.error("[didit-auth] Could not load the session."));
+    let live = true;
+    setSessionUnavailable(false);
+    client.load().catch(() => {
+      if (!live) return;
+      setSessionUnavailable(true);
+      console.error("[didit-auth] Could not load the session.");
+    });
+
+    return () => {
+      live = false;
+    };
   }, [client]);
+
+  useEffect(function readBrowserLocale() {
+    if (typeof navigator !== "undefined") setBrowserLocale(navigator.language);
+  }, []);
 
   const value = useMemo(
     () => ({
       client,
       appearance: appearance ?? {},
-      locale: resolveLocale(locale ?? (typeof navigator === "undefined" ? "en" : navigator.language))
+      locale: resolveLocale(locale ?? browserLocale),
+      sessionUnavailable
     }),
-    [client, appearance, locale]
+    [client, appearance, locale, browserLocale, sessionUnavailable]
   );
 
   return (
