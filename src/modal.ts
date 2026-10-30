@@ -403,6 +403,9 @@ export class VerificationModal {
         max-width: max(300px, 18.75rem);
         margin: auto;
         overflow-wrap: anywhere;
+        /* Focusing the dialog scrolls it into view start-aligned; this keeps
+         * the overlay's top padding visible so the title is never clipped. */
+        scroll-margin-top: 1rem;
       }
 
       .${CSS_CLASSES.flowSized} .didit-confirm-actions {
@@ -780,26 +783,14 @@ export class VerificationModal {
     if (this.iframe) this.iframe.inert = true;
     const close = this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`);
     if (close) close.inert = true;
-    if (this.isTopmost()) this.focusConfirmation();
     // A confirmation scrolled at a large text size opens again at its title.
-    // Focusing the dialog can scroll it to its content box after this task in
-    // WebKit (the top padding then hides the title), so reassert the top once
-    // the focus scroll has settled.
-    this.scrollConfirmationToTop();
-    if (typeof requestAnimationFrame === "function") {
-      requestAnimationFrame(() => this.scrollConfirmationToTop());
-    }
+    this.confirmOverlay.scrollTop = 0;
+    if (this.isTopmost()) this.focusConfirmation();
     this.callbacks.onClose();
   }
 
   private focusConfirmation(): void {
     this.confirmOverlay?.querySelector<HTMLDivElement>(`.${CSS_CLASSES.confirmBox}`)?.focus({ preventScroll: true });
-  }
-
-  private scrollConfirmationToTop(): void {
-    if (this.state.showConfirmation && this.confirmOverlay) {
-      this.confirmOverlay.scrollTop = 0;
-    }
   }
 
   private hideConfirmation(restoreFocus = true): void {
