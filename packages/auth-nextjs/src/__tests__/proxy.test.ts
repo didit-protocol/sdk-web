@@ -332,16 +332,18 @@ describe("signing out", () => {
     expect(calls[1].headers.get("authorization")).toBe(`Bearer ${rotated.access_token}`);
   });
 
-  it.each([
+  const diditDown: Array<[string, { status: number; body: unknown }, Record<string, string>]> = [
     ["refuses the session it is asked to end", { status: 503, body: { error: "unavailable" } }, signedIn],
     ["cannot be reached at all", { status: 500, body: null }, signedIn],
     ["cannot rotate the refresh token first", { status: 503, body: { error: "unavailable" } }, expired]
-  ])("signs this browser out when Didit %s", async (_, response) => {
+  ];
+
+  it.each(diditDown)("signs this browser out when Didit %s", async (_, failure, cookies) => {
     replay(
-      { method: "POST", path: "token/", response },
-      { method: "DELETE", path: "session/", response }
+      { method: "POST", path: "token/", response: failure },
+      { method: "DELETE", path: "session/", response: failure }
     );
-    const signedOut = await proxy(request("/auth/sign-out", { method: "POST", cookies: expired, headers: { origin: APP } }));
+    const signedOut = await proxy(request("/auth/sign-out", { method: "POST", cookies, headers: { origin: APP } }));
 
     expect(signedOut.status).toBe(303);
     expect(signedOut.cookies.get("didit_at")).toMatchObject({ value: "", maxAge: 0 });
