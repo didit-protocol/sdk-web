@@ -403,9 +403,6 @@ export class VerificationModal {
         max-width: max(300px, 18.75rem);
         margin: auto;
         overflow-wrap: anywhere;
-        /* Focusing the dialog scrolls it into view start-aligned; this keeps
-         * the overlay's top padding visible so the title is never clipped. */
-        scroll-margin-top: 1rem;
       }
 
       .${CSS_CLASSES.flowSized} .didit-confirm-actions {

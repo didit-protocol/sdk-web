@@ -295,8 +295,6 @@ DiditSdk.shared.startVerification({
 
 If the host element has no resolved height, the embedded iframe also has no usable height. Resize the host element when your layout changes; the SDK continues to fill it automatically.
 
-If `embeddedContainerId` is missing or no element carries it, the launch fails with the `failed` result (and the `error` state) instead of silently rendering nothing: embedded mode never falls back to the modal overlay.
-
 ## Verification Results
 
 The SDK returns three types of results:
