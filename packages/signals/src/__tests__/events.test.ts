@@ -516,6 +516,12 @@ describe("submitEvent input", () => {
     );
   });
 
+  it("refuses an unusable occurredAt with a typed validation error", () => {
+    expect(() =>
+      submitEvent({ monitoringToken: "valid", event: { category: "auth", actionType: "login", occurredAt: new Date("not a date") } })
+    ).toThrow(expect.objectContaining({ name: "DiditEventError", type: "validation" }));
+  });
+
   it("returns the integrator's event id, or a new one per event", () => {
     const event: DiditEvent = { category: "auth", actionType: "login" };
 

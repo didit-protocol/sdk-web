@@ -121,8 +121,27 @@ describe("the callback", () => {
       { method: "DELETE", path: "session/", response: recorded.sessionEnded }
     );
 
-    await proxy(request(`/auth/callback?code=c&state=${state}`, { cookies: { [name]: value, didit_at: "previousAccessToken" } }));
+    const response = await proxy(request(`/auth/callback?code=c&state=${state}`, { cookies: { [name]: value, didit_at: "previousAccessToken" } }));
+
     expect(calls[2].headers.get("authorization")).toBe("Bearer previousAccessToken");
+    expect(response.cookies.get("didit_at")).toMatchObject({ value: issued.access_token });
+  });
+
+  it("stores the new session when Didit cannot end the earlier one", async () => {
+    replay();
+    const { state, name, value } = await started();
+    replay(
+      { method: "POST", path: "token/", response: recorded.tokenIssued },
+      { method: "GET", path: "session/", response: recorded.session },
+      { method: "DELETE", path: "session/", response: { status: 503, body: { error: "unavailable" } } }
+    );
+    const response = await proxy(
+      request(`/auth/callback?code=c&state=${state}`, { cookies: { [name]: value, didit_at: "previousAccessToken" } })
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.cookies.get("didit_at")).toMatchObject({ value: issued.access_token });
+    expect(response.cookies.get("didit_rt")).toMatchObject({ value: `${sessionEnd}.${issued.refresh_token}` });
   });
 
   it.each([
@@ -326,11 +345,23 @@ describe("signing out", () => {
 });
 
 describe("reauthentication identity binding", () => {
-  it("requires a current session", async () => {
+  it("answers the browser client that there is no session", async () => {
     const { calls } = replay();
-    const response = await proxy(request("/auth/reauthenticate"));
+    const response = await proxy(request("/auth/reauthenticate", { headers: fromApp }));
 
     expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: "signed_out" });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("sends a browser with no session on to the sign-in page and back to the page it asked for", async () => {
+    const { calls } = replay();
+    const response = await proxy(request("/auth/reauthenticate?redirect_url=%2Faccount%2Fsecurity%3Ftab%3Demail"));
+    const signIn = new URL(response.headers.get("location")!);
+
+    expect(response.status).toBe(307);
+    expect(`${signIn.origin}${signIn.pathname}`).toBe(`${APP}/auth/sign-in`);
+    expect(signIn.searchParams.get("redirect_url")).toBe("/account/security?tab=email");
     expect(calls).toHaveLength(0);
   });
 
