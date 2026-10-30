@@ -74,6 +74,7 @@ h1 {
 
 .lead {
   margin: 0 0 24px;
+  overflow-wrap: anywhere;
   color: var(--subtle);
 }
 
