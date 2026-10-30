@@ -1,0 +1,115 @@
+name: Release auth
+
+# One auth-v* tag (auth-v0.1.0) releases @didit-protocol/auth, auth-react and
+# auth-nextjs at the same version. They depend on @didit-protocol/signals, so
+# release signals (signals-v* tag) first when they need a new version of it.
+on:
+  push:
+    tags:
+      - 'auth-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  github-release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Verify tag and create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#auth-v}"
+
+          # Versions, changelog sections, registry-only dependency specs and a published signals.
+          node scripts/auth-release.mjs "$TAG" --check-registry --notes release-notes.md
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists - skipping."
+            exit 0
+          fi
+
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Didit Authentication $VERSION" \
+            --notes-file release-notes.md
+
+  publish-npm:
+    name: Publish to npm
+    if: vars.NPM_TRUSTED_PUBLISHING == 'true'
+    needs: github-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify packages
+        run: |
+          set -euo pipefail
+          npm run build:auth
+          npm test -w @didit-protocol/auth -- --runInBand
+          npm run typecheck -w @didit-protocol/auth
+          npm run size -w @didit-protocol/auth
+          npm run typecheck:auth
+          npm run test:auth -- --runInBand
+          node --test scripts/auth-release.test.mjs
+          for PACKAGE in auth auth-react auth-nextjs; do
+            npm pack --dry-run -w "@didit-protocol/$PACKAGE"
+          done
+
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: Publish
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#auth-v}"
+          # Dependency order: auth-react can run on auth, and auth-nextjs pins both.
+          for PACKAGE in auth auth-react auth-nextjs; do
+            if npm view "@didit-protocol/$PACKAGE@$VERSION" version >/dev/null 2>&1; then
+              echo "@didit-protocol/$PACKAGE@$VERSION is already published - skipping."
+              continue
+            fi
+            npm publish -w "@didit-protocol/$PACKAGE" --access public
+          done
+
+      - name: Install from npm in a clean directory
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#auth-v}"
+          cd "$(mktemp -d)"
+          echo '{"private":true}' > package.json
+          # The registry can take a moment to serve a version it just accepted.
+          for ATTEMPT in 1 2 3 4 5 6; do
+            if npm install --no-audit --no-fund --ignore-scripts "@didit-protocol/auth-nextjs@$VERSION"; then
+              npm ls --all >/dev/null
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "npm install @didit-protocol/auth-nextjs@$VERSION did not resolve." >&2
+          exit 1

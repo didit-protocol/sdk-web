@@ -1,0 +1,35 @@
+{
+  "scenario": "rate-limited",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "result": {
+    "error": {
+      "code": "rate_limited",
+      "status": 429
+    }
+  },
+  "events": [],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "FiB4ZoRtPC1Ndb97bx01ag",
+          "code_challenge": "YvfvxTJkGEQ3gBFnuTmvZ5Ol-AxyTyNj0CI-nodcs6s",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "Retry-After": "60"
+        },
+        "body": {
+          "detail": "Too many requests from this IP address. Please wait before trying again. Expected available in 60 seconds."
+        }
+      }
+    }
+  ]
+}
