@@ -320,10 +320,10 @@ test("neither storage nor a reported error keeps the password, a code or a used 
   await openApp(page, { scenario: "wrong-password" });
   const failure = await page.evaluate(
     (password) => window.auth.password.signIn({ email: "person@example.com", password }).catch((error) => ({ code: error.code, text: `${error.message} ${error.stack}` })),
-    "Not-the-password-0001"
+    "Not-the-password-1"
   );
   expect(failure.code).toBe("invalid_credentials");
-  expect(failure.text).not.toContain("Not-the-password-0001");
+  expect(failure.text).not.toContain("Not-the-password-1");
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length, document.cookie])).toEqual([0, 0, ""]);
 
   const recorded = fixture("password-sign-in");
