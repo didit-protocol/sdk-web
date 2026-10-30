@@ -29,6 +29,23 @@ import {
 
 type TransactionActionOutcome = "finished" | "aborted";
 
+/**
+ * Embedded mode renders inside an element that already exists on the
+ * integrator's page. Without it the modal never shows anything (embedded mode
+ * never activates the overlay), so the launch fails with a message the
+ * integrator can act on instead of silently presenting nothing.
+ */
+function assertEmbeddedHostExists(configuration: DiditSdkConfiguration | undefined): void {
+  if (!configuration?.embedded) return;
+  const containerId = configuration.embeddedContainerId;
+  if (!containerId) {
+    throw new Error("Embedded mode requires embeddedContainerId: the id of the element that hosts the verification.");
+  }
+  if (typeof document === "undefined" || !document.getElementById(containerId)) {
+    throw new Error(`Embedded container "#${containerId}" was not found in the page.`);
+  }
+}
+
 export class DiditSdk {
   private static _instance: DiditSdk | null = null;
 
