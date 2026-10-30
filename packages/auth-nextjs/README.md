@@ -131,7 +131,7 @@ The proxy serves these routes; your app needs no route files for them.
 | --- | --- |
 | `GET /auth/sign-in`, `/auth/sign-up`, `/auth/reauthenticate` | Open the hosted page with PKCE. `redirect_url` (a path in your app) is where the person comes back to. |
 | `GET` the path of `DIDIT_REDIRECT_URI` | Checks the state, exchanges the code and stores the session. Brings a person back from a step-up's check. |
-| `POST /auth/sign-out` | Ends the session at Didit and clears the cookies. |
+| `POST /auth/sign-out` | Ends the session at Didit and clears the cookies. This browser is signed out even when Didit cannot be reached; the session there then ends when it expires or is ended from the console. |
 | `POST /auth/step-up`, `GET /auth/step-up/{id}` | Asks the application's step-up rules about an action, and reads a step-up's outcome. |
 | `POST /auth/exchange` | Completes a headless sign-in: exchanges its one-time code and stores the session. |
 | `GET /auth/session`, `GET /auth/token` | The session and the access token, for this app's own pages. |
@@ -158,6 +158,8 @@ rotates the refresh token first, so pages render with a valid session.
 
 - Reauthentication requires an existing session and binds the callback to that
   same person. A different identity is refused and its new session is revoked.
+  A browser that opens it with no session left is sent on to the sign-in page,
+  so the person is never left looking at a JSON answer.
 - A step-up's outcome is read from Didit with the person's session, never from
   the address it came back with.
 - Sign-out reports an upstream failure and retains the browser session so the
