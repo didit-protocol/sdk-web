@@ -101,7 +101,8 @@ export function createCoreAuthClient(options: CoreClientOptions): AuthClient {
     },
     load() {
       loading ??= restore().catch(() => {
-        store.set(snapshotOf(null));
+        // A peer may have established the session while this restore was failing: keep it.
+        if (store.get().status !== "signed-in") store.set(snapshotOf(null));
         console.error("[didit-auth] Could not restore the session.");
       });
 

@@ -66,7 +66,7 @@ describe("<DiditAuthProvider>", () => {
     const { client } = testClient();
     const original = Object.getOwnPropertyDescriptor(globalThis, "navigator");
     const errors = jest.spyOn(console, "error").mockImplementation(() => undefined);
-    const Language = () => <span>{useDiditAuthContext().locale}</span>;
+    const Language = () => <span id="language">{useDiditAuthContext().locale}</span>;
 
     Object.defineProperty(globalThis, "navigator", { value: undefined, configurable: true });
     const html = renderToString(
@@ -75,6 +75,7 @@ describe("<DiditAuthProvider>", () => {
       </DiditAuthProvider>
     );
     Object.defineProperty(globalThis, "navigator", { value: { language: "es-MX" }, configurable: true });
+    expect(html).toContain(">en<");
     const container = document.createElement("div");
     container.innerHTML = html;
     document.body.append(container);
@@ -89,8 +90,7 @@ describe("<DiditAuthProvider>", () => {
     });
 
     expect(errors.mock.calls.map((call) => String(call[0])).filter((text) => /hydrat/i.test(text))).toEqual([]);
-    expect(container.textContent).toBe("en");
-    await waitFor(() => expect(container.textContent).toBe("es"));
+    await waitFor(() => expect(container.querySelector("#language")?.textContent).toBe("es"));
     container.remove();
     if (original) Object.defineProperty(globalThis, "navigator", original);
     jest.restoreAllMocks();

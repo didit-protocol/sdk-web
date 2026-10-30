@@ -1,6 +1,7 @@
 /** @type {import('jest').Config} */
 module.exports = {
   testEnvironment: "jsdom",
+  setupFiles: ["<rootDir>/jest.setup.cjs"],
   roots: ["<rootDir>/src"],
   testMatch: ["**/__tests__/**/*.test.ts?(x)"],
   transform: {

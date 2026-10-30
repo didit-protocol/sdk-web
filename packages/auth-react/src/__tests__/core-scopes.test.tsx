@@ -70,12 +70,15 @@ import { createCoreAuthClient } from "../core";
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.spyOn(console, "error").mockImplementation(() => undefined);
   signedIn = false;
   pending = true;
   exchanges = 0;
   listeners.clear();
   window.history.replaceState(null, "", "/callback?code=c&state=s");
 });
+
+afterEach(() => jest.restoreAllMocks());
 
 it("settles two provider scopes on the one session and exchanges the redirect once", async () => {
   const first = createCoreAuthClient({ publishableKey: "pk_test_example" });
@@ -84,9 +87,6 @@ it("settles two provider scopes on the one session and exchanges the redirect on
   second.subscribe(() => undefined);
 
   await Promise.all([first.load(), second.load()]);
-  await new Promise((r) => setTimeout(r, 50));
-  console.log("DBG", JSON.stringify({ first: first.getSnapshot().status, second: second.getSnapshot().status, calls: (createDiditAuth as any).mock.calls.length, subs: 0 }));
-
   await waitFor(() => expect(second.getSnapshot().status).toBe("signed-in"));
   expect(first.getSnapshot().status).toBe("signed-in");
   expect(second.getSnapshot().session?.user.id).toBe(coreSession.userId);
@@ -97,8 +97,8 @@ it("settles two provider scopes on the one session and exchanges the redirect on
 it("tells the other scope when one signs out", async () => {
   const first = createCoreAuthClient({ publishableKey: "pk_test_example" });
   const second = createCoreAuthClient({ publishableKey: "pk_test_example" });
-  first.subscribe(() => undefined);
-  second.subscribe(() => undefined);
+  const stopFirst = first.subscribe(() => undefined);
+  const stopSecond = second.subscribe(() => undefined);
   await Promise.all([first.load(), second.load()]);
   await waitFor(() => expect(second.getSnapshot().status).toBe("signed-in"));
 
@@ -106,4 +106,6 @@ it("tells the other scope when one signs out", async () => {
 
   await waitFor(() => expect(second.getSnapshot().status).toBe("signed-out"));
   expect(first.getSnapshot().status).toBe("signed-out");
+  stopFirst();
+  stopSecond();
 });
