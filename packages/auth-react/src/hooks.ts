@@ -14,9 +14,12 @@ import type {
 } from "./types.js";
 
 export function useAuthSnapshot(): AuthSnapshot {
-  const { client } = useDiditAuthContext();
+  const { client, sessionUnavailable } = useDiditAuthContext();
+  const snapshot = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
 
-  return useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
+  // A client that cannot load the session reads as signed out, so protected screens render their
+  // guest state instead of waiting on a load that already failed.
+  return sessionUnavailable && snapshot.status === "loading" ? { status: "signed-out", session: null } : snapshot;
 }
 
 export interface UseAuthResult extends HeadlessSignIn {
