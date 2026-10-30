@@ -158,6 +158,8 @@ rotates the refresh token first, so pages render with a valid session.
 
 - Reauthentication requires an existing session and binds the callback to that
   same person. A different identity is refused and its new session is revoked.
+  A browser that opens it with no session left is sent on to the sign-in page,
+  so the person is never left looking at a JSON answer.
 - A step-up's outcome is read from Didit with the person's session, never from
   the address it came back with.
 - Sign-out reports an upstream failure and retains the browser session so the

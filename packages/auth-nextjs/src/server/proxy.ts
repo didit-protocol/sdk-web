@@ -158,7 +158,18 @@ async function startHostedSignIn(request: NextRequest, config: DiditAuthConfig):
   const reauthenticating = request.nextUrl.pathname === `${config.basePath}/reauthenticate`;
   const current = reauthenticating ? await resolve(request, config, true) : null;
 
-  if (reauthenticating && !current?.session) return json({ error: "signed_out" }, 401);
+  if (reauthenticating && !current?.session) {
+    // The session this page asked about has already ended. A browser that arrives here is signing in, so
+    // it goes on to the sign-in page rather than being answered with JSON it cannot read.
+    if (fromClient(request)) return json({ error: "signed_out" }, 401);
+    const signIn = new URL(`${config.basePath}/sign-in`, config.redirectUri);
+
+    signIn.searchParams.set("redirect_url", returnTo);
+    const response = noStore(NextResponse.redirect(signIn));
+
+    writeUpdate(response, config, current?.update ?? null);
+    return response;
+  }
   const verifier = randomString();
   const state = randomString();
   // The hosted page opens on sign-in and links to sign-up and password reset itself.
@@ -242,11 +253,17 @@ async function storeSession(
 
   // Signing in again in this browser (for example to confirm it is you) replaces the earlier session.
   const old = readCookies(request, cookieNames(config));
-  const previous = old.access ?? (old.refresh ? (await refreshOnce(config, old.refresh.token))?.accessToken : null);
 
-  if (previous && previous !== tokens.accessToken) {
-    forgetSession(config, previous);
-    await endSession(config, previous);
+  try {
+    const previous = old.access ?? (old.refresh ? (await refreshOnce(config, old.refresh.token))?.accessToken : null);
+
+    if (previous && previous !== tokens.accessToken) {
+      forgetSession(config, previous);
+      await endSession(config, previous);
+    }
+  } catch {
+    // Didit could not end the earlier session: that is no reason to refuse the new one.
+    console.warn("[didit-auth] Could not end the earlier session of this browser at Didit.");
   }
   writeUpdate(response, config, { kind: "set", tokens, sessionEnd: Math.floor(Date.parse(session.expiresAt) / 1000) });
 }
