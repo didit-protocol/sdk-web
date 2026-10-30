@@ -1,0 +1,349 @@
+{
+  "scenario": "protection-email-code",
+  "origin": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766",
+  "publishableKey": "pk_test_aHR0cDovL2V4YW1wbGUtb3JnYW5pemF0aW9uLTg2MjRlYWI1NzYyMjUwNDlmYThhNDE1MTViYTE3NWQ4LnNhbmRib3guYXV0aC5sb2NhbGhvc3Q6ODc2Ng",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "email": "protected-person@example.com",
+  "wrongPassword": "Not-the-password-0000",
+  "failures": [
+    "invalid_credentials",
+    "invalid_credentials",
+    "invalid_credentials",
+    "invalid_credentials",
+    "invalid_credentials"
+  ],
+  "challenged": {
+    "status": "protection_required",
+    "methods": [
+      "email_code"
+    ],
+    "expiresIn": 300
+  },
+  "emailSubject": "Confirm your sign-in",
+  "code": "522268",
+  "wrongCode": "000000",
+  "wrong": {
+    "error": "invalid_grant"
+  },
+  "result": {
+    "status": "signed_in",
+    "methods": [
+      "password"
+    ],
+    "mfaVerified": false
+  },
+  "events": [
+    "SIGNED_IN"
+  ],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "fD7m0NmmQcJzYjcSsniEGg",
+          "code_challenge": "FucorzDjJQn6L8JaMquo8JunsVwYD5GWkZyInVL9m3Q",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "PzLugeQ8v6PfSKFFM0qH0-vEWZhMpH9zsNZk29Wa8RI",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "PzLugeQ8v6PfSKFFM0qH0-vEWZhMpH9zsNZk29Wa8RI",
+          "email": "protected-person@example.com",
+          "password": "Not-the-password-0000"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "invalid_credentials"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "zSXhYulK_0VaQV7D_VuPwg",
+          "code_challenge": "0kpkpJajuZpHHlEl-AXcwBibmFtOrj_w7v46GkOtOkE",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "nDxctsgAKymhH0e8pID2GWu4h58Bt3HkVQ38WYdTrIc",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "nDxctsgAKymhH0e8pID2GWu4h58Bt3HkVQ38WYdTrIc",
+          "email": "protected-person@example.com",
+          "password": "Not-the-password-0000"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "invalid_credentials"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "m-T32gixqxyhspkP7wpnIA",
+          "code_challenge": "Vn3DGQpJ1MLLrlorTkJBCCRWLIiKrOOMwhA6sOPX0W4",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "bRfDWflA-J53xAlnjTBH5IFlLZ_eeEbovOdT1nrHoMg",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "bRfDWflA-J53xAlnjTBH5IFlLZ_eeEbovOdT1nrHoMg",
+          "email": "protected-person@example.com",
+          "password": "Not-the-password-0000"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "invalid_credentials"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "AYpDmVa96HWOJF1C03sonw",
+          "code_challenge": "1xpKFqFph5BtFPb0GoqIUTNvKl3RDE3DBXJYpnNNlS4",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "XlhA4gAR8neKUL8ukojalgopP7PSHO8NN5tFIdup8B8",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "XlhA4gAR8neKUL8ukojalgopP7PSHO8NN5tFIdup8B8",
+          "email": "protected-person@example.com",
+          "password": "Not-the-password-0000"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "invalid_credentials"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "NUkI_Ylh4ObMAOWpH0rsRw",
+          "code_challenge": "N1Be5wm1mVHinCIX32RB9FWxPhk7YjlML2LcZZVHLck",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "1hXvMIS0qSlBpcqjRNEOYt-ZQErL19gtfddbxFNhLIQ",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "1hXvMIS0qSlBpcqjRNEOYt-ZQErL19gtfddbxFNhLIQ",
+          "email": "protected-person@example.com",
+          "password": "Not-the-password-0000"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "invalid_credentials"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "LqA-E0mS8OYgE7dYyV2JpQ",
+          "code_challenge": "fnM7FXF2SihxT7fmlD2es5m5lP_6lr3MaBRhlfs8D38",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "lmuXUJ9xwGSq1sG6RIicTRZE2HrfcbZWegrsek-fZxc",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "lmuXUJ9xwGSq1sG6RIicTRZE2HrfcbZWegrsek-fZxc",
+          "email": "protected-person@example.com",
+          "password": "Correct-horse-battery-91"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "protection_required": true,
+          "challenge": "DEVNFxw13U5EuLd8o1m_k_fiOAlXdtNmH18xo7H5e1Y",
+          "methods": [
+            "email_code"
+          ],
+          "options": null,
+          "expires_in": 300
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "protection/complete/",
+        "body": {
+          "challenge": "DEVNFxw13U5EuLd8o1m_k_fiOAlXdtNmH18xo7H5e1Y",
+          "method": "email_code",
+          "code": "000000"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "invalid_grant"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "protection/complete/",
+        "body": {
+          "challenge": "DEVNFxw13U5EuLd8o1m_k_fiOAlXdtNmH18xo7H5e1Y",
+          "method": "email_code",
+          "code": "522268"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "code": "Iw5HPzyyoDfCbeOnPNat5GHQElJqciqg9A-xQR2avAc",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "LqA-E0mS8OYgE7dYyV2JpQ"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "Iw5HPzyyoDfCbeOnPNat5GHQElJqciqg9A-xQR2avAc",
+          "code_verifier": "210TkZpqDkTNVcF94hvdsQRLazylMAMO6OanAsV-tKg",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtfWmFScXRUZ3dTa0pSLU9hcHFYazhadyIsInR5cCI6ImF0K2p3dCJ9.eyJpc3MiOiJodHRwOi8vZXhhbXBsZS1vcmdhbml6YXRpb24tODYyNGVhYjU3NjIyNTA0OWZhOGE0MTUxNWJhMTc1ZDguc2FuZGJveC5hdXRoLmxvY2FsaG9zdDo4NzY2IiwiYXVkIjoiYjRiOTk5YTUtMmM2YS00MTg2LWI3NDYtMzI5YzAwMGMyNzU2Iiwic3ViIjoiMDAwNzBiMDctZTJlZS00NGI2LTg5NGYtZDA1NjAwZTY5NGZhIiwic2lkIjoiZDQyZTJjMDgtMDliMi00MzIyLThlYzQtOTBmNzExYzJmZTQ2IiwianRpIjoiaEVGc2FsVTBJM0ZnTGJtZUJQME5ydyIsImlhdCI6MTc5MTg4NDAyNywiZXhwIjoxNzkxODg0MzI3LCJ2ZW5kb3JfZGF0YSI6IjAwMDcwYjA3LWUyZWUtNDRiNi04OTRmLWQwNTYwMGU2OTRmYSIsIm9yZyI6bnVsbCwidmVyaWZpZWQiOnt9LCJhbXIiOlsicGFzc3dvcmQiXSwiYWN0IjpudWxsLCJjbGllbnRfaWQiOiJiNGI5OTlhNS0yYzZhLTQxODYtYjc0Ni0zMjljMDAwYzI3NTYifQ.5Jb09rMaRzQnkthbQTSaboRx_Var8oBnZQkK7Bjy8VNOPmPqElgILvmgNcBBkS_S0HsegNYkMhGaln5EW2xWfQ",
+          "id_token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtfWmFScXRUZ3dTa0pSLU9hcHFYazhadyIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwOi8vZXhhbXBsZS1vcmdhbml6YXRpb24tODYyNGVhYjU3NjIyNTA0OWZhOGE0MTUxNWJhMTc1ZDguc2FuZGJveC5hdXRoLmxvY2FsaG9zdDo4NzY2IiwiYXVkIjoiYjRiOTk5YTUtMmM2YS00MTg2LWI3NDYtMzI5YzAwMGMyNzU2Iiwic3ViIjoiMDAwNzBiMDctZTJlZS00NGI2LTg5NGYtZDA1NjAwZTY5NGZhIiwic2lkIjoiZDQyZTJjMDgtMDliMi00MzIyLThlYzQtOTBmNzExYzJmZTQ2IiwianRpIjoiU2d2WlRCdHRWbHRubnA1ckxmY0wzQSIsImlhdCI6MTc5MTg4NDAyNywiZXhwIjoxNzkxODg0MzI3LCJ2ZW5kb3JfZGF0YSI6IjAwMDcwYjA3LWUyZWUtNDRiNi04OTRmLWQwNTYwMGU2OTRmYSIsIm9yZyI6bnVsbCwidmVyaWZpZWQiOnt9LCJhbXIiOlsicGFzc3dvcmQiXSwiYWN0IjpudWxsLCJhdXRoX3RpbWUiOjE3OTE4ODQwMjcsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJlbWFpbCI6InByb3RlY3RlZC1wZXJzb25AZXhhbXBsZS5jb20ifQ.ZPNvdppjlfe4ZTrFyqgO9Sj_wYQ896REXr8Metmvoj4RbhL2UWjteXIDcSL2ZkVq0eLFnvBddQQUjv4iOSPHhQ",
+          "refresh_token": "Nu_Mn2DfsWoVS2uxg8z6s3yVMNjJaFDgx9retXB-TcvZ7_q4QIyc8muVeVpJzJrM",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "d42e2c08-09b2-4322-8ec4-90f711c2fe46"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer eyJhbGciOiJFUzI1NiIsImtpZCI6ImtfWmFScXRUZ3dTa0pSLU9hcHFYazhadyIsInR5cCI6ImF0K2p3dCJ9.eyJpc3MiOiJodHRwOi8vZXhhbXBsZS1vcmdhbml6YXRpb24tODYyNGVhYjU3NjIyNTA0OWZhOGE0MTUxNWJhMTc1ZDguc2FuZGJveC5hdXRoLmxvY2FsaG9zdDo4NzY2IiwiYXVkIjoiYjRiOTk5YTUtMmM2YS00MTg2LWI3NDYtMzI5YzAwMGMyNzU2Iiwic3ViIjoiMDAwNzBiMDctZTJlZS00NGI2LTg5NGYtZDA1NjAwZTY5NGZhIiwic2lkIjoiZDQyZTJjMDgtMDliMi00MzIyLThlYzQtOTBmNzExYzJmZTQ2IiwianRpIjoiaEVGc2FsVTBJM0ZnTGJtZUJQME5ydyIsImlhdCI6MTc5MTg4NDAyNywiZXhwIjoxNzkxODg0MzI3LCJ2ZW5kb3JfZGF0YSI6IjAwMDcwYjA3LWUyZWUtNDRiNi04OTRmLWQwNTYwMGU2OTRmYSIsIm9yZyI6bnVsbCwidmVyaWZpZWQiOnt9LCJhbXIiOlsicGFzc3dvcmQiXSwiYWN0IjpudWxsLCJjbGllbnRfaWQiOiJiNGI5OTlhNS0yYzZhLTQxODYtYjc0Ni0zMjljMDAwYzI3NTYifQ.5Jb09rMaRzQnkthbQTSaboRx_Var8oBnZQkK7Bjy8VNOPmPqElgILvmgNcBBkS_S0HsegNYkMhGaln5EW2xWfQ"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "00070b07-e2ee-44b6-894f-d05600e694fa",
+          "sid": "d42e2c08-09b2-4322-8ec4-90f711c2fe46",
+          "application_id": "b4b999a5-2c6a-4186-b746-329c000c2756",
+          "vendor_data": "00070b07-e2ee-44b6-894f-d05600e694fa",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "protected-person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "verified": null,
+          "expires_at": "2026-11-12T09:33:47.530430Z",
+          "post_logout_redirect_uri": "",
+          "organizations": []
+        }
+      }
+    }
+  ]
+}
