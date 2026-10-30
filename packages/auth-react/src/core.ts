@@ -14,6 +14,17 @@ export interface CoreClientOptions {
   language?: "en" | "es" | "fr" | "de" | "ja";
 }
 
+// Every client mounted on this page shares the browser's one session. When one of them restores,
+// signs in or signs out, it tells the others to re-read the session, so two provider scopes on the
+// same page never disagree about who is signed in. A client adds its listener once mounted.
+const pagePeers = new Set<() => void>();
+
+function announceSessionChange(source: () => void): void {
+  pagePeers.forEach((refresh) => {
+    if (refresh !== source) refresh();
+  });
+}
+
 function toSession(session: CoreSession): DiditSession;
 function toSession(session: CoreSession | null): DiditSession | null;
 function toSession(session: CoreSession | null): DiditSession | null {
