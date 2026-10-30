@@ -84,6 +84,8 @@ it("settles two provider scopes on the one session and exchanges the redirect on
   second.subscribe(() => undefined);
 
   await Promise.all([first.load(), second.load()]);
+  await new Promise((r) => setTimeout(r, 50));
+  console.log("DBG", JSON.stringify({ first: first.getSnapshot().status, second: second.getSnapshot().status, calls: (createDiditAuth as any).mock.calls.length, subs: 0 }));
 
   await waitFor(() => expect(second.getSnapshot().status).toBe("signed-in"));
   expect(first.getSnapshot().status).toBe("signed-in");
