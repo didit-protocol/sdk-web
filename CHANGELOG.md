@@ -2,6 +2,18 @@
 
 All notable changes to `@didit-protocol/sdk-web` will be documented in this file.
 
+## [0.5.1] - 2026-10-31
+
+### Added
+- The verification iframe, in a modal and embedded, also allows `digital-credentials-get`, so the hosted flow can ask a digital ID wallet such as Google Wallet for the user's ID through the W3C Digital Credentials API without leaving the SDK.
+
+### Fixed
+- A failed launch keeps the SDK in the `error` state with its `errorMessage` instead of silently returning to `idle`, and starting again clears it.
+- Closing or completing a verification reports the `idle` state through `onStateChange`.
+- A verification the user closes by hand reports the session the flow already announced in the `cancelled` result.
+- Embedded mode fails a launch with a clear error when its host element is missing, instead of rendering an overlay it never shows.
+- Focusing the exit confirmation keeps its title visible in Safari.
+
 ## [0.5.0] - 2026-11-01
 
 ### Added
@@ -16,11 +28,7 @@ All notable changes to `@didit-protocol/sdk-web` will be documented in this file
 - The verification iframe, in a modal and embedded, also allows `clipboard-write`, so the hosted flow's copy buttons work inside the SDK.
 
 ### Fixed
-- The exit confirmation is announced as a dialog, and its Exit control is a button that works from the keyboard. Focus stays inside the confirmation while it is open and goes back to where it was when the user continues. In the redesigned flow's modal, a confirmation taller than the modal at a large text size scrolls, wraps long words and opens again at its title; focusing the dialog keeps the title visible in Safari.
-- A failed launch keeps the SDK in the `error` state with its `errorMessage` instead of silently returning to `idle`, and starting again clears it.
-- Closing or completing a verification reports the `idle` state through `onStateChange`.
-- A verification the user closes by hand reports the session the flow already announced in the `cancelled` result.
-- Embedded mode fails a launch with a clear error when its host element is missing, instead of rendering an overlay it never shows.
+- The exit confirmation is announced as a dialog, and its Exit control is a button that works from the keyboard. Focus stays inside the confirmation while it is open and goes back to where it was when the user continues. In the redesigned flow's modal, a confirmation taller than the modal at a large text size scrolls, wraps long words and opens again at its title.
 
 ## [0.4.0] - 2026-09-19
 
