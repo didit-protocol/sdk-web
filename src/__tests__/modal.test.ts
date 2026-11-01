@@ -592,14 +592,49 @@ describe("VerificationModal flow layout", () => {
       expect(loaderHidden(modal)).toBe(false);
     });
 
+    function withShownSize(height: number, innerWidth: number, run: () => void): void {
+      const heightSpy = jest.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(height);
+      const widthBefore = window.innerWidth;
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: innerWidth });
+      try {
+        run();
+      } finally {
+        heightSpy.mockRestore();
+        Object.defineProperty(window, "innerWidth", { configurable: true, value: widthBefore });
+      }
+    }
+
     it("shows the handoff card at once, with no animation, when the flow reports a handoff", () => {
-      const { modal } = openModal();
+      withShownSize(660, 1024, () => {
+        const { modal } = openModal();
 
-      postLayout(modal, { contentHeight: 660, kind: "handoff" });
+        postLayout(modal, { contentHeight: 660, kind: "handoff" });
 
-      expect(kindOf(modal)).toBe("handoff");
-      expect(getContainer(modal).style.getPropertyValue("--didit-content-height")).toBe("660px");
-      expect(getContainer(modal).classList.contains(CSS_CLASSES.sizeAnimated)).toBe(false);
+        expect(kindOf(modal)).toBe("handoff");
+        expect(getContainer(modal).style.getPropertyValue("--didit-content-height")).toBe("660px");
+        expect(getContainer(modal).classList.contains(CSS_CLASSES.sizeAnimated)).toBe(false);
+      });
+    });
+
+    it("animates the one correction when a handoff reports a height other than the pending card's", () => {
+      withShownSize(660, 800, () => {
+        const { modal } = openModal();
+
+        postLayout(modal, { contentHeight: 520, kind: "handoff" });
+
+        expect(kindOf(modal)).toBe("handoff");
+        expect(getContainer(modal).classList.contains(CSS_CLASSES.sizeAnimated)).toBe(true);
+      });
+    });
+
+    it("moves nothing when a narrow window's handoff reports the pending card's height", () => {
+      withShownSize(660, 800, () => {
+        const { modal } = openModal();
+
+        postLayout(modal, { contentHeight: 660, kind: "handoff" });
+
+        expect(getContainer(modal).classList.contains(CSS_CLASSES.sizeAnimated)).toBe(false);
+      });
     });
 
     it("follows the device theme while pending", () => {
@@ -642,10 +677,12 @@ describe("VerificationModal flow layout", () => {
 
     it("animates the one later change, such as continuing on this computer, and no more", () => {
       jest.useFakeTimers();
+      const heightSpy = jest.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(660);
       const { modal } = openModal();
       const animated = () => getContainer(modal).classList.contains(CSS_CLASSES.sizeAnimated);
 
       postLayout(modal, { contentHeight: 660, kind: "handoff" });
+      heightSpy.mockRestore();
       expect(animated()).toBe(false);
       postLayout(modal, { contentHeight: 700, kind: "step" });
 

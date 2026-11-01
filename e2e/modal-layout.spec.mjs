@@ -298,6 +298,17 @@ test("waits as the real card with its loader inside, then shows what the flow re
   await expectSize(container, 960, 660);
 });
 
+test("in a narrow window the pending card is corrected once to the handoff's own height", async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 900 });
+  await page.goto("/e2e/fixtures/host.html?layout=520&kind=handoff&delay=1200");
+  const container = page.locator(CONTAINER);
+
+  await expect(container).toHaveAttribute("data-didit-kind", "pending");
+  await expectSize(container, 768, 660);
+  await expect(container).toHaveAttribute("data-didit-kind", "handoff");
+  await expectSize(container, 768, 520);
+});
+
 test("never opens small: the pending card is the handoff card, then a step animates once", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.addInitScript(() => {

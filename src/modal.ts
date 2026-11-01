@@ -758,9 +758,11 @@ export class VerificationModal {
     this.container.classList.add(CSS_CLASSES.flowSized);
     this.container.dataset.diditTheme = layout.colorScheme;
     this.container.dataset.diditDir = layout.dir;
+    // The height the person sees now, before the reported content height can change it.
+    const shownHeight = this.container.offsetHeight;
     this.container.style.setProperty("--didit-content-height", `${layout.contentHeight}px`);
     this.matchPageBackground(layout.colorScheme);
-    this.setModalKind(layout.kind);
+    this.setModalKind(layout.kind, layout.kind === "handoff" && this.handoffHeight(layout) === shownHeight);
   }
 
   /** Whether the window is a computer-sized one: a phone is full screen and never waits for a layout. */
@@ -768,11 +770,17 @@ export class VerificationModal {
     return window.matchMedia?.("(max-width: 540px)").matches ?? false;
   }
 
+  /** The height the handoff card takes for a layout, as the size rules above compute it (rounded like offsetHeight). */
+  private handoffHeight(layout: FlowLayout): number {
+    const cap = window.innerHeight * 0.9;
+    return Math.round(Math.min(window.innerWidth >= 1000 ? 660 : layout.contentHeight, cap));
+  }
+
   /**
    * Sets what the modal is sized for. Leaving "pending" shows the modal at its final size with no
    * transition; any later change animates once.
    */
-  private setModalKind(kind: ModalKind): void {
+  private setModalKind(kind: ModalKind, sizeUnchanged = false): void {
     if (!this.container) return;
     const previous = this.container.dataset.diditKind;
     if (previous === kind) return;
@@ -782,8 +790,10 @@ export class VerificationModal {
     }
     // Every change of kind animates, the pending card included (it is on screen), and only for the
     // length of the change, so resizing the window never lags behind.
-    // Pending already is the handoff card, so a handoff first layout moves nothing.
-    if (previous !== undefined && !(previous === "pending" && kind === "handoff")) this.animateSizeOnce();
+    // Pending already is the handoff card: a handoff first layout of the same size moves nothing,
+    // while a different reported height (a narrow window) animates the correction once.
+    const staysPut = previous === "pending" && kind === "handoff" && sizeUnchanged;
+    if (previous !== undefined && !staysPut) this.animateSizeOnce();
     this.container.dataset.diditKind = kind;
     // The final size is in place before the loader goes; a flow still loading keeps its loader.
     if (previous === "pending" && !this.state.isLoading) this.loadingEl?.classList.add("hidden");
