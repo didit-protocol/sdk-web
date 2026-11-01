@@ -23,8 +23,25 @@ async function openFixture(page, viewport, options = "") {
 
   await expect(iframe).toBeVisible();
   await expect(iframe.contentFrame().getByRole("heading", { name: "Verify your identity" })).toBeVisible();
+  await expectSettled(page);
 
   return iframe;
+}
+
+/**
+ * The first change from the pending card to the flow's size animates once (the card is on
+ * screen), and the flow shows in the same frame. Sizes are only read once that has finished.
+ */
+async function expectSettled(page) {
+  // An embedded host has no modal card, so it is settled from the start.
+  await expect
+    .poll(() =>
+      page.evaluate((selector) => {
+        const container = document.querySelector(selector);
+        return !container || (container.dataset.diditKind !== "pending" && !container.classList.contains("didit-size-animated"));
+      }, CONTAINER)
+    )
+    .toBe(true);
 }
 
 async function elementHeight(locator) {
