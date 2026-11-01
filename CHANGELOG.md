@@ -2,6 +2,15 @@
 
 All notable changes to `@didit-protocol/sdk-web` will be documented in this file.
 
+## [0.5.3] - 2026-11-01
+
+### Changed
+- The modal opens at the size of the flow's first screen: 960 x 660 for the computer handoff card on a window of 1000 px or more, and phone-sized steps of 440 x 860. Moving between them resizes it once.
+- While the flow loads, the modal already shows that card with the spinner inside it, in the device's light or dark theme. The flow stays hidden until it reports its first layout, and a 3 second fallback means the modal can never hang.
+
+### Fixed
+- The host page no longer shows around a full-screen modal on a phone.
+
 ## [0.5.1] - 2026-10-31
 
 ### Added
