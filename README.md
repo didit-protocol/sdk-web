@@ -257,19 +257,13 @@ DiditSdk.shared.startVerification({
 
 ## Modal Sizing
 
-Modal mode uses a maximum width of 500px and a maximum height of 700px. On shorter desktop and landscape viewports, the iframe tracks 90% of the visible viewport so the modal never extends beyond its container. The hosted flow owns the scrollbar inside the iframe, keeping later steps reachable without scrolling the page behind the modal.
+Modal mode is one phone-shaped size from its first frame: 440px wide and 860px tall, or the height of the window less a 16px margin above and below when the window is shorter. It never resizes while the flow runs, so every step fits as it does on a phone, without a jump when it opens.
 
-Browsers that support dynamic viewport units use `dvh`, while older supported browsers fall back to `vh`. At widths of 540px and below, the modal fills the visible viewport. The close button and exit confirmation stay inside the modal at every size.
+Browsers that support dynamic viewport units use `dvh`, while older supported browsers fall back to `vh`. At widths of 540px and below, the modal fills the visible viewport.
 
 ### Redesigned verification flow
 
-When the hosted verification page reports its layout with a `didit:layout` message, the modal sizes itself around it:
-
-| Window width | Modal |
-|---|---|
-| 1024px and wider | The handoff card: 960px by 660px in every state, at most 90% of the window's width and height |
-| 541px to 1023px | 500px wide, as tall as the page's content, at most 90% of the window's height |
-| 540px and below | Full screen, as above |
+When the hosted verification page reports its layout with a `didit:layout` message, the modal takes the page's light or dark theme and its text direction. The message never changes the modal's size.
 
 The close button becomes a 44px circle over the page's top bar. It follows the page's light or dark theme and moves to the left for right-to-left languages. If a large text size makes the exit confirmation taller than a short page, the confirmation scrolls inside the modal. Until the page reports its layout, and for pages that never do, the modal keeps the 500px by 700px size above. Embedded mode keeps filling its host element. There is nothing to configure, and every existing option keeps working.
 
@@ -277,7 +271,7 @@ The SDK tells the page how it is shown with two query parameters on the verifica
 
 ## Embedded Mode
 
-Render verification inline instead of a modal overlay. Embedded mode does not apply the modal's 500px by 700px cap; the SDK fills the host element's content box. Give the host an explicit or otherwise resolved height:
+Render verification inline instead of a modal overlay. Embedded mode does not apply the modal's size; the SDK fills the host element's content box. Give the host an explicit or otherwise resolved height:
 
 ```html
 <div id="verification-container" style="width: 500px; height: 700px;"></div>

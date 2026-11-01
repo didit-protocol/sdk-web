@@ -8,12 +8,12 @@ const EMBEDDED = ".didit-embedded";
 const HOST = "#verification-container";
 const PROOF_DIR = ".github/pr-review-assets/web-sdk-modal";
 const VIEWPORTS = [
-  { name: "short desktop", viewport: { width: 1366, height: 625 }, height: 562.5 },
-  { name: "tall desktop", viewport: { width: 1366, height: 900 }, height: 700 },
-  { name: "desktop breakpoint", viewport: { width: 541, height: 800 }, height: 700 },
+  { name: "short desktop", viewport: { width: 1366, height: 625 }, height: 593 },
+  { name: "tall desktop", viewport: { width: 1366, height: 900 }, height: 860 },
+  { name: "desktop breakpoint", viewport: { width: 541, height: 800 }, height: 768 },
   { name: "mobile breakpoint", viewport: { width: 540, height: 800 }, height: 800 },
   { name: "mobile portrait", viewport: { width: 390, height: 844 }, height: 844 },
-  { name: "mobile landscape", viewport: { width: 844, height: 390 }, height: 351 }
+  { name: "mobile landscape", viewport: { width: 844, height: 390 }, height: 358 }
 ];
 
 async function openFixture(page, viewport, options = "") {
@@ -106,10 +106,10 @@ for (const scenario of VIEWPORTS) {
 test("updates its height when the viewport resizes", async ({ page }) => {
   const iframe = await openFixture(page, { width: 1366, height: 900 });
 
-  await expectHeight(iframe, 700);
+  await expectHeight(iframe, 860);
   await page.setViewportSize({ width: 1366, height: 625 });
-  await expectHeight(iframe, 562.5);
-  await expectHeight(page.locator(CONTAINER), 562.5);
+  await expectHeight(iframe, 593);
+  await expectHeight(page.locator(CONTAINER), 593);
 });
 
 test("keeps the end of a long verification flow reachable", async ({ page }) => {
@@ -185,16 +185,14 @@ for (const viewport of [{ width: 1366, height: 625 }, { width: 390, height: 844 
   });
 }
 
-// Once the flow posts didit:layout, the modal grows to the handoff card on a
-// computer (960 x 660, at most 90% of the window), follows the content height
-// in a narrow window and stays full screen on a phone.
+// The modal is one phone-shaped size whatever the flow reports: a layout message
+// never resizes it, and it stays full screen on a phone.
 const FLOW_LAYOUTS = [
-  { name: "computer", viewport: { width: 1440, height: 900 }, layout: 600, width: 960, height: 660 },
-  { name: "short computer window", viewport: { width: 1440, height: 580 }, layout: 600, width: 960, height: 522 },
-  { name: "computer window at the breakpoint", viewport: { width: 1024, height: 768 }, layout: 600, width: 921.6, height: 660 },
-  { name: "window just under the breakpoint", viewport: { width: 1023, height: 900 }, layout: 560, width: 500, height: 560 },
-  { name: "narrow window", viewport: { width: 800, height: 900 }, layout: 600, width: 500, height: 600 },
-  { name: "narrow window with tall content", viewport: { width: 800, height: 700 }, layout: 1200, width: 500, height: 630 },
+  { name: "computer", viewport: { width: 1440, height: 900 }, layout: 600, width: 440, height: 860 },
+  { name: "short computer window", viewport: { width: 1440, height: 580 }, layout: 600, width: 440, height: 548 },
+  { name: "computer window at the breakpoint", viewport: { width: 1024, height: 768 }, layout: 600, width: 440, height: 736 },
+  { name: "narrow window", viewport: { width: 800, height: 900 }, layout: 600, width: 440, height: 860 },
+  { name: "narrow window with tall content", viewport: { width: 800, height: 700 }, layout: 1200, width: 440, height: 668 },
   { name: "phone", viewport: { width: 390, height: 844 }, layout: 600, width: 390, height: 844 }
 ];
 
@@ -254,46 +252,54 @@ test("tells the flow it is in a modal with a close button", async ({ page }) => 
   expect(params.get("sdk_close_button")).toBe("true");
 });
 
-test("follows the flow's content height in a narrow window, capped at 90%", async ({ page }) => {
+test("keeps its size in a narrow window whatever height the flow reports", async ({ page }) => {
   const iframe = await openFlowFixture(page, { width: 800, height: 900 }, "?layout=600");
   const container = page.locator(CONTAINER);
 
-  await expectSize(container, 500, 600);
+  await expectSize(container, 440, 860);
   await postLayout(page, iframe, { contentHeight: 560 });
-  await expectSize(container, 500, 560);
+  await expectSize(container, 440, 860);
   await postLayout(page, iframe, { contentHeight: 2000 });
-  await expectSize(container, 500, 810);
+  await expectSize(container, 440, 860);
   expect(await page.evaluate(() => window.diditEvents)).not.toContain("didit:layout");
 });
 
-test("keeps the handoff card size whatever content height the flow reports", async ({ page }) => {
+test("keeps the same size whatever content height the flow reports", async ({ page }) => {
   const iframe = await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=300");
   const container = page.locator(CONTAINER);
 
-  await expectSize(container, 960, 660);
+  await expectSize(container, 440, 860);
   await postLayout(page, iframe, { contentHeight: 900 });
-  await expectSize(container, 960, 660);
+  await expectSize(container, 440, 860);
 });
 
-test("switches between the card, the content height and full screen as the window resizes", async ({ page }) => {
+test("never changes size between opening and the flow's first layout", async ({ page }) => {
+  const iframe = await openFixture(page, { width: 1440, height: 900 });
+  const container = page.locator(CONTAINER);
+
+  await expectSize(container, 440, 860);
+  await postLayout(page, iframe, { contentHeight: 300 });
+  await expect(page.locator(`${CONTAINER}.didit-flow-sized`)).toHaveCount(1);
+  await expectSize(container, 440, 860);
+});
+
+test("keeps its shape and fills a phone as the window resizes", async ({ page }) => {
   await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600");
   const container = page.locator(CONTAINER);
 
-  await expectSize(container, 960, 660);
-  await page.setViewportSize({ width: 800, height: 900 });
-  await expectSize(container, 500, 600);
+  await expectSize(container, 440, 860);
   await page.setViewportSize({ width: 390, height: 844 });
   await expectSize(container, 390, 844);
   await page.setViewportSize({ width: 1440, height: 580 });
-  await expectSize(container, 960, 522);
+  await expectSize(container, 440, 548);
 });
 
-test("keeps the fixed modal when the layout has no content height", async ({ page }) => {
+test("keeps the neutral look when the layout has no content height", async ({ page }) => {
   const iframe = await openFixture(page, { width: 1440, height: 900 });
 
   await postLayout(page, iframe, { colorScheme: "dark" });
   await expect(page.locator(`${CONTAINER}.didit-flow-sized`)).toHaveCount(0);
-  await expectSize(page.locator(CONTAINER), 500, 700);
+  await expectSize(page.locator(CONTAINER), 440, 860);
 });
 
 test("keeps filling the embedded host whatever layout the flow reports", async ({ page }) => {
@@ -498,17 +504,18 @@ async function wheelToEndOfConfirmation(page, frame) {
   expect(await atEnd()).toBe(true);
 }
 
-// A short flow reports a small content height, but the exit confirmation is the SDK's own
-// rem-sized dialog, so at a large text size it is taller than the modal. It must scroll
-// inside the modal, by wheel and pointer only, with nothing clipped above or below.
+// In a short window the exit confirmation, the SDK's own rem-sized dialog, is taller than
+// the modal at a large text size. It must scroll inside the modal, by wheel and pointer
+// only, with nothing clipped above or below.
 for (const theme of ["light", "dark"]) {
-  test(`scrolls an exit confirmation taller than a short flow at 200% text, ${theme}`, async ({ page }) => {
-    await openFlowFixture(page, { width: 800, height: 900 }, `?layout=300&textSize=200&theme=${theme}`);
+  test(`scrolls an exit confirmation taller than a short window at 200% text, ${theme}`, async ({ page }) => {
+    await openFlowFixture(page, { width: 800, height: 332 }, `?layout=300&textSize=200&theme=${theme}`);
     const container = page.locator(CONTAINER);
     const heading = page.getByRole("heading", { name: "Exit verification?" });
     const exit = page.getByText("Exit", { exact: true });
 
-    await expectSize(container, 500, 300);
+    // At 200% text the 1rem margin above and below is 32px each.
+    await expectSize(container, 440, 268);
     await page.getByRole("button", { name: "Close verification" }).click();
     await expect(heading).toBeVisible();
 
@@ -529,7 +536,7 @@ for (const theme of ["light", "dark"]) {
   });
 
   test(`opens a scrolled exit confirmation again at its title at 200% text, ${theme}`, async ({ page }) => {
-    await openFlowFixture(page, { width: 800, height: 900 }, `?layout=300&textSize=200&theme=${theme}`);
+    await openFlowFixture(page, { width: 800, height: 332 }, `?layout=300&textSize=200&theme=${theme}`);
     const heading = page.getByRole("heading", { name: "Exit verification?" });
     const close = page.getByRole("button", { name: "Close verification" });
 

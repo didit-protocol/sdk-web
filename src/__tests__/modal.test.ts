@@ -336,10 +336,11 @@ describe("VerificationModal iframe sizing", () => {
     const container = baseRuleBody(styles, CSS_CLASSES.container);
     const iframe = baseRuleBody(styles, CSS_CLASSES.iframe);
 
-    expect(container).toMatch(/max-height: 90vh;\s+max-height: 90dvh/);
-    expect(container).toContain("max-height: 90dvh");
+    expect(container).toContain("max-width: 440px");
+    expect(container).toMatch(/height: min\(860px, calc\(100vh - 2rem\)\);\s+height: min\(860px, calc\(100dvh - 2rem\)\)/);
     expect(container).toContain("overflow: hidden");
-    expect(iframe).toMatch(/height: 90vh;\s+height: 90dvh;\s+max-height: 700px/);
+    expect(iframe).toContain("height: 100%");
+    expect(iframe).not.toContain("max-height");
   });
 
   it("clears the modal height cap in embedded mode, so a tall host is not truncated", () => {
@@ -415,32 +416,32 @@ describe("VerificationModal flow layout", () => {
     const { modal } = openModal();
 
     expect(isFlowSized(modal)).toBe(false);
-    expect(getContainer(modal).style.getPropertyValue("--didit-flow-height")).toBe("");
   });
 
-  it("sizes the modal from the reported layout and keeps the message from onMessage", () => {
+  it("takes the theme and direction from the reported layout and keeps the message from onMessage", () => {
     const { modal, onMessage } = openModal();
 
     postLayout(modal, { contentHeight: 612.4, colorScheme: "dark", dir: "rtl" });
 
     const container = getContainer(modal);
     expect(isFlowSized(modal)).toBe(true);
-    expect(container.style.getPropertyValue("--didit-flow-height")).toBe("613px");
     expect(container.dataset.diditTheme).toBe("dark");
     expect(container.dataset.diditDir).toBe("rtl");
     expect(onMessage).not.toHaveBeenCalled();
   });
 
-  it("follows the content height each time the flow reports it, including as a JSON string", () => {
+  it("reads a layout sent as a JSON string, and no layout ever resizes the modal", () => {
     const { modal } = openModal();
+    const before = getContainer(modal).getAttribute("style");
 
     postLayout(modal, { contentHeight: 600 });
     dispatchMessage(
       getIframe(modal).contentWindow,
-      JSON.stringify({ type: "didit:layout", data: { contentHeight: 560 }, timestamp: 2 })
+      JSON.stringify({ type: "didit:layout", data: { contentHeight: 560, colorScheme: "dark" }, timestamp: 2 })
     );
 
-    expect(getContainer(modal).style.getPropertyValue("--didit-flow-height")).toBe("560px");
+    expect(getContainer(modal).dataset.diditTheme).toBe("dark");
+    expect(getContainer(modal).getAttribute("style")).toBe(before);
   });
 
   it.each([
@@ -501,7 +502,6 @@ describe("VerificationModal flow layout", () => {
 
     const container = getContainer(modal);
     expect(isFlowSized(modal)).toBe(false);
-    expect(container.style.getPropertyValue("--didit-flow-height")).toBe("");
     expect(container.dataset.diditTheme).toBeUndefined();
     expect(container.dataset.diditDir).toBeUndefined();
 
@@ -509,6 +509,32 @@ describe("VerificationModal flow layout", () => {
     expect(isFlowSized(modal)).toBe(true);
     modal.close();
     expect(isFlowSized(modal)).toBe(false);
+  });
+
+  it("lends a phone page the flow's ground while the full-screen modal is open, and gives it back", () => {
+    const original = window.matchMedia;
+    window.matchMedia = jest.fn((query: string) => ({ matches: query.includes("max-width") })) as unknown as typeof window.matchMedia;
+    document.body.style.backgroundColor = "rgb(1, 2, 3)";
+    const { modal } = openModal();
+
+    postLayout(modal, { contentHeight: 600, colorScheme: "dark" });
+    expect(document.documentElement.style.backgroundColor).toBe("rgb(11, 11, 13)");
+    expect(document.body.style.backgroundColor).toBe("rgb(11, 11, 13)");
+
+    modal.close();
+    expect(document.documentElement.style.backgroundColor).toBe("");
+    expect(document.body.style.backgroundColor).toBe("rgb(1, 2, 3)");
+
+    document.body.style.backgroundColor = "";
+    window.matchMedia = original;
+  });
+
+  it("leaves the page's background alone on a computer", () => {
+    const { modal } = openModal();
+
+    postLayout(modal, { contentHeight: 600, colorScheme: "dark" });
+
+    expect(document.body.style.backgroundColor).toBe("");
   });
 
   it("leaves embedded mode to the host element", () => {
@@ -523,22 +549,16 @@ describe("VerificationModal flow layout", () => {
     postLayout(modal, { contentHeight: 600 });
 
     expect(isFlowSized(modal)).toBe(false);
-    expect(getContainer(modal).style.getPropertyValue("--didit-flow-height")).toBe("");
     expect(onMessage).not.toHaveBeenCalled();
   });
 
-  it("grows to the handoff card on a computer, follows the content in a narrow window and fills a phone", () => {
+  it("keeps one phone-shaped size on a computer and fills a phone", () => {
     openModal();
     const styles = document.getElementById("didit-sdk-styles")?.textContent ?? "";
-    const wide = /@media \(min-width: 1024px\) \{([\s\S]*?)\n      \}/.exec(styles)?.[1] ?? "";
-    const flowIframe = new RegExp(`\\.${CSS_CLASSES.flowSized} \\.${CSS_CLASSES.iframe} \\{([^}]*)\\}`).exec(styles)?.[1];
 
-    expect(wide).toMatch(/width: 90vw;\s+max-width: 960px/);
-    expect(wide).toContain("height: 660px");
-    expect(flowIframe).toMatch(/height: var\(--didit-flow-height\);\s+max-height: 90vh;\s+max-height: 90dvh/);
-    expect(styles).toMatch(
-      new RegExp(`@media \\(max-width: 540px\\) \\{\\s+\\.${CSS_CLASSES.container}\\.${CSS_CLASSES.flowSized} \\{[^}]*max-width: 100%`)
-    );
+    expect(styles).not.toContain("--didit-flow-height");
+    expect(styles).not.toContain("960px");
+    expect(styles).toMatch(/@media \(max-width: 540px\) \{[\s\S]*?height: 100dvh;\s+border-radius: 0/);
   });
 
   it("draws the design system close icon only once the flow reports its layout", () => {

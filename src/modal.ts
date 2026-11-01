@@ -59,6 +59,8 @@ export class VerificationModal {
   private embeddedContainer: HTMLElement | null = null;
   private language: string = "en";
 
+  /** The page's own background colours, kept while a full-screen modal paints over them. */
+  private pageBackground: { root: string; body: string } | null = null;
   /** body.style.overflow value observed right before this modal locked scroll, restored on close(). */
   private previousBodyOverflow: string | null = null;
 
@@ -107,9 +109,9 @@ export class VerificationModal {
       .${CSS_CLASSES.container} {
         position: relative;
         width: 100%;
-        max-width: 500px;
-        max-height: 90vh;
-        max-height: 90dvh;
+        max-width: 440px;
+        height: min(860px, calc(100vh - 2rem));
+        height: min(860px, calc(100dvh - 2rem));
         border-radius: 16px;
         overflow: hidden;
         background: transparent;
@@ -121,9 +123,7 @@ export class VerificationModal {
 
       .${CSS_CLASSES.iframe} {
         width: 100%;
-        height: 90vh;
-        height: 90dvh;
-        max-height: 700px;
+        height: 100%;
         border: none;
         display: block;
       }
@@ -162,6 +162,12 @@ export class VerificationModal {
         justify-content: center;
         background: #fafafa;
         z-index: 5;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .${CSS_CLASSES.loading} {
+          background: #0b0b0d;
+        }
       }
 
       .${CSS_CLASSES.loading}.hidden {
@@ -292,23 +298,18 @@ export class VerificationModal {
 
         .${CSS_CLASSES.container} {
           max-width: 100%;
-          max-height: 100vh;
-          max-height: 100dvh;
-          border-radius: 0;
-        }
-
-        .${CSS_CLASSES.iframe} {
           height: 100vh;
           height: 100dvh;
-          max-height: none;
+          border-radius: 0;
         }
       }
 
       /*
-       * Once the hosted flow reports its layout (didit:layout), the modal
-       * grows to the handoff card on a computer (960 x 660, at most 90% of
-       * the window) and follows the flow's content height in a narrow
-       * window. Colours are the design system tokens named beside them.
+       * The modal is one phone-shaped size from its first frame and never
+       * resizes, so the flow opens without a jump and every step fits as it
+       * does on a phone. The hosted flow's layout message (didit:layout) only
+       * brings its theme and direction. Colours are the design system tokens
+       * named beside them.
        */
       .${CSS_CLASSES.container}.${CSS_CLASSES.flowSized} {
         --didit-ground: #ffffff; /* site-ground */
@@ -318,7 +319,6 @@ export class VerificationModal {
         --didit-close-fill: rgba(0, 0, 0, 0.06);
         --didit-drop: rgba(17, 24, 39, 0.35);
         --didit-ring: rgba(0, 0, 0, 0.06);
-        max-width: 500px;
         background: var(--didit-ground);
         box-shadow: 0 30px 80px -24px var(--didit-drop), 0 0 0 1px var(--didit-ring);
       }
@@ -331,12 +331,6 @@ export class VerificationModal {
         --didit-close-fill: rgba(255, 255, 255, 0.06);
         --didit-drop: rgba(0, 0, 0, 0.55); /* c-shadow-pop, dark */
         --didit-ring: rgba(255, 255, 255, 0.08); /* c-shadow-pop, dark */
-      }
-
-      .${CSS_CLASSES.flowSized} .${CSS_CLASSES.iframe} {
-        height: var(--didit-flow-height);
-        max-height: 90vh;
-        max-height: 90dvh;
       }
 
       .${CSS_CLASSES.closeIcon} {
@@ -412,27 +406,10 @@ export class VerificationModal {
         flex-wrap: wrap;
       }
 
-      @media (min-width: 1024px) {
-        .${CSS_CLASSES.container}.${CSS_CLASSES.flowSized} {
-          width: 90vw;
-          max-width: 960px;
-        }
-
-        .${CSS_CLASSES.flowSized} .${CSS_CLASSES.iframe} {
-          height: 660px;
-        }
-      }
-
       @media (max-width: 540px) {
         .${CSS_CLASSES.container}.${CSS_CLASSES.flowSized} {
           max-width: 100%;
           box-shadow: none;
-        }
-
-        .${CSS_CLASSES.flowSized} .${CSS_CLASSES.iframe} {
-          height: 100vh;
-          height: 100dvh;
-          max-height: none;
         }
       }
 
@@ -710,16 +687,37 @@ export class VerificationModal {
     if (this.embedded || !this.container) return;
     SDKLogger.log("Flow layout:", layout);
     this.container.classList.add(CSS_CLASSES.flowSized);
-    this.container.style.setProperty("--didit-flow-height", `${layout.contentHeight}px`);
     this.container.dataset.diditTheme = layout.colorScheme;
     this.container.dataset.diditDir = layout.dir;
+    this.matchPageBackground(layout.colorScheme);
   }
 
-  /** Back to the fixed 500 x 700 modal until the newly loaded flow reports its layout. */
+  /**
+   * On a phone Safari paints the bottom edge of the screen with the page's own background, past
+   * any fixed overlay, and shows it when the keyboard moves the page. A full-screen modal lends
+   * the page its ground colour while it is open, so no strip of the host page shows around it.
+   */
+  private matchPageBackground(colorScheme: FlowLayout["colorScheme"]): void {
+    if (!window.matchMedia?.("(max-width: 540px)").matches) return;
+    const root = document.documentElement;
+    this.pageBackground ??= { root: root.style.backgroundColor, body: document.body.style.backgroundColor };
+    const ground = colorScheme === "dark" ? "#0b0b0d" : "#ffffff";
+    root.style.backgroundColor = ground;
+    document.body.style.backgroundColor = ground;
+  }
+
+  private restorePageBackground(): void {
+    if (!this.pageBackground) return;
+    document.documentElement.style.backgroundColor = this.pageBackground.root;
+    document.body.style.backgroundColor = this.pageBackground.body;
+    this.pageBackground = null;
+  }
+
+  /** Back to the neutral look until the newly loaded flow reports its theme and direction. */
   private resetFlowLayout(): void {
     if (this.embedded || !this.container) return;
+    this.restorePageBackground();
     this.container.classList.remove(CSS_CLASSES.flowSized);
-    this.container.style.removeProperty("--didit-flow-height");
     delete this.container.dataset.diditTheme;
     delete this.container.dataset.diditDir;
   }
