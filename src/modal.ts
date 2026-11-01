@@ -59,6 +59,8 @@ export class VerificationModal {
   private embeddedContainer: HTMLElement | null = null;
   private language: string = "en";
 
+  /** The page's own background colours, kept while a full-screen modal paints over them. */
+  private pageBackground: { root: string; body: string } | null = null;
   /** body.style.overflow value observed right before this modal locked scroll, restored on close(). */
   private previousBodyOverflow: string | null = null;
 
@@ -687,11 +689,34 @@ export class VerificationModal {
     this.container.classList.add(CSS_CLASSES.flowSized);
     this.container.dataset.diditTheme = layout.colorScheme;
     this.container.dataset.diditDir = layout.dir;
+    this.matchPageBackground(layout.colorScheme);
+  }
+
+  /**
+   * On a phone Safari paints the bottom edge of the screen with the page's own background, past
+   * any fixed overlay, and shows it when the keyboard moves the page. A full-screen modal lends
+   * the page its ground colour while it is open, so no strip of the host page shows around it.
+   */
+  private matchPageBackground(colorScheme: FlowLayout["colorScheme"]): void {
+    if (!window.matchMedia?.("(max-width: 540px)").matches) return;
+    const root = document.documentElement;
+    this.pageBackground ??= { root: root.style.backgroundColor, body: document.body.style.backgroundColor };
+    const ground = colorScheme === "dark" ? "#0b0b0d" : "#ffffff";
+    root.style.backgroundColor = ground;
+    document.body.style.backgroundColor = ground;
+  }
+
+  private restorePageBackground(): void {
+    if (!this.pageBackground) return;
+    document.documentElement.style.backgroundColor = this.pageBackground.root;
+    document.body.style.backgroundColor = this.pageBackground.body;
+    this.pageBackground = null;
   }
 
   /** Back to the neutral look until the newly loaded flow reports its theme and direction. */
   private resetFlowLayout(): void {
     if (this.embedded || !this.container) return;
+    this.restorePageBackground();
     this.container.classList.remove(CSS_CLASSES.flowSized);
     delete this.container.dataset.diditTheme;
     delete this.container.dataset.diditDir;

@@ -514,7 +514,8 @@ for (const theme of ["light", "dark"]) {
     const heading = page.getByRole("heading", { name: "Exit verification?" });
     const exit = page.getByText("Exit", { exact: true });
 
-    await expectSize(container, 440, 300);
+    // At 200% text the 1rem margin above and below is 32px each.
+    await expectSize(container, 440, 268);
     await page.getByRole("button", { name: "Close verification" }).click();
     await expect(heading).toBeVisible();
 

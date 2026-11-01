@@ -511,6 +511,32 @@ describe("VerificationModal flow layout", () => {
     expect(isFlowSized(modal)).toBe(false);
   });
 
+  it("lends a phone page the flow's ground while the full-screen modal is open, and gives it back", () => {
+    const original = window.matchMedia;
+    window.matchMedia = jest.fn((query: string) => ({ matches: query.includes("max-width") })) as unknown as typeof window.matchMedia;
+    document.body.style.backgroundColor = "rgb(1, 2, 3)";
+    const { modal } = openModal();
+
+    postLayout(modal, { contentHeight: 600, colorScheme: "dark" });
+    expect(document.documentElement.style.backgroundColor).toBe("rgb(11, 11, 13)");
+    expect(document.body.style.backgroundColor).toBe("rgb(11, 11, 13)");
+
+    modal.close();
+    expect(document.documentElement.style.backgroundColor).toBe("");
+    expect(document.body.style.backgroundColor).toBe("rgb(1, 2, 3)");
+
+    document.body.style.backgroundColor = "";
+    window.matchMedia = original;
+  });
+
+  it("leaves the page's background alone on a computer", () => {
+    const { modal } = openModal();
+
+    postLayout(modal, { contentHeight: 600, colorScheme: "dark" });
+
+    expect(document.body.style.backgroundColor).toBe("");
+  });
+
   it("leaves embedded mode to the host element", () => {
     const host = document.createElement("div");
     host.id = "host";
