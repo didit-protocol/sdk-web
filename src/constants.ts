@@ -15,6 +15,7 @@ export const CSS_CLASSES = {
   closeIcon: "didit-close-icon",
   closeIconLegacy: "didit-close-icon-legacy",
   flowSized: "didit-flow-sized",
+  sizeAnimated: "didit-size-animated",
   loading: "didit-loading",
   confirmOverlay: "didit-confirm-overlay",
   confirmBox: "didit-confirm-box",
@@ -55,7 +56,7 @@ export const PRESENTATION_QUERY_PARAMS = {
 
 /**
  * Posted by the hosted flow when it lays itself out for the modal, with
- * `data: { contentHeight, colorScheme?, dir? }`. The modal then grows to the
+ * `data: { contentHeight, colorScheme?, dir?, kind? }` (`kind` is `handoff` or `step`, `step` when missing). The modal then grows to the
  * handoff card on a computer and follows the content height in a narrow
  * window. Handled by the modal and never delivered to `onEvent`.
  */

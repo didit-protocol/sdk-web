@@ -16,8 +16,21 @@ export interface ModalCallbacks {
   onIframeLoad: () => void;
 }
 
+export type FlowKind = "handoff" | "step";
+
+/** Until the flow reports its first layout the modal waits (hidden) at the size the handoff card needs. */
+type ModalKind = FlowKind | "pending";
+
+/** How long the modal waits for the first layout before it shows at step size, so it can never hang. */
+export const FIRST_LAYOUT_TIMEOUT_MS = 3000;
+
 /** The layout the hosted flow reports in a didit:layout message. */
 export interface FlowLayout {
+  /**
+   * What the flow is showing: the computer handoff card, or a step (phone-sized). A flow that does
+   * not say gets "step", the size every earlier version of the modal used.
+   */
+  kind: FlowKind;
   /** Height of the flow's content in CSS pixels, its top bar included. */
   contentHeight: number;
   colorScheme: "light" | "dark";
@@ -54,6 +67,8 @@ export class VerificationModal {
   private boundHandleKeydown: ((event: KeyboardEvent) => void) | null = null;
   private boundHandleFocusChange: (() => void) | null = null;
   private confirmationFocusTimeout: number | null = null;
+  private firstLayoutTimeout: number | null = null;
+  private sizeFrame: number | null = null;
 
   private embedded: boolean = false;
   private embeddedContainer: HTMLElement | null = null;
@@ -291,6 +306,57 @@ export class VerificationModal {
         outline-offset: 2px;
       }
 
+      /*
+       * Steps are phone-sized (440 x 860, above). On a computer the handoff card is wider
+       * (board Start-Embedded): 960 x 660 on a window of 1000px or more, never wider than the
+       * window less its margin and never taller than 90% of it. In a narrower window the
+       * page stacks and the height follows its content (--didit-content-height, set from the
+       * flow's layout message). Until the flow reports what it shows, the modal is invisible
+       * at the handoff size (so the flow lays itself out for it), behind a bare spinner, and
+       * then appears at its final size: it never opens small and grows. A later change of kind
+       * (the person continues on this computer) animates once.
+       */
+      @media (min-width: 541px) {
+        .${CSS_CLASSES.container}[data-didit-kind="handoff"],
+        .${CSS_CLASSES.container}[data-didit-kind="pending"] {
+          max-width: min(960px, calc(100vw - 2rem));
+          height: min(var(--didit-content-height, 660px), calc(100vh * 0.9));
+          height: min(var(--didit-content-height, 660px), calc(100dvh * 0.9));
+        }
+
+        .${CSS_CLASSES.container}.${CSS_CLASSES.sizeAnimated} {
+          transition: max-width 0.25s ease, height 0.25s ease;
+        }
+
+        .${CSS_CLASSES.container}[data-didit-kind="pending"] {
+          background: transparent;
+        }
+
+        .${CSS_CLASSES.container}[data-didit-kind="pending"] .${CSS_CLASSES.iframe} {
+          visibility: hidden;
+        }
+
+        .${CSS_CLASSES.container}[data-didit-kind="pending"] .${CSS_CLASSES.loading} {
+          background: transparent;
+        }
+
+        .${CSS_CLASSES.container}[data-didit-kind="pending"] .${CSS_CLASSES.loading} circle {
+          stroke: rgba(255, 255, 255, 0.25);
+        }
+
+        .${CSS_CLASSES.container}[data-didit-kind="pending"] .${CSS_CLASSES.loading} path {
+          stroke: #fff;
+        }
+      }
+
+      @media (min-width: 1000px) {
+        .${CSS_CLASSES.container}[data-didit-kind="handoff"],
+        .${CSS_CLASSES.container}[data-didit-kind="pending"] {
+          height: min(660px, calc(100vh * 0.9));
+          height: min(660px, calc(100dvh * 0.9));
+        }
+      }
+
       @media (max-width: 540px) {
         .${CSS_CLASSES.overlay} {
           padding: 0;
@@ -305,10 +371,8 @@ export class VerificationModal {
       }
 
       /*
-       * The modal is one phone-shaped size from its first frame and never
-       * resizes, so the flow opens without a jump and every step fits as it
-       * does on a phone. The hosted flow's layout message (didit:layout) only
-       * brings its theme and direction. Colours are the design system tokens
+       * The hosted flow's layout message (didit:layout) brings the modal's size
+       * (see above), theme and direction. Colours are the design system tokens
        * named beside them.
        */
       .${CSS_CLASSES.container}.${CSS_CLASSES.flowSized} {
@@ -670,12 +734,13 @@ export class VerificationModal {
    */
   private readFlowLayout(data: unknown): FlowLayout | null {
     const fields = typeof data === "object" && data !== null ? (data as Record<string, unknown>) : {};
-    const { contentHeight, colorScheme, dir } = fields;
+    const { contentHeight, colorScheme, dir, kind } = fields;
     if (typeof contentHeight !== "number" || !Number.isFinite(contentHeight) || contentHeight <= 0) {
       return null;
     }
     const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
     return {
+      kind: kind === "handoff" ? "handoff" : "step",
       contentHeight: Math.ceil(contentHeight),
       colorScheme: colorScheme === "light" || colorScheme === "dark" ? colorScheme : prefersDark ? "dark" : "light",
       dir: dir === "ltr" || dir === "rtl" ? dir : isRtlLanguage(this.language) ? "rtl" : "ltr"
@@ -689,7 +754,46 @@ export class VerificationModal {
     this.container.classList.add(CSS_CLASSES.flowSized);
     this.container.dataset.diditTheme = layout.colorScheme;
     this.container.dataset.diditDir = layout.dir;
+    this.container.style.setProperty("--didit-content-height", `${layout.contentHeight}px`);
     this.matchPageBackground(layout.colorScheme);
+    this.setModalKind(layout.kind);
+  }
+
+  /** Whether the window is a computer-sized one: a phone is full screen and never waits for a layout. */
+  private isPhoneWindow(): boolean {
+    return window.matchMedia?.("(max-width: 540px)").matches ?? false;
+  }
+
+  /**
+   * Sets what the modal is sized for. Leaving "pending" shows the modal at its final size with no
+   * transition; any later change animates once.
+   */
+  private setModalKind(kind: ModalKind): void {
+    if (!this.container) return;
+    const previous = this.container.dataset.diditKind;
+    if (previous === kind) return;
+    if (this.firstLayoutTimeout !== null && kind !== "pending") {
+      window.clearTimeout(this.firstLayoutTimeout);
+      this.firstLayoutTimeout = null;
+    }
+    this.container.dataset.diditKind = kind;
+    if (previous === "pending") {
+      // The final size is in place before the loader goes; a flow still loading keeps its loader.
+      if (!this.state.isLoading) this.loadingEl?.classList.add("hidden");
+      this.sizeFrame = window.requestAnimationFrame(() => {
+        this.sizeFrame = null;
+        this.container?.classList.add(CSS_CLASSES.sizeAnimated);
+      });
+    }
+  }
+
+  /** A flow that reports no layout (an older one) still shows, at step size, after a short wait. */
+  private waitForFirstLayout(): void {
+    this.setModalKind("pending");
+    this.firstLayoutTimeout = window.setTimeout(() => {
+      this.firstLayoutTimeout = null;
+      this.setModalKind("step");
+    }, FIRST_LAYOUT_TIMEOUT_MS);
   }
 
   /**
@@ -717,9 +821,19 @@ export class VerificationModal {
   private resetFlowLayout(): void {
     if (this.embedded || !this.container) return;
     this.restorePageBackground();
-    this.container.classList.remove(CSS_CLASSES.flowSized);
+    this.container.classList.remove(CSS_CLASSES.flowSized, CSS_CLASSES.sizeAnimated);
     delete this.container.dataset.diditTheme;
     delete this.container.dataset.diditDir;
+    delete this.container.dataset.diditKind;
+    this.container.style.removeProperty("--didit-content-height");
+    if (this.firstLayoutTimeout !== null) {
+      window.clearTimeout(this.firstLayoutTimeout);
+      this.firstLayoutTimeout = null;
+    }
+    if (this.sizeFrame !== null) {
+      window.cancelAnimationFrame(this.sizeFrame);
+      this.sizeFrame = null;
+    }
   }
 
   private handleKeydown(event: KeyboardEvent): void {
@@ -757,7 +871,8 @@ export class VerificationModal {
   private handleIframeLoad(): void {
     if (this.iframe?.src && this.iframe.src !== "about:blank") {
       this.state.isLoading = false;
-      this.loadingEl?.classList.add("hidden");
+      // A modal still waiting for its first layout keeps the loader over the hidden flow.
+      if (this.container?.dataset.diditKind !== "pending") this.loadingEl?.classList.add("hidden");
       this.callbacks.onIframeLoad();
     }
   }
@@ -847,6 +962,7 @@ export class VerificationModal {
     this.hideConfirmation();
     this.loadingEl?.classList.remove("hidden");
     this.resetFlowLayout();
+    if (!this.embedded && !this.isPhoneWindow()) this.waitForFirstLayout();
 
     if (this.iframe) {
       this.iframe.src = verificationUrl;

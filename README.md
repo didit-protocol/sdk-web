@@ -257,15 +257,17 @@ DiditSdk.shared.startVerification({
 
 ## Modal Sizing
 
-Modal mode is one phone-shaped size from its first frame: 440px wide and 860px tall, or the height of the window less a 16px margin above and below when the window is shorter. It never resizes while the flow runs, so every step fits as it does on a phone, without a jump when it opens.
+Verification steps are phone-shaped: 440px wide and 860px tall, or the height of the window less a 16px margin above and below when the window is shorter, so every step fits as it does on a phone.
+
+On a computer the handoff screen (the QR code to continue on a phone) is a wider two-panel card: 960px by 660px on a window of 1000px or more, never wider than the window less its margin and never taller than 90% of it. In a narrower window the card stacks and its height follows its content. The modal stays hidden behind a spinner until the page says which of the two it shows, and then appears at that size, so it never opens small and grows. It changes size once, with a short animation, only when the page moves from one to the other (for example when the person continues on the computer). A page that does not say gets the phone-shaped size after 3 seconds.
 
 Browsers that support dynamic viewport units use `dvh`, while older supported browsers fall back to `vh`. At widths of 540px and below, the modal fills the visible viewport.
 
 ### Redesigned verification flow
 
-When the hosted verification page reports its layout with a `didit:layout` message, the modal takes the page's light or dark theme and its text direction. The message never changes the modal's size.
+When the hosted verification page reports its layout with a `didit:layout` message, the modal takes the page's light or dark theme and its text direction. Its `kind` field (`handoff` or `step`, `step` when missing) sets the modal's size as described above.
 
-The close button becomes a 44px circle over the page's top bar. It follows the page's light or dark theme and moves to the left for right-to-left languages. If a large text size makes the exit confirmation taller than a short page, the confirmation scrolls inside the modal. Until the page reports its layout, and for pages that never do, the modal keeps the 500px by 700px size above. Embedded mode keeps filling its host element. There is nothing to configure, and every existing option keeps working.
+The close button becomes a 44px circle over the page's top bar. It follows the page's light or dark theme and moves to the left for right-to-left languages. If a large text size makes the exit confirmation taller than a short page, the confirmation scrolls inside the modal. Pages that never report a layout get the phone-shaped size. Embedded mode keeps filling its host element. There is nothing to configure, and every existing option keeps working.
 
 The SDK tells the page how it is shown with two query parameters on the verification URL: `sdk_presentation` (`modal` or `embedded`) and, in a modal, `sdk_close_button` (`true` or `false`, following `showCloseButton`). The SDK handles the `didit:layout` message itself and does not pass it to `onEvent`.
 
