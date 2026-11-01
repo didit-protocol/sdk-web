@@ -279,7 +279,7 @@ test("makes the handoff card follow its content in a narrow window", async ({ pa
   await expectSize(container, 768, 520);
 });
 
-test("waits hidden behind its loader, then appears at the size of what the flow shows", async ({ page }) => {
+test("waits as the real card with its loader inside, then shows what the flow reports", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/e2e/fixtures/host.html?layout=660&kind=handoff&delay=1200");
   const container = page.locator(CONTAINER);
@@ -288,12 +288,17 @@ test("waits hidden behind its loader, then appears at the size of what the flow 
   await expect(container).toHaveAttribute("data-didit-kind", "pending");
   await expect(iframe).toHaveCSS("visibility", "hidden");
   await expect(page.locator(".didit-loading")).toBeVisible();
+  // The card is on screen while pending: opaque ground, radius, shadow, at the final size.
+  await expectSize(container, 960, 660);
+  await expect(container).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(container).toHaveCSS("border-radius", "16px");
+  await expect(container).not.toHaveCSS("box-shadow", "none");
   await expect(container).toHaveAttribute("data-didit-kind", "handoff");
   await expect(iframe).toHaveCSS("visibility", "visible");
   await expectSize(container, 960, 660);
 });
 
-test("never shows the modal at a size it then leaves", async ({ page }) => {
+test("never opens small: the pending card is the handoff card, then a step animates once", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.addInitScript(() => {
     window.shownSizes = [];
@@ -312,7 +317,10 @@ test("never shows the modal at a size it then leaves", async ({ page }) => {
   await expectSize(page.locator(CONTAINER), 440, 860);
   await page.waitForTimeout(500);
 
-  expect([...new Set(await page.evaluate(() => window.shownSizes))]).toEqual(["440x860"]);
+  // Visible samples end at the step, never below the step's width.
+  const sizes = await page.evaluate(() => window.shownSizes);
+  expect(sizes.at(-1)).toBe("440x860");
+  for (const size of sizes) expect(Number(size.split("x")[0])).toBeGreaterThanOrEqual(440);
 });
 
 test("falls back to step size when the flow never reports a layout", async ({ page }) => {

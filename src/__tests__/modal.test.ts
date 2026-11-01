@@ -410,7 +410,9 @@ describe("VerificationModal flow layout", () => {
   }
 
   function isFlowSized(modal: VerificationModal): boolean {
-    return getContainer(modal).classList.contains(CSS_CLASSES.flowSized);
+    // The pending card looks flow-sized too; this is whether a reported layout has been applied.
+    const container = getContainer(modal);
+    return container.classList.contains(CSS_CLASSES.flowSized) && container.dataset.diditKind !== "pending";
   }
 
   it("keeps the fixed modal until the flow reports its layout", () => {
@@ -501,7 +503,7 @@ describe("VerificationModal flow layout", () => {
 
     const container = getContainer(modal);
     expect(isFlowSized(modal)).toBe(false);
-    expect(container.dataset.diditTheme).toBeUndefined();
+    expect(container.dataset.diditTheme).toBe("light");
     expect(container.dataset.diditDir).toBeUndefined();
 
     postLayout(modal, { contentHeight: 600 });
@@ -573,10 +575,17 @@ describe("VerificationModal flow layout", () => {
       jest.useRealTimers();
     });
 
-    it("waits invisible at the handoff size, behind its loader, until the flow reports what it shows", () => {
+    it("waits as the real card at the handoff size, loader inside it, until the flow reports what it shows", () => {
       const { modal } = openModal();
 
       expect(kindOf(modal)).toBe("pending");
+      // The card is visible from the first frame: flow-sized look, device theme, opaque ground.
+      expect(getContainer(modal).classList.contains(CSS_CLASSES.flowSized)).toBe(true);
+      expect(getContainer(modal).dataset.diditTheme).toBe("light");
+      const styles = document.getElementById("didit-sdk-styles")?.textContent ?? "";
+      expect(styles).not.toMatch(/data-didit-kind="pending"\]\s*\{\s*background: transparent/);
+      expect(styles).toMatch(/--didit-ground: #ffffff/);
+      expect(styles).toMatch(/\[data-didit-theme="dark"\] \{\s*--didit-ground: #0b0b0d/);
       expect(loaderHidden(modal)).toBe(false);
       getIframe(modal).dispatchEvent(new Event("load"));
       expect(kindOf(modal)).toBe("pending");
@@ -591,6 +600,24 @@ describe("VerificationModal flow layout", () => {
       expect(kindOf(modal)).toBe("handoff");
       expect(getContainer(modal).style.getPropertyValue("--didit-content-height")).toBe("660px");
       expect(getContainer(modal).classList.contains(CSS_CLASSES.sizeAnimated)).toBe(false);
+    });
+
+    it("follows the device theme while pending", () => {
+      const original = window.matchMedia;
+      window.matchMedia = jest.fn((query: string) => ({ matches: query.includes("prefers-color-scheme: dark") })) as unknown as typeof window.matchMedia;
+      const { modal } = openModal();
+
+      expect(getContainer(modal).dataset.diditTheme).toBe("dark");
+      window.matchMedia = original;
+    });
+
+    it("animates the first layout when it is a step, because the card is on screen", () => {
+      jest.useFakeTimers();
+      const { modal } = openModal();
+
+      postLayout(modal, { contentHeight: 700, kind: "step" });
+
+      expect(getContainer(modal).classList.contains(CSS_CLASSES.sizeAnimated)).toBe(true);
     });
 
     it("shows a step at phone size when the flow reports a step, or an older flow reports no kind", () => {
@@ -636,6 +663,8 @@ describe("VerificationModal flow layout", () => {
       expect(kindOf(modal)).toBe("pending");
       jest.advanceTimersByTime(1);
       expect(kindOf(modal)).toBe("step");
+      // An older flow paints itself: the card look is not kept around it.
+      expect(getContainer(modal).classList.contains(CSS_CLASSES.flowSized)).toBe(false);
     });
 
     it("does not fall back after the flow has reported, and starts waiting again on re-open", () => {

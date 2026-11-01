@@ -314,10 +314,10 @@ export class VerificationModal {
        * (board Start-Embedded): 960 x 660 on a window of 1000px or more, never wider than the
        * window less its margin and never taller than 90% of it. In a narrower window the
        * page stacks and the height follows its content (--didit-content-height, set from the
-       * flow's layout message). Until the flow reports what it shows, the modal is invisible
-       * at the handoff size (so the flow lays itself out for it), behind a bare spinner, and
-       * then appears at its final size: it never opens small and grows. A later change of kind
-       * (the person continues on this computer) animates once.
+       * flow's layout message). Until the flow reports what it shows, the modal is the handoff
+       * card at its final size with the spinner inside it (the flow stays hidden and lays itself
+       * out for that size): it never opens small and grows. The first change of kind (a step
+       * instead of the handoff, or the person continues on this computer) animates once.
        */
       @media (min-width: 541px) {
         .${CSS_CLASSES.container}[data-didit-kind="handoff"],
@@ -331,25 +331,26 @@ export class VerificationModal {
           transition: max-width 0.25s ease, height 0.25s ease;
         }
 
-        .${CSS_CLASSES.container}[data-didit-kind="pending"] {
-          background: transparent;
-        }
-
         .${CSS_CLASSES.container}[data-didit-kind="pending"] .${CSS_CLASSES.iframe} {
           visibility: hidden;
         }
+      }
 
-        .${CSS_CLASSES.container}[data-didit-kind="pending"] .${CSS_CLASSES.loading} {
-          background: transparent;
-        }
+      /*
+       * While pending the card already looks like the first screen (ground, radius, shadow and
+       * close button come from the flow-sized rules below, with the device theme); the loader
+       * sits inside it on the card's own ground.
+       */
+      .${CSS_CLASSES.container}[data-didit-kind="pending"] .${CSS_CLASSES.loading} {
+        background: transparent;
+      }
 
-        .${CSS_CLASSES.container}[data-didit-kind="pending"] .${CSS_CLASSES.loading} circle {
-          stroke: rgba(255, 255, 255, 0.25);
-        }
+      .${CSS_CLASSES.container}[data-didit-kind="pending"][data-didit-theme="dark"] .${CSS_CLASSES.loading} circle {
+        stroke: rgba(255, 255, 255, 0.16);
+      }
 
-        .${CSS_CLASSES.container}[data-didit-kind="pending"] .${CSS_CLASSES.loading} path {
-          stroke: #fff;
-        }
+      .${CSS_CLASSES.container}[data-didit-kind="pending"][data-didit-theme="dark"] .${CSS_CLASSES.loading} path {
+        stroke: #f5f5f7;
       }
 
       @media (min-width: 1000px) {
@@ -779,9 +780,10 @@ export class VerificationModal {
       window.clearTimeout(this.firstLayoutTimeout);
       this.firstLayoutTimeout = null;
     }
-    // Only a change after the first layout animates, and only for the length of the change, so
-    // resizing the window never lags behind.
-    if (previous !== undefined && previous !== "pending") this.animateSizeOnce();
+    // Every change of kind animates, the pending card included (it is on screen), and only for the
+    // length of the change, so resizing the window never lags behind.
+    // Pending already is the handoff card, so a handoff first layout moves nothing.
+    if (previous !== undefined && !(previous === "pending" && kind === "handoff")) this.animateSizeOnce();
     this.container.dataset.diditKind = kind;
     // The final size is in place before the loader goes; a flow still loading keeps its loader.
     if (previous === "pending" && !this.state.isLoading) this.loadingEl?.classList.add("hidden");
@@ -798,9 +800,16 @@ export class VerificationModal {
 
   /** A flow that reports no layout (an older one) still shows, at step size, after a short wait. */
   private waitForFirstLayout(): void {
+    if (!this.container) return;
+    // The card looks like the first screen from the first frame, in the device's theme.
+    this.container.classList.add(CSS_CLASSES.flowSized);
+    this.container.dataset.diditTheme = window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     this.setModalKind("pending");
     this.firstLayoutTimeout = window.setTimeout(() => {
       this.firstLayoutTimeout = null;
+      // A flow that never reported is an older one that paints itself: no card look around it.
+      this.container?.classList.remove(CSS_CLASSES.flowSized);
+      delete this.container?.dataset.diditTheme;
       this.setModalKind("step");
     }, FIRST_LAYOUT_TIMEOUT_MS);
   }
