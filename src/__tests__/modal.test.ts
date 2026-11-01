@@ -2,6 +2,7 @@ import { jest, describe, it, expect, afterEach } from "@jest/globals";
 import { VerificationModal } from "../modal";
 import type { DiditSdkConfiguration, VerificationEvent } from "../types";
 import { CSS_CLASSES } from "../constants";
+import { FIRST_LAYOUT_TIMEOUT_MS } from "../modal";
 
 interface ModalInternals {
   iframe: HTMLIFrameElement | null;
@@ -430,9 +431,8 @@ describe("VerificationModal flow layout", () => {
     expect(onMessage).not.toHaveBeenCalled();
   });
 
-  it("reads a layout sent as a JSON string, and no layout ever resizes the modal", () => {
+  it("reads a layout sent as a JSON string", () => {
     const { modal } = openModal();
-    const before = getContainer(modal).getAttribute("style");
 
     postLayout(modal, { contentHeight: 600 });
     dispatchMessage(
@@ -441,7 +441,6 @@ describe("VerificationModal flow layout", () => {
     );
 
     expect(getContainer(modal).dataset.diditTheme).toBe("dark");
-    expect(getContainer(modal).getAttribute("style")).toBe(before);
   });
 
   it.each([
@@ -552,13 +551,114 @@ describe("VerificationModal flow layout", () => {
     expect(onMessage).not.toHaveBeenCalled();
   });
 
-  it("keeps one phone-shaped size on a computer and fills a phone", () => {
+  it("sizes the modal for the handoff card on a computer, keeps steps phone-sized and fills a phone", () => {
     openModal();
     const styles = document.getElementById("didit-sdk-styles")?.textContent ?? "";
 
-    expect(styles).not.toContain("--didit-flow-height");
-    expect(styles).not.toContain("960px");
+    expect(styles).toMatch(/@media \(min-width: 1000px\) \{[\s\S]*?data-didit-kind="handoff"[\s\S]*?min\(660px, calc\(100dvh \* 0\.9\)\)/);
+    expect(styles).toMatch(/data-didit-kind="handoff"\][\s\S]*?max-width: min\(960px, calc\(100vw - 2rem\)\)/);
     expect(styles).toMatch(/@media \(max-width: 540px\) \{[\s\S]*?height: 100dvh;\s+border-radius: 0/);
+  });
+
+  describe("first layout", () => {
+    function kindOf(modal: VerificationModal): string | undefined {
+      return getContainer(modal).dataset.diditKind;
+    }
+
+    function loaderHidden(modal: VerificationModal): boolean {
+      return getContainer(modal).querySelector(`.${CSS_CLASSES.loading}`)?.classList.contains("hidden") ?? false;
+    }
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("waits invisible at the handoff size, behind its loader, until the flow reports what it shows", () => {
+      const { modal } = openModal();
+
+      expect(kindOf(modal)).toBe("pending");
+      expect(loaderHidden(modal)).toBe(false);
+      getIframe(modal).dispatchEvent(new Event("load"));
+      expect(kindOf(modal)).toBe("pending");
+      expect(loaderHidden(modal)).toBe(false);
+    });
+
+    it("shows the handoff card at once, with no animation, when the flow reports a handoff", () => {
+      const { modal } = openModal();
+
+      postLayout(modal, { contentHeight: 660, kind: "handoff" });
+
+      expect(kindOf(modal)).toBe("handoff");
+      expect(getContainer(modal).style.getPropertyValue("--didit-content-height")).toBe("660px");
+      expect(getContainer(modal).classList.contains(CSS_CLASSES.sizeAnimated)).toBe(false);
+    });
+
+    it("shows a step at phone size when the flow reports a step, or an older flow reports no kind", () => {
+      const first = openModal();
+      const second = openModal();
+
+      postLayout(first.modal, { contentHeight: 700, kind: "step" });
+      postLayout(second.modal, { contentHeight: 700 });
+
+      expect(kindOf(first.modal)).toBe("step");
+      expect(kindOf(second.modal)).toBe("step");
+    });
+
+    it("hides the loader once the flow has loaded and reported", () => {
+      const { modal } = openModal();
+
+      getIframe(modal).dispatchEvent(new Event("load"));
+      postLayout(modal, { contentHeight: 660, kind: "handoff" });
+
+      expect(loaderHidden(modal)).toBe(true);
+    });
+
+    it("animates the one later change, such as continuing on this computer, and no more", () => {
+      jest.useFakeTimers();
+      const { modal } = openModal();
+      const animated = () => getContainer(modal).classList.contains(CSS_CLASSES.sizeAnimated);
+
+      postLayout(modal, { contentHeight: 660, kind: "handoff" });
+      expect(animated()).toBe(false);
+      postLayout(modal, { contentHeight: 700, kind: "step" });
+
+      expect(kindOf(modal)).toBe("step");
+      expect(animated()).toBe(true);
+      jest.advanceTimersByTime(400);
+      expect(animated()).toBe(false);
+    });
+
+    it("falls back to step size when no layout arrives, so it can never hang", () => {
+      jest.useFakeTimers();
+      const { modal } = openModal();
+
+      jest.advanceTimersByTime(FIRST_LAYOUT_TIMEOUT_MS - 1);
+      expect(kindOf(modal)).toBe("pending");
+      jest.advanceTimersByTime(1);
+      expect(kindOf(modal)).toBe("step");
+    });
+
+    it("does not fall back after the flow has reported, and starts waiting again on re-open", () => {
+      jest.useFakeTimers();
+      const { modal } = openModal();
+
+      postLayout(modal, { contentHeight: 660, kind: "handoff" });
+      jest.advanceTimersByTime(FIRST_LAYOUT_TIMEOUT_MS * 2);
+      expect(kindOf(modal)).toBe("handoff");
+
+      modal.open("https://verify.didit.me/session/b");
+      expect(kindOf(modal)).toBe("pending");
+      expect(getContainer(modal).style.getPropertyValue("--didit-content-height")).toBe("");
+    });
+
+    it("does not wait on a phone, which is full screen from the first frame", () => {
+      const original = window.matchMedia;
+      window.matchMedia = jest.fn((query: string) => ({ matches: query.includes("max-width") })) as unknown as typeof window.matchMedia;
+      const { modal } = openModal();
+
+      expect(kindOf(modal)).toBeUndefined();
+      window.matchMedia = original;
+    });
   });
 
   it("draws the design system close icon only once the flow reports its layout", () => {

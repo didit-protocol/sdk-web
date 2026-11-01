@@ -52,7 +52,7 @@
       if (params.has("textSize")) document.documentElement.style.fontSize = `${params.get("textSize")}%`;
       flowUrl.searchParams.set("theme", theme);
       // The flow fixture posts didit:layout only when a test asks for it.
-      for (const name of ["layout", "dir"]) {
+      for (const name of ["layout", "dir", "kind", "delay"]) {
         if (params.has(name)) flowUrl.searchParams.set(name, params.get(name));
       }
       window.diditEvents = [];

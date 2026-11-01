@@ -182,10 +182,13 @@
       window.postLayout = (data) => {
         window.parent.postMessage({ type: "didit:layout", data, timestamp: Date.now() }, "*");
       };
+      // ?layout=<height>&kind=handoff|step (no kind is an older flow) &delay=<ms> before the first layout.
       if (params.has("layout")) {
         const dir = params.get("dir") === "rtl" ? "rtl" : "ltr";
         document.documentElement.dir = dir;
-        window.postLayout({ contentHeight: Number(params.get("layout")), colorScheme: theme, dir });
+        const data = { contentHeight: Number(params.get("layout")), colorScheme: theme, dir };
+        if (params.has("kind")) data.kind = params.get("kind");
+        setTimeout(() => window.postLayout(data), Number(params.get("delay") || 0));
       }
     </script>
   </body>
