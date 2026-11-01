@@ -185,15 +185,20 @@ for (const viewport of [{ width: 1366, height: 625 }, { width: 390, height: 844 
   });
 }
 
-// The modal is one phone-shaped size whatever the flow reports: a layout message
-// never resizes it, and it stays full screen on a phone.
+// Steps are phone-shaped whatever height the flow reports; the handoff card is 960 x 660 on a
+// computer (at most 100% of the window less its margin wide and 90% tall), stacks and follows its
+// content in a narrow window, and everything is full screen on a phone.
 const FLOW_LAYOUTS = [
-  { name: "computer", viewport: { width: 1440, height: 900 }, layout: 600, width: 440, height: 860 },
-  { name: "short computer window", viewport: { width: 1440, height: 580 }, layout: 600, width: 440, height: 548 },
-  { name: "computer window at the breakpoint", viewport: { width: 1024, height: 768 }, layout: 600, width: 440, height: 736 },
-  { name: "narrow window", viewport: { width: 800, height: 900 }, layout: 600, width: 440, height: 860 },
-  { name: "narrow window with tall content", viewport: { width: 800, height: 700 }, layout: 1200, width: 440, height: 668 },
-  { name: "phone", viewport: { width: 390, height: 844 }, layout: 600, width: 390, height: 844 }
+  { name: "step on a computer", viewport: { width: 1440, height: 900 }, layout: 600, kind: "step", width: 440, height: 860 },
+  { name: "step with no kind (an older flow)", viewport: { width: 1440, height: 900 }, layout: 600, width: 440, height: 860 },
+  { name: "step in a short computer window", viewport: { width: 1440, height: 580 }, layout: 600, kind: "step", width: 440, height: 548 },
+  { name: "handoff on a computer", viewport: { width: 1440, height: 900 }, layout: 660, kind: "handoff", width: 960, height: 660 },
+  { name: "handoff in a short computer window", viewport: { width: 1440, height: 580 }, layout: 660, kind: "handoff", width: 960, height: 522 },
+  { name: "handoff at the breakpoint", viewport: { width: 1000, height: 768 }, layout: 660, kind: "handoff", width: 960, height: 660 },
+  { name: "handoff in a narrow window", viewport: { width: 800, height: 900 }, layout: 600, kind: "handoff", width: 768, height: 600 },
+  { name: "handoff in a narrow window with tall content", viewport: { width: 800, height: 700 }, layout: 1200, kind: "handoff", width: 768, height: 630 },
+  { name: "step on a phone", viewport: { width: 390, height: 844 }, layout: 600, kind: "step", width: 390, height: 844 },
+  { name: "handoff on a phone", viewport: { width: 390, height: 844 }, layout: 660, kind: "handoff", width: 390, height: 844 }
 ];
 
 async function elementSize(locator) {
@@ -236,7 +241,8 @@ async function postLayout(page, iframe, data) {
 
 for (const scenario of FLOW_LAYOUTS) {
   test(`sizes the flow's layout in a ${scenario.name}`, async ({ page }) => {
-    const iframe = await openFlowFixture(page, scenario.viewport, `?layout=${scenario.layout}`);
+    const kind = scenario.kind ? `&kind=${scenario.kind}` : "";
+    const iframe = await openFlowFixture(page, scenario.viewport, `?layout=${scenario.layout}${kind}`);
 
     await expectSize(page.locator(CONTAINER), scenario.width, scenario.height);
     await expectHeight(iframe, scenario.height);
@@ -252,39 +258,81 @@ test("tells the flow it is in a modal with a close button", async ({ page }) => 
   expect(params.get("sdk_close_button")).toBe("true");
 });
 
-test("keeps its size in a narrow window whatever height the flow reports", async ({ page }) => {
-  const iframe = await openFlowFixture(page, { width: 800, height: 900 }, "?layout=600");
+test("keeps a step phone-sized in a narrow window whatever height the flow reports", async ({ page }) => {
+  const iframe = await openFlowFixture(page, { width: 800, height: 900 }, "?layout=600&kind=step");
   const container = page.locator(CONTAINER);
 
   await expectSize(container, 440, 860);
-  await postLayout(page, iframe, { contentHeight: 560 });
+  await postLayout(page, iframe, { contentHeight: 560, kind: "step" });
   await expectSize(container, 440, 860);
-  await postLayout(page, iframe, { contentHeight: 2000 });
+  await postLayout(page, iframe, { contentHeight: 2000, kind: "step" });
   await expectSize(container, 440, 860);
   expect(await page.evaluate(() => window.diditEvents)).not.toContain("didit:layout");
 });
 
-test("keeps the same size whatever content height the flow reports", async ({ page }) => {
-  const iframe = await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=300");
+test("makes the handoff card follow its content in a narrow window", async ({ page }) => {
+  const iframe = await openFlowFixture(page, { width: 800, height: 900 }, "?layout=600&kind=handoff");
   const container = page.locator(CONTAINER);
 
-  await expectSize(container, 440, 860);
-  await postLayout(page, iframe, { contentHeight: 900 });
-  await expectSize(container, 440, 860);
+  await expectSize(container, 768, 600);
+  await postLayout(page, iframe, { contentHeight: 520, kind: "handoff" });
+  await expectSize(container, 768, 520);
 });
 
-test("never changes size between opening and the flow's first layout", async ({ page }) => {
-  const iframe = await openFixture(page, { width: 1440, height: 900 });
+test("waits hidden behind its loader, then appears at the size of what the flow shows", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/e2e/fixtures/host.html?layout=660&kind=handoff&delay=1200");
+  const container = page.locator(CONTAINER);
+  const iframe = page.locator(FRAME);
+
+  await expect(container).toHaveAttribute("data-didit-kind", "pending");
+  await expect(iframe).toHaveCSS("visibility", "hidden");
+  await expect(page.locator(".didit-loading")).toBeVisible();
+  await expect(container).toHaveAttribute("data-didit-kind", "handoff");
+  await expect(iframe).toHaveCSS("visibility", "visible");
+  await expectSize(container, 960, 660);
+});
+
+test("never shows the modal at a size it then leaves", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(() => {
+    window.shownSizes = [];
+    const sample = () => {
+      const container = document.querySelector(".didit-modal-container");
+      const frame = document.querySelector(".didit-verification-iframe");
+      if (container && frame && getComputedStyle(frame).visibility === "visible") {
+        const { width, height } = container.getBoundingClientRect();
+        window.shownSizes.push(`${Math.round(width)}x${Math.round(height)}`);
+      }
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  await page.goto("/e2e/fixtures/host.html?layout=700&kind=step&delay=800");
+  await expectSize(page.locator(CONTAINER), 440, 860);
+  await page.waitForTimeout(500);
+
+  expect([...new Set(await page.evaluate(() => window.shownSizes))]).toEqual(["440x860"]);
+});
+
+test("falls back to step size when the flow never reports a layout", async ({ page }) => {
+  await openFixture(page, { width: 1440, height: 900 });
+
+  await expectSize(page.locator(CONTAINER), 440, 860);
+  await expect(page.locator(CONTAINER)).toHaveAttribute("data-didit-kind", "step");
+});
+
+test("animates the one change from the handoff card to a step", async ({ page }) => {
+  const iframe = await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=660&kind=handoff");
   const container = page.locator(CONTAINER);
 
-  await expectSize(container, 440, 860);
-  await postLayout(page, iframe, { contentHeight: 300 });
-  await expect(page.locator(`${CONTAINER}.didit-flow-sized`)).toHaveCount(1);
+  await expectSize(container, 960, 660);
+  await postLayout(page, iframe, { contentHeight: 700, kind: "step" });
   await expectSize(container, 440, 860);
 });
 
 test("keeps its shape and fills a phone as the window resizes", async ({ page }) => {
-  await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600");
+  await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600&kind=step");
   const container = page.locator(CONTAINER);
 
   await expectSize(container, 440, 860);

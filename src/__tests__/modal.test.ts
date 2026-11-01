@@ -613,21 +613,19 @@ describe("VerificationModal flow layout", () => {
       expect(loaderHidden(modal)).toBe(true);
     });
 
-    it("animates the one later change, such as continuing on this computer", () => {
-      const frames: FrameRequestCallback[] = [];
-      const request = jest.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-        frames.push(callback);
-        return frames.length;
-      });
+    it("animates the one later change, such as continuing on this computer, and no more", () => {
+      jest.useFakeTimers();
       const { modal } = openModal();
+      const animated = () => getContainer(modal).classList.contains(CSS_CLASSES.sizeAnimated);
 
       postLayout(modal, { contentHeight: 660, kind: "handoff" });
-      frames.forEach((callback) => callback(0));
+      expect(animated()).toBe(false);
       postLayout(modal, { contentHeight: 700, kind: "step" });
 
       expect(kindOf(modal)).toBe("step");
-      expect(getContainer(modal).classList.contains(CSS_CLASSES.sizeAnimated)).toBe(true);
-      request.mockRestore();
+      expect(animated()).toBe(true);
+      jest.advanceTimersByTime(400);
+      expect(animated()).toBe(false);
     });
 
     it("falls back to step size when no layout arrives, so it can never hang", () => {

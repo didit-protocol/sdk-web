@@ -21,6 +21,9 @@ export type FlowKind = "handoff" | "step";
 /** Until the flow reports its first layout the modal waits (hidden) at the size the handoff card needs. */
 type ModalKind = FlowKind | "pending";
 
+/** The length of the one animation when the flow moves from the handoff card to a step or back. */
+const SIZE_ANIMATION_MS = 300;
+
 /** How long the modal waits for the first layout before it shows at step size, so it can never hang. */
 export const FIRST_LAYOUT_TIMEOUT_MS = 3000;
 
@@ -68,7 +71,7 @@ export class VerificationModal {
   private boundHandleFocusChange: (() => void) | null = null;
   private confirmationFocusTimeout: number | null = null;
   private firstLayoutTimeout: number | null = null;
-  private sizeFrame: number | null = null;
+  private sizeTimeout: number | null = null;
 
   private embedded: boolean = false;
   private embeddedContainer: HTMLElement | null = null;
@@ -776,15 +779,21 @@ export class VerificationModal {
       window.clearTimeout(this.firstLayoutTimeout);
       this.firstLayoutTimeout = null;
     }
+    // Only a change after the first layout animates, and only for the length of the change, so
+    // resizing the window never lags behind.
+    if (previous !== undefined && previous !== "pending") this.animateSizeOnce();
     this.container.dataset.diditKind = kind;
-    if (previous === "pending") {
-      // The final size is in place before the loader goes; a flow still loading keeps its loader.
-      if (!this.state.isLoading) this.loadingEl?.classList.add("hidden");
-      this.sizeFrame = window.requestAnimationFrame(() => {
-        this.sizeFrame = null;
-        this.container?.classList.add(CSS_CLASSES.sizeAnimated);
-      });
-    }
+    // The final size is in place before the loader goes; a flow still loading keeps its loader.
+    if (previous === "pending" && !this.state.isLoading) this.loadingEl?.classList.add("hidden");
+  }
+
+  private animateSizeOnce(): void {
+    this.container?.classList.add(CSS_CLASSES.sizeAnimated);
+    if (this.sizeTimeout !== null) window.clearTimeout(this.sizeTimeout);
+    this.sizeTimeout = window.setTimeout(() => {
+      this.sizeTimeout = null;
+      this.container?.classList.remove(CSS_CLASSES.sizeAnimated);
+    }, SIZE_ANIMATION_MS);
   }
 
   /** A flow that reports no layout (an older one) still shows, at step size, after a short wait. */
@@ -830,9 +839,9 @@ export class VerificationModal {
       window.clearTimeout(this.firstLayoutTimeout);
       this.firstLayoutTimeout = null;
     }
-    if (this.sizeFrame !== null) {
-      window.cancelAnimationFrame(this.sizeFrame);
-      this.sizeFrame = null;
+    if (this.sizeTimeout !== null) {
+      window.clearTimeout(this.sizeTimeout);
+      this.sizeTimeout = null;
     }
   }
 
