@@ -195,13 +195,14 @@ export class VerificationModal {
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #fafafa;
+        /* The flow's ground, so a phone's loader meets the ground below the viewport without a seam. */
+        background: ${FLOW_GROUND.light};
         z-index: 5;
       }
 
       @media (prefers-color-scheme: dark) {
         .${CSS_CLASSES.loading} {
-          background: #0b0b0d;
+          background: ${FLOW_GROUND.dark};
         }
       }
 
