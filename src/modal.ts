@@ -40,6 +40,23 @@ export interface FlowLayout {
   dir: "ltr" | "rtl";
 }
 
+/** The inline scroll styles a modal overrides to lock the page, as they were before. */
+interface PageScrollLock {
+  holders: Set<VerificationModal>;
+  root: { overflow: string; overscrollBehavior: string };
+  /** Only set when the page scrolls its body rather than the window, so the body was locked too. */
+  body: { overflow: string } | null;
+}
+
+/** The page's background colours before any modal lent it a ground, and each modal's ground. */
+interface PageBackground {
+  saved: { root: string; body: string };
+  grounds: Map<VerificationModal, FlowLayout["colorScheme"]>;
+}
+
+/** The flow's ground (site-ground in the design system), which a full-screen modal paints the page with. */
+const FLOW_GROUND = { light: "#ffffff", dark: "#0b0b0d" } as const;
+
 export class VerificationModal {
   /**
    * Every currently-open modal, oldest first. Used so a single Escape
@@ -77,10 +94,19 @@ export class VerificationModal {
   private embeddedContainer: HTMLElement | null = null;
   private language: string = "en";
 
-  /** The page's own background colours, kept while a full-screen modal paints over them. */
-  private pageBackground: { root: string; body: string } | null = null;
-  /** body.style.overflow value observed right before this modal locked scroll, restored on close(). */
-  private previousBodyOverflow: string | null = null;
+  /**
+   * The page's own background colours, kept while full-screen modals lend it their ground, shared by
+   * every open modal: the topmost one's ground shows and the last one to give it back restores them.
+   */
+  private static pageBackground: PageBackground | null = null;
+  /**
+   * The page's scroll styles from before the first open modal locked them, shared by every open
+   * modal: the last one to close gives them back.
+   */
+  private static pageScrollLock: PageScrollLock | null = null;
+  /** The ground below the layout viewport (see showCurtain), while this modal is open. */
+  private curtain: HTMLDivElement | null = null;
+  private boundPlaceCurtain: (() => void) | null = null;
 
   constructor(configuration: DiditSdkConfiguration | undefined, callbacks: ModalCallbacks) {
     this.modalId = generateModalId();
@@ -178,13 +204,14 @@ export class VerificationModal {
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #fafafa;
+        /* The flow's ground, so a phone's loader meets the ground below the viewport without a seam. */
+        background: ${FLOW_GROUND.light};
         z-index: 5;
       }
 
       @media (prefers-color-scheme: dark) {
         .${CSS_CLASSES.loading} {
-          background: #0b0b0d;
+          background: ${FLOW_GROUND.dark};
         }
       }
 
@@ -371,6 +398,40 @@ export class VerificationModal {
           height: 100vh;
           height: 100dvh;
           border-radius: 0;
+        }
+      }
+
+      /*
+       * The flow's ground right below the layout viewport, in the page itself (see showCurtain):
+       * on a phone, iOS browsers with their toolbars collapsed show a band of the page there,
+       * below every fixed element, the full-screen modal included.
+       */
+      .${CSS_CLASSES.curtain} {
+        display: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        pointer-events: none;
+        /* Under the modal where they meet for a frame while the toolbars move, above the page. */
+        z-index: ${this.config.zIndex - 1};
+        background: ${FLOW_GROUND.light};
+      }
+
+      .${CSS_CLASSES.curtain}[data-didit-theme="dark"] {
+        background: ${FLOW_GROUND.dark};
+      }
+
+      /* The exit confirmation's dimming continues over the ground below the viewport. */
+      .${CSS_CLASSES.curtain}[data-didit-dimmed] {
+        background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5));
+      }
+
+      @media (max-width: 540px) {
+        .${CSS_CLASSES.curtain} {
+          display: block;
         }
       }
 
@@ -762,6 +823,7 @@ export class VerificationModal {
     const shownHeight = this.container.offsetHeight;
     this.container.style.setProperty("--didit-content-height", `${layout.contentHeight}px`);
     this.matchPageBackground(layout.colorScheme);
+    if (this.curtain) this.curtain.dataset.diditTheme = layout.colorScheme;
     this.setModalKind(layout.kind, layout.kind === "handoff" && this.handoffHeight(layout) === shownHeight);
   }
 
@@ -831,18 +893,126 @@ export class VerificationModal {
    */
   private matchPageBackground(colorScheme: FlowLayout["colorScheme"]): void {
     if (!window.matchMedia?.("(max-width: 540px)").matches) return;
-    const root = document.documentElement;
-    this.pageBackground ??= { root: root.style.backgroundColor, body: document.body.style.backgroundColor };
-    const ground = colorScheme === "dark" ? "#0b0b0d" : "#ffffff";
-    root.style.backgroundColor = ground;
-    document.body.style.backgroundColor = ground;
+    VerificationModal.pageBackground ??= {
+      saved: { root: document.documentElement.style.backgroundColor, body: document.body.style.backgroundColor },
+      grounds: new Map()
+    };
+    VerificationModal.pageBackground.grounds.set(this, colorScheme);
+    VerificationModal.paintPageBackground();
   }
 
   private restorePageBackground(): void {
-    if (!this.pageBackground) return;
-    document.documentElement.style.backgroundColor = this.pageBackground.root;
-    document.body.style.backgroundColor = this.pageBackground.body;
-    this.pageBackground = null;
+    const background = VerificationModal.pageBackground;
+    if (!background?.grounds.delete(this)) return;
+    if (background.grounds.size > 0) {
+      VerificationModal.paintPageBackground();
+      return;
+    }
+    VerificationModal.pageBackground = null;
+    document.documentElement.style.backgroundColor = background.saved.root;
+    document.body.style.backgroundColor = background.saved.body;
+  }
+
+  /** The page shows the ground of the topmost open modal that lends one. */
+  private static paintPageBackground(): void {
+    const background = VerificationModal.pageBackground;
+    if (!background) return;
+    const lender = [...VerificationModal.openModals].reverse().find((modal) => background.grounds.has(modal));
+    const colorScheme = lender ? background.grounds.get(lender) : [...background.grounds.values()].pop();
+    if (!colorScheme) return;
+    document.documentElement.style.backgroundColor = FLOW_GROUND[colorScheme];
+    document.body.style.backgroundColor = FLOW_GROUND[colorScheme];
+  }
+
+  /**
+   * Stops the page scrolling under the modal. The lock is on the root element: Chrome for iOS keeps
+   * scrolling a page whose body alone is `overflow: hidden` (a swipe over the modal scrolls the page
+   * and toggles the browser's toolbars), and stops only when the root element is. A page that
+   * scrolls its body instead of the window has its body locked too. The first modal to open keeps
+   * the page's own values and the last one to close gives them back.
+   */
+  private lockPageScroll(): void {
+    const lock = VerificationModal.pageScrollLock;
+    if (lock) {
+      lock.holders.add(this);
+      return;
+    }
+    const root = document.documentElement;
+    const body = document.body;
+    // The body's overflow is the viewport's only while the root's is visible; otherwise a body with
+    // an overflow of its own is a scroll container. Locking a body that is not one would clip the page
+    // to the body's box.
+    const clips = (overflow: string) => overflow !== "" && overflow !== "visible";
+    const bodyScrollsItself =
+      clips(window.getComputedStyle(root).overflowY) && clips(window.getComputedStyle(body).overflowY);
+    VerificationModal.pageScrollLock = {
+      holders: new Set([this]),
+      root: { overflow: root.style.overflow, overscrollBehavior: root.style.overscrollBehavior },
+      body: bodyScrollsItself ? { overflow: body.style.overflow } : null
+    };
+    root.style.overflow = "hidden";
+    root.style.overscrollBehavior = "none";
+    if (bodyScrollsItself) body.style.overflow = "hidden";
+  }
+
+  private unlockPageScroll(): void {
+    const lock = VerificationModal.pageScrollLock;
+    if (!lock || !lock.holders.delete(this) || lock.holders.size > 0) return;
+    VerificationModal.pageScrollLock = null;
+    const root = document.documentElement;
+    root.style.overflow = lock.root.overflow;
+    root.style.overscrollBehavior = lock.root.overscrollBehavior;
+    if (lock.body) document.body.style.overflow = lock.body.overflow;
+  }
+
+  /**
+   * On a phone, Chrome for iOS (and the other iOS browsers built on WebKit's web view) shows a band
+   * of the page below the layout viewport while its toolbars are collapsed: the home indicator's
+   * area, and more while the toolbars move. Fixed elements end at the layout viewport, so the
+   * full-screen modal cannot cover it and the host page's own content showed under the flow. The
+   * curtain is part of the page instead: right below the viewport, in the flow's ground, so that band
+   * shows the modal's ground. The page cannot scroll while the modal is open (lockPageScroll), and the
+   * curtain follows the viewport when it resizes. Only phone-sized windows draw it (see the styles).
+   */
+  private showCurtain(): void {
+    if (!this.curtain) {
+      const curtain = document.createElement("div");
+      curtain.className = CSS_CLASSES.curtain;
+      curtain.setAttribute("aria-hidden", "true");
+      document.body.appendChild(curtain);
+      this.curtain = curtain;
+      this.boundPlaceCurtain = () => this.placeCurtain();
+      window.addEventListener("resize", this.boundPlaceCurtain);
+      window.addEventListener("scroll", this.boundPlaceCurtain);
+      window.visualViewport?.addEventListener("resize", this.boundPlaceCurtain);
+    }
+    // The device's theme until the newly loaded flow reports its own (applyFlowLayout).
+    this.curtain.dataset.diditTheme = window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    this.placeCurtain();
+  }
+
+  /** Puts the curtain's top at the bottom of the layout viewport, whatever its containing block is. */
+  private placeCurtain(): void {
+    const curtain = this.curtain;
+    if (!curtain) return;
+    curtain.style.top = "0px";
+    curtain.style.left = "0px";
+    // At 0, 0 the curtain's box starts at its containing block's corner (the page's, or a positioned
+    // body's), in viewport coordinates: the offset that brings its top to the viewport's bottom edge.
+    const origin = curtain.getBoundingClientRect();
+    curtain.style.top = `${window.innerHeight - origin.top}px`;
+    curtain.style.left = `${-origin.left}px`;
+  }
+
+  private removeCurtain(): void {
+    if (this.boundPlaceCurtain) {
+      window.removeEventListener("resize", this.boundPlaceCurtain);
+      window.removeEventListener("scroll", this.boundPlaceCurtain);
+      window.visualViewport?.removeEventListener("resize", this.boundPlaceCurtain);
+      this.boundPlaceCurtain = null;
+    }
+    this.curtain?.remove();
+    this.curtain = null;
   }
 
   /** Back to the neutral look until the newly loaded flow reports its theme and direction. */
@@ -921,6 +1091,7 @@ export class VerificationModal {
       : this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`) ?? this.iframe);
     this.state.showConfirmation = true;
     this.confirmOverlay.classList.add("active");
+    this.curtain?.setAttribute("data-didit-dimmed", "");
     if (this.iframe) this.iframe.inert = true;
     const close = this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`);
     if (close) close.inert = true;
@@ -942,6 +1113,7 @@ export class VerificationModal {
     if (!this.state.showConfirmation) return;
     this.state.showConfirmation = false;
     this.confirmOverlay?.classList.remove("active");
+    this.curtain?.removeAttribute("data-didit-dimmed");
     if (this.iframe) this.iframe.inert = false;
     const close = this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`);
     if (close) close.inert = false;
@@ -968,12 +1140,6 @@ export class VerificationModal {
   }
 
   open(verificationUrl: string): void {
-    // Whether this modal already held its scroll lock before this call. Re-opening
-    // an already-open instance must not re-capture previousBodyOverflow, or it
-    // would record this modal's own "hidden" lock and close() could never restore
-    // the real pre-lock value.
-    const wasAlreadyOpen = this.state.isOpen;
-
     this.language = detectLanguageFromUrl(verificationUrl);
 
     if (!this.overlay && !this.container) {
@@ -1004,16 +1170,10 @@ export class VerificationModal {
     }
 
     this.overlay?.classList.add("active");
-    // Capture whatever overflow value is currently in effect (which may
-    // already be "hidden" because another modal is open) so close() can
-    // restore exactly that value instead of clobbering a scroll lock owned
-    // by a concurrently open modal. Skip the capture on a re-open: the value
-    // in effect is this modal's own lock, and previousBodyOverflow already
-    // holds the correct pre-lock value.
-    if (!wasAlreadyOpen) {
-      this.previousBodyOverflow = document.body.style.overflow;
-    }
-    document.body.style.overflow = "hidden";
+    // Idempotent: a re-open of a modal that is still open keeps its one hold on the lock, so
+    // close() still gives the page back the values it had before any modal opened.
+    this.lockPageScroll();
+    this.showCurtain();
   }
 
   close(): void {
@@ -1036,8 +1196,8 @@ export class VerificationModal {
     }
 
     this.overlay?.classList.remove("active");
-    document.body.style.overflow = this.previousBodyOverflow ?? "";
-    this.previousBodyOverflow = null;
+    this.removeCurtain();
+    this.unlockPageScroll();
   }
 
   destroy(): void {

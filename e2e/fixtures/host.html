@@ -55,6 +55,12 @@
       for (const name of ["layout", "dir", "kind", "delay"]) {
         if (params.has(name)) flowUrl.searchParams.set(name, params.get(name));
       }
+      // A long page scrolled down before the modal opens, like a demo whose start button sits low.
+      if (params.has("pageHeight")) {
+        document.body.style.height = "auto";
+        document.body.style.minHeight = `${params.get("pageHeight")}px`;
+        window.scrollTo(0, Number(params.get("scrollTo") ?? 0));
+      }
       window.diditEvents = [];
       DiditSdk.shared.onEvent = (event) => window.diditEvents.push(event.type);
       DiditSdk.shared.startVerification({ url: flowUrl.href, configuration });

@@ -52,6 +52,8 @@ describe("VerificationModal cross-modal isolation", () => {
     openModals.forEach((modal) => modal.destroy());
     openModals.length = 0;
     document.body.style.overflow = "";
+    document.documentElement.style.overflow = "";
+    document.documentElement.style.overscrollBehavior = "";
   });
 
   it("only delivers a postMessage to the modal whose iframe is the event source", () => {
@@ -106,27 +108,64 @@ describe("VerificationModal cross-modal isolation", () => {
     expect(a.onCloseConfirmed).not.toHaveBeenCalled();
   });
 
-  it("restores the body overflow value observed at open() instead of unconditionally clearing it", () => {
-    document.body.style.overflow = "";
+  it("restores the page's scroll lock values observed at open() instead of unconditionally clearing them", () => {
+    const root = document.documentElement;
     const a = createModal();
     const b = createModal();
     openModals.push(a.modal, b.modal);
 
     a.modal.open("https://verify.didit.me/session/a");
-    expect(document.body.style.overflow).toBe("hidden");
+    expect(root.style.overflow).toBe("hidden");
+    expect(root.style.overscrollBehavior).toBe("none");
 
     b.modal.open("https://verify.didit.me/session/b");
-    expect(document.body.style.overflow).toBe("hidden");
+    expect(root.style.overflow).toBe("hidden");
 
     // Closing the later-opened modal must not clobber the scroll lock "a" still owns.
     b.modal.close();
-    expect(document.body.style.overflow).toBe("hidden");
+    expect(root.style.overflow).toBe("hidden");
 
     a.modal.close();
+    expect(root.style.overflow).toBe("");
+    expect(root.style.overscrollBehavior).toBe("");
+  });
+
+  it("restores the pre-lock overflow after re-opening an already-open modal", () => {
+    const root = document.documentElement;
+    root.style.overflow = "scroll";
+    const a = createModal();
+    openModals.push(a.modal);
+
+    a.modal.open("https://verify.didit.me/session/a");
+    expect(root.style.overflow).toBe("hidden");
+
+    // Re-open the same instance while it is still open (supported: open()
+    // dedupes itself in the stack). This must not overwrite the saved pre-lock
+    // overflow with the lock this modal already applied.
+    a.modal.open("https://verify.didit.me/session/a-2");
+    expect(root.style.overflow).toBe("hidden");
+
+    a.modal.close();
+    expect(root.style.overflow).toBe("scroll");
+  });
+
+  // Chrome for iOS kept scrolling a page whose body alone was hidden: a swipe over the modal moved
+  // the page underneath and toggled the browser's toolbars. The root's overflow is the viewport's.
+  it("locks the page on the root element and leaves a body that does not scroll alone", () => {
+    const a = createModal();
+    openModals.push(a.modal);
+
+    a.modal.open("https://verify.didit.me/session/a");
+
+    expect(document.documentElement.style.overflow).toBe("hidden");
+    // Locking the body too would clip a page taller than its body box to that box.
     expect(document.body.style.overflow).toBe("");
   });
 
-  it("restores the pre-lock body overflow after re-opening an already-open modal", () => {
+  it("also locks the body of a page that scrolls its body instead of the window", () => {
+    const sheet = document.createElement("style");
+    sheet.textContent = "html { overflow-y: hidden; } body { overflow-y: auto; }";
+    document.head.appendChild(sheet);
     document.body.style.overflow = "scroll";
     const a = createModal();
     openModals.push(a.modal);
@@ -134,14 +173,37 @@ describe("VerificationModal cross-modal isolation", () => {
     a.modal.open("https://verify.didit.me/session/a");
     expect(document.body.style.overflow).toBe("hidden");
 
-    // Re-open the same instance while it is still open (supported: open()
-    // dedupes itself in the stack). This must not overwrite the saved pre-lock
-    // overflow with the lock this modal already applied.
-    a.modal.open("https://verify.didit.me/session/a-2");
-    expect(document.body.style.overflow).toBe("hidden");
-
     a.modal.close();
     expect(document.body.style.overflow).toBe("scroll");
+    sheet.remove();
+  });
+
+  it("leaves the body alone when the root clips but the body does not scroll", () => {
+    const sheet = document.createElement("style");
+    sheet.textContent = "html { overflow-x: hidden; overflow-y: auto; }";
+    document.head.appendChild(sheet);
+    const a = createModal();
+    openModals.push(a.modal);
+
+    a.modal.open("https://verify.didit.me/session/a");
+
+    expect(document.documentElement.style.overflow).toBe("hidden");
+    expect(document.body.style.overflow).toBe("");
+    sheet.remove();
+  });
+
+  it("keeps the page locked until the last of two modals closes, whichever closes first", () => {
+    const a = createModal();
+    const b = createModal();
+    openModals.push(a.modal, b.modal);
+    a.modal.open("https://verify.didit.me/session/a");
+    b.modal.open("https://verify.didit.me/session/b");
+
+    a.modal.close();
+    expect(document.documentElement.style.overflow).toBe("hidden");
+
+    b.modal.close();
+    expect(document.documentElement.style.overflow).toBe("");
   });
 
   it("falls back to Escape acting on the remaining modal once the topmost one closes", () => {
@@ -166,6 +228,8 @@ describe("VerificationModal confirmation focus", () => {
     openModals.length = 0;
     document.getElementById("didit-sdk-styles")?.remove();
     document.body.style.overflow = "";
+    document.documentElement.style.overflow = "";
+    document.documentElement.style.overscrollBehavior = "";
   });
 
   function openModal(configuration: DiditSdkConfiguration = {}) {
@@ -307,6 +371,8 @@ describe("VerificationModal iframe sizing", () => {
     openModals.length = 0;
     document.getElementById("didit-sdk-styles")?.remove();
     document.body.style.overflow = "";
+    document.documentElement.style.overflow = "";
+    document.documentElement.style.overscrollBehavior = "";
   });
 
   function injectedStyles(): string {
@@ -363,6 +429,8 @@ describe("VerificationModal iframe permissions", () => {
     openModals.length = 0;
     document.getElementById("host")?.remove();
     document.body.style.overflow = "";
+    document.documentElement.style.overflow = "";
+    document.documentElement.style.overscrollBehavior = "";
   });
 
   it("lets the modal iframe use the camera, write to the clipboard and ask a digital ID wallet", () => {
@@ -525,6 +593,133 @@ describe("VerificationModal flow layout", () => {
     modal.close();
     expect(document.documentElement.style.backgroundColor).toBe("");
     expect(document.body.style.backgroundColor).toBe("rgb(1, 2, 3)");
+
+    document.body.style.backgroundColor = "";
+    window.matchMedia = original;
+  });
+
+  describe("the ground below the layout viewport", () => {
+    const innerHeight = window.innerHeight;
+
+    afterEach(() => {
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: innerHeight });
+      jest.restoreAllMocks();
+    });
+
+    function curtains(): HTMLElement[] {
+      return Array.from(document.querySelectorAll<HTMLElement>(`.${CSS_CLASSES.curtain}`));
+    }
+
+    // Chrome for iOS with its toolbars collapsed shows a band of the page below the layout viewport,
+    // where no fixed element reaches: the page's own content showed under the full-screen modal.
+    it("puts the flow's ground in the page right below the viewport while the modal is open, and takes it away", () => {
+      const { modal } = openModal();
+      const [curtain] = curtains();
+
+      expect(curtains()).toHaveLength(1);
+      expect(curtain.parentElement).toBe(document.body);
+      expect(curtain.getAttribute("aria-hidden")).toBe("true");
+      expect(curtain.style.top).toBe(`${window.innerHeight}px`);
+      expect(curtain.dataset.diditTheme).toBe("light");
+
+      postLayout(modal, { contentHeight: 600, colorScheme: "dark" });
+      expect(curtain.dataset.diditTheme).toBe("dark");
+
+      modal.close();
+      expect(curtains()).toHaveLength(0);
+    });
+
+    it("starts in the device's theme until the flow reports its own", () => {
+      window.matchMedia = jest.fn((query: string) => ({ matches: query.includes("dark") })) as unknown as typeof window.matchMedia;
+      openModal();
+
+      expect(curtains()[0].dataset.diditTheme).toBe("dark");
+    });
+
+    it("follows the viewport's bottom edge when the window resizes, whatever its containing block", () => {
+      openModal();
+      const [curtain] = curtains();
+      // jsdom has no layout: report the corner a positioned, scrolled body would put the curtain at.
+      jest.spyOn(curtain, "getBoundingClientRect").mockReturnValue({ top: -120, left: 8 } as DOMRect);
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: 700 });
+
+      window.dispatchEvent(new Event("resize"));
+
+      expect(curtain.style.top).toBe("820px");
+      expect(curtain.style.left).toBe("-8px");
+    });
+
+    it("stops following the window once the modal is closed", () => {
+      const { modal } = openModal();
+      const [curtain] = curtains();
+      modal.close();
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: 700 });
+
+      window.dispatchEvent(new Event("resize"));
+
+      expect(curtain.style.top).toBe(`${innerHeight}px`);
+    });
+
+    it("dims the ground below the viewport with the exit confirmation, and lightens it again", () => {
+      const { modal } = openModal("https://verify.didit.me/session/a", { showExitConfirmation: true });
+      const [curtain] = curtains();
+
+      getContainer(modal).querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`)?.click();
+      expect(curtain.hasAttribute("data-didit-dimmed")).toBe(true);
+
+      document.querySelector<HTMLButtonElement>('[data-action="continue"]')?.click();
+      expect(curtain.hasAttribute("data-didit-dimmed")).toBe(false);
+    });
+
+    it("keeps one curtain when an open modal opens again", () => {
+      const { modal } = openModal();
+
+      modal.open("https://verify.didit.me/session/b");
+
+      expect(curtains()).toHaveLength(1);
+    });
+
+    it("draws the curtain only for the full-screen modal of a phone-sized window, above the page", () => {
+      openModal();
+      const styles = document.getElementById("didit-sdk-styles")?.textContent ?? "";
+
+      expect(styles).toMatch(/\.didit-modal-curtain \{\s*display: none;\s*position: absolute;/);
+      expect(styles).toMatch(/\.didit-modal-curtain \{[^}]*pointer-events: none;[^}]*z-index: 9998;/);
+      expect(styles).toMatch(/@media \(max-width: 540px\) \{\s*\.didit-modal-curtain \{\s*display: block;/);
+    });
+
+    it("leaves embedded mode to the host page", () => {
+      const host = document.createElement("div");
+      host.id = "host";
+      document.body.appendChild(host);
+      openModal("https://verify.didit.me/session/a", { embedded: true, embeddedContainerId: "host" });
+
+      expect(curtains()).toHaveLength(0);
+      expect(document.documentElement.style.overflow).toBe("");
+    });
+  });
+
+  it.each([
+    ["the older one first", "older"],
+    ["the newer one first", "newer"]
+  ])("shares the page's ground between two phone modals and restores it once both close, %s", (_, first) => {
+    const original = window.matchMedia;
+    window.matchMedia = jest.fn((query: string) => ({ matches: query.includes("max-width") })) as unknown as typeof window.matchMedia;
+    document.body.style.backgroundColor = "rgb(1, 2, 3)";
+    const older = openModal().modal;
+    postLayout(older, { contentHeight: 600, colorScheme: "dark" });
+    const newer = openModal("https://verify.didit.me/session/b").modal;
+    postLayout(newer, { contentHeight: 600, colorScheme: "light" });
+    // The topmost modal's ground shows.
+    expect(document.body.style.backgroundColor).toBe("rgb(255, 255, 255)");
+
+    (first === "older" ? older : newer).close();
+    // The modal still open keeps its own ground on the page.
+    expect(document.body.style.backgroundColor).toBe(first === "older" ? "rgb(255, 255, 255)" : "rgb(11, 11, 13)");
+
+    (first === "older" ? newer : older).close();
+    expect(document.body.style.backgroundColor).toBe("rgb(1, 2, 3)");
+    expect(document.documentElement.style.backgroundColor).toBe("");
 
     document.body.style.backgroundColor = "";
     window.matchMedia = original;

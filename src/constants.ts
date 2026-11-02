@@ -19,7 +19,8 @@ export const CSS_CLASSES = {
   loading: "didit-loading",
   confirmOverlay: "didit-confirm-overlay",
   confirmBox: "didit-confirm-box",
-  embedded: "didit-embedded"
+  embedded: "didit-embedded",
+  curtain: "didit-modal-curtain"
 } as const;
 
 export const SDK_VERSION = "__SDK_PACKAGE_VERSION__";
