@@ -48,6 +48,12 @@ interface PageScrollLock {
   body: { overflow: string } | null;
 }
 
+/** The page's background colours before any modal lent it a ground, and each modal's ground. */
+interface PageBackground {
+  saved: { root: string; body: string };
+  grounds: Map<VerificationModal, FlowLayout["colorScheme"]>;
+}
+
 /** The flow's ground (site-ground in the design system), which a full-screen modal paints the page with. */
 const FLOW_GROUND = { light: "#ffffff", dark: "#0b0b0d" } as const;
 
@@ -88,8 +94,11 @@ export class VerificationModal {
   private embeddedContainer: HTMLElement | null = null;
   private language: string = "en";
 
-  /** The page's own background colours, kept while a full-screen modal paints over them. */
-  private pageBackground: { root: string; body: string } | null = null;
+  /**
+   * The page's own background colours, kept while full-screen modals lend it their ground, shared by
+   * every open modal: the topmost one's ground shows and the last one to give it back restores them.
+   */
+  private static pageBackground: PageBackground | null = null;
   /**
    * The page's scroll styles from before the first open modal locked them, shared by every open
    * modal: the last one to close gives them back.
@@ -884,18 +893,35 @@ export class VerificationModal {
    */
   private matchPageBackground(colorScheme: FlowLayout["colorScheme"]): void {
     if (!window.matchMedia?.("(max-width: 540px)").matches) return;
-    const root = document.documentElement;
-    this.pageBackground ??= { root: root.style.backgroundColor, body: document.body.style.backgroundColor };
-    const ground = FLOW_GROUND[colorScheme];
-    root.style.backgroundColor = ground;
-    document.body.style.backgroundColor = ground;
+    VerificationModal.pageBackground ??= {
+      saved: { root: document.documentElement.style.backgroundColor, body: document.body.style.backgroundColor },
+      grounds: new Map()
+    };
+    VerificationModal.pageBackground.grounds.set(this, colorScheme);
+    VerificationModal.paintPageBackground();
   }
 
   private restorePageBackground(): void {
-    if (!this.pageBackground) return;
-    document.documentElement.style.backgroundColor = this.pageBackground.root;
-    document.body.style.backgroundColor = this.pageBackground.body;
-    this.pageBackground = null;
+    const background = VerificationModal.pageBackground;
+    if (!background?.grounds.delete(this)) return;
+    if (background.grounds.size > 0) {
+      VerificationModal.paintPageBackground();
+      return;
+    }
+    VerificationModal.pageBackground = null;
+    document.documentElement.style.backgroundColor = background.saved.root;
+    document.body.style.backgroundColor = background.saved.body;
+  }
+
+  /** The page shows the ground of the topmost open modal that lends one. */
+  private static paintPageBackground(): void {
+    const background = VerificationModal.pageBackground;
+    if (!background) return;
+    const lender = [...VerificationModal.openModals].reverse().find((modal) => background.grounds.has(modal));
+    const colorScheme = lender ? background.grounds.get(lender) : [...background.grounds.values()].pop();
+    if (!colorScheme) return;
+    document.documentElement.style.backgroundColor = FLOW_GROUND[colorScheme];
+    document.body.style.backgroundColor = FLOW_GROUND[colorScheme];
   }
 
   /**

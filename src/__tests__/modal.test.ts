@@ -699,6 +699,32 @@ describe("VerificationModal flow layout", () => {
     });
   });
 
+  it.each([
+    ["the older one first", "older"],
+    ["the newer one first", "newer"]
+  ])("shares the page's ground between two phone modals and restores it once both close, %s", (_, first) => {
+    const original = window.matchMedia;
+    window.matchMedia = jest.fn((query: string) => ({ matches: query.includes("max-width") })) as unknown as typeof window.matchMedia;
+    document.body.style.backgroundColor = "rgb(1, 2, 3)";
+    const older = openModal().modal;
+    postLayout(older, { contentHeight: 600, colorScheme: "dark" });
+    const newer = openModal("https://verify.didit.me/session/b").modal;
+    postLayout(newer, { contentHeight: 600, colorScheme: "light" });
+    // The topmost modal's ground shows.
+    expect(document.body.style.backgroundColor).toBe("rgb(255, 255, 255)");
+
+    (first === "older" ? older : newer).close();
+    // The modal still open keeps its own ground on the page.
+    expect(document.body.style.backgroundColor).toBe(first === "older" ? "rgb(255, 255, 255)" : "rgb(11, 11, 13)");
+
+    (first === "older" ? newer : older).close();
+    expect(document.body.style.backgroundColor).toBe("rgb(1, 2, 3)");
+    expect(document.documentElement.style.backgroundColor).toBe("");
+
+    document.body.style.backgroundColor = "";
+    window.matchMedia = original;
+  });
+
   it("leaves the page's background alone on a computer", () => {
     const { modal } = openModal();
 
