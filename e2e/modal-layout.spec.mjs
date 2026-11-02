@@ -378,6 +378,69 @@ test("keeps its shape and fills a phone as the window resizes", async ({ page })
   await expectSize(container, 440, 548);
 });
 
+const CURTAIN = ".didit-modal-curtain";
+const PHONE = { width: 390, height: 664 };
+
+// What the page shows right below the layout viewport: on a phone, iOS browsers with collapsed
+// toolbars show that band of the page under every fixed element, the full-screen modal included.
+async function pageBelowViewport(page) {
+  return page.evaluate((selector) => {
+    const curtain = document.querySelector(selector);
+    const box = curtain?.getBoundingClientRect();
+    return {
+      innerHeight: window.innerHeight,
+      scrollY: Math.round(window.scrollY),
+      rootOverflow: getComputedStyle(document.documentElement).overflowY,
+      curtain: box ? { top: Math.round(box.top), height: Math.round(box.height), left: Math.round(box.left) } : null,
+      ground: curtain ? getComputedStyle(curtain).backgroundColor : null
+    };
+  }, CURTAIN);
+}
+
+for (const [theme, ground] of [
+  ["light", "rgb(255, 255, 255)"],
+  ["dark", "rgb(11, 11, 13)"]
+]) {
+  test(`on a phone keeps the page still and its ground below the viewport as the toolbars move, ${theme}`, async ({ page }) => {
+    await openFlowFixture(page, PHONE, `?layout=600&theme=${theme}&pageHeight=3000&scrollTo=900`);
+
+    expect(await pageBelowViewport(page)).toEqual({
+      innerHeight: PHONE.height,
+      scrollY: 900,
+      rootOverflow: "hidden",
+      curtain: { top: PHONE.height, height: PHONE.height, left: 0 },
+      ground
+    });
+    // The toolbars collapse: the viewport grows and the ground follows its bottom edge.
+    await page.setViewportSize({ width: PHONE.width, height: 756 });
+    await expect.poll(async () => (await pageBelowViewport(page)).curtain).toEqual({ top: 756, height: 756, left: 0 });
+    await expectSize(page.locator(CONTAINER), PHONE.width, 756);
+    await page.setViewportSize(PHONE);
+    await expect.poll(async () => (await pageBelowViewport(page)).curtain?.top).toBe(PHONE.height);
+
+    await page.getByRole("button", { name: "Close verification" }).click();
+    await page.getByRole("button", { name: "Exit" }).click();
+    await expect(page.locator(CURTAIN)).toHaveCount(0);
+    expect(await pageBelowViewport(page)).toMatchObject({ scrollY: 900, rootOverflow: "visible", curtain: null });
+  });
+}
+
+test("on a phone a wheel over the modal does not scroll the page underneath", async ({ page }) => {
+  await openFlowFixture(page, PHONE, "?layout=600&pageHeight=3000&scrollTo=900");
+
+  await page.mouse.move(PHONE.width / 2, PHONE.height / 2);
+  await page.mouse.wheel(0, 800);
+  await page.waitForTimeout(300);
+
+  expect((await pageBelowViewport(page)).scrollY).toBe(900);
+});
+
+test("does not draw the ground below the viewport on a computer", async ({ page }) => {
+  await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600&kind=step");
+
+  await expect(page.locator(CURTAIN)).toBeHidden();
+});
+
 test("keeps the neutral look when the layout has no content height", async ({ page }) => {
   const iframe = await openFixture(page, { width: 1440, height: 900 });
 
