@@ -28,6 +28,8 @@ let provider: DeviceSignalsProvider | null = null;
 let cachedPayload: DeviceFingerprintPayload | null = null;
 let pendingPayload: DeviceFingerprintPayload | null = null;
 let cachedPayloadPromise: Promise<DeviceFingerprintPayload | null> | null = null;
+/** Raised when the source of the payload changes, so a collection started before it is recognised. */
+let generation = 0;
 
 async function buildPayload(): Promise<DeviceFingerprintPayload> {
   // These layers answer at once, so the id is in the payload before anything is awaited.
@@ -77,12 +79,18 @@ export async function getDeviceFingerprintPayload(): Promise<DeviceFingerprintPa
   if (!isBrowserEnvironment()) return null;
   if (cachedPayload) return cachedPayload;
   if (!cachedPayloadPromise) {
+    const started = generation;
     cachedPayloadPromise = (provider ? provider.get() : buildPayload()).then(
       (payload) => {
+        // The source changed while this was being collected (`enableDeviceIntelligence()` called
+        // with the lite collection still running): its result must not become the cached payload,
+        // and whoever waited for it gets the payload of the source that replaced it.
+        if (started !== generation) return getDeviceFingerprintPayload();
         cachedPayload = payload;
         return payload;
       },
       (error) => {
+        if (started !== generation) return getDeviceFingerprintPayload();
         // Do not cache failures; a later call may succeed.
         cachedPayloadPromise = null;
         throw error;
@@ -103,6 +111,7 @@ export function getAvailableDeviceFingerprintPayload(): DeviceFingerprintPayload
  */
 export function setDeviceSignalsProvider(next: DeviceSignalsProvider | null): void {
   provider = next;
+  generation += 1;
   cachedPayload = null;
   pendingPayload = null;
   cachedPayloadPromise = null;

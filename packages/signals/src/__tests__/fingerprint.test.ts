@@ -155,6 +155,33 @@ describe("full fingerprint as the source", () => {
     expect(await getDeviceFingerprintPayload()).toBe(full);
     expect(attempts).toBe(2);
   });
+
+  it("does not let a collection that was still running replace the collector set after it started", async () => {
+    const full = { persistentId: "pid-from-the-full-collector", signals: { tier: "full" } } as never;
+    // The light collection has started and is waiting for its hash.
+    const startedBefore = getDeviceFingerprintPayload();
+    setDeviceSignalsProvider({ get: async () => full, peek: () => null });
+
+    // Whoever waited for it gets the new collector's payload, and so does every request after.
+    expect(await startedBefore).toBe(full);
+    expect(await getDeviceFingerprintPayload()).toBe(full);
+    expect((await getDeviceFingerprintPayload())!.signals.tier).toBe("full");
+  });
+
+  it("does not let a failed collection of the collector it replaced undo the new one", async () => {
+    const full = { persistentId: "pid-from-the-full-collector", signals: { tier: "full" } } as never;
+    let failOld: (error: Error) => void = () => undefined;
+    setDeviceSignalsProvider({
+      get: () => new Promise((_, reject) => (failOld = reject)),
+      peek: () => null,
+    });
+    const startedBefore = getDeviceFingerprintPayload();
+    setDeviceSignalsProvider({ get: async () => full, peek: () => null });
+    failOld(new Error("the old collector failed late"));
+
+    expect(await startedBefore).toBe(full);
+    expect(await getDeviceFingerprintPayload()).toBe(full);
+  });
 });
 
 describe("bot score", () => {

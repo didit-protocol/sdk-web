@@ -137,19 +137,81 @@ function nextCount(key: string): number {
 // What is reported about a page: its path, never its query string or fragment.
 // ---------------------------------------------------------------------------------------------
 
+const DIGIT = 2;
+const LETTER = 1;
+
+/** A digit, a letter (of any alphabet), or what separates the words of a path segment. */
+function kindOf(code: number): number {
+  if (code >= 48 && code <= 57) return DIGIT;
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code > 127 ? LETTER : 0;
+}
+
 /**
- * Whether a path segment names one record rather than a page: a number, a UUID, a long
- * hexadecimal string, an email address, or a long token (letters of both cases and digits, which a
- * readable slug such as `how-to-verify-your-identity` does not have).
+ * Whether a path segment names one record rather than a page.
+ *
+ * It does when it is an email address, a UUID, a long hexadecimal string, made of numbers alone
+ * (`48213`, an order number `2024-00123`, a phone number), or when one of its words mixes letters
+ * and digits the way no word of a readable slug does: twelve characters or more of both
+ * (`ckv4zq3x10000a1b2c3d4e5f6`, `01ARZ3NDEKTSV4RRFFQ69G5FAV`), or letters and digits taking turns
+ * three times (`1a2b3c`, `9f86d081`). `oauth2`, `iso27001`, `i18n` and
+ * `How-To-Verify-In-2-Minutes` name pages and are kept.
+ *
+ * One pass over the characters; the only regular expressions are anchored ones over one character
+ * class, so a long path costs its length once.
  */
 function looksLikeIdentifier(segment: string): boolean {
-  return (
-    /^\d+$/.test(segment) ||
-    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(segment) ||
-    /^[0-9a-fA-F]{16,}$/.test(segment) ||
-    /@|%40/.test(segment) ||
-    (/^[A-Za-z0-9_-]{20,}$/.test(segment) && /\d/.test(segment) && /[a-z]/.test(segment) && /[A-Z]/.test(segment))
-  );
+  let text = segment;
+  try {
+    text = decodeURIComponent(segment);
+  } catch {
+    // Not valid percent-encoding: read as written.
+  }
+  if (text.includes("@")) return true;
+  if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(text)) return true;
+  if (/^[0-9a-fA-F]{16,}$/.test(text)) return true;
+
+  let digits = 0;
+  let letters = 0;
+  let humps = 0;
+  let afterLower = false;
+  let plain = true;
+  let wordDigits = 0;
+  let wordLetters = 0;
+  let turns = 0;
+  let previous = 0;
+  let mixedWord = false;
+  for (let index = 0; index <= text.length; index++) {
+    const code = index < text.length ? text.charCodeAt(index) : 0;
+    const kind = kindOf(code);
+    if (!kind) {
+      // The end of a word: was it one no slug has?
+      if (wordDigits && wordLetters && (wordDigits + wordLetters >= 12 || turns >= 3)) mixedWord = true;
+      wordDigits = 0;
+      wordLetters = 0;
+      turns = 0;
+      previous = 0;
+      afterLower = false;
+      if (index < text.length && code !== 45 && code !== 95) plain = false;
+      continue;
+    }
+    if (previous && previous !== kind) turns += 1;
+    previous = kind;
+    if (kind === DIGIT) {
+      digits += 1;
+      wordDigits += 1;
+    } else {
+      letters += 1;
+      wordLetters += 1;
+      // A capital after a small letter inside a word: `AbCd`, not `Verify`.
+      if (afterLower && code >= 65 && code <= 90) humps += 1;
+    }
+    afterLower = code >= 97 && code <= 122;
+  }
+  if (digits && !letters) return true;
+  if (mixedWord) return true;
+  // A token cut into short words by its own "-" and "_": long, with a digit, and capitals in the
+  // middle of its words, which the words of a title (`How-To-Verify`) do not have.
+  return plain && text.length >= 20 && digits > 0 && humps >= 3;
 }
 
 /** The path with every segment that looks like an identifier replaced by `:id`. */

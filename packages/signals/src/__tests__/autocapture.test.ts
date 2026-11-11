@@ -102,6 +102,45 @@ describe("session and page views", () => {
     expect(defaultSanitizePath("/pricing")).toBe("/pricing");
   });
 
+  it("replaces identifiers written in one case, order numbers and phone numbers", () => {
+    // The identifiers databases and payment providers hand out: no capital letter, or no small one.
+    expect(defaultSanitizePath("/c/ckv4zq3x10000a1b2c3d4e5f6")).toBe("/c/:id");
+    expect(defaultSanitizePath("/t/tz4a98xxat96iws9zmbrgj3a/edit")).toBe("/t/:id/edit");
+    expect(defaultSanitizePath("/o/01ARZ3NDEKTSV4RRFFQ69G5FAV")).toBe("/o/:id");
+    expect(defaultSanitizePath("/orders/ord_1a2b3c")).toBe("/orders/:id");
+    expect(defaultSanitizePath("/short/9f86d081")).toBe("/short/:id");
+    expect(defaultSanitizePath("/k/AbCd-EfGh_IjKl-MnOp-QrSt1")).toBe("/k/:id");
+    // Numbers with what separates them.
+    expect(defaultSanitizePath("/orders/2024-00123")).toBe("/orders/:id");
+    expect(defaultSanitizePath("/call/%2B34%20600%20111%20222")).toBe("/call/:id");
+    expect(defaultSanitizePath("/invite/someone%40example.com")).toBe("/invite/:id");
+  });
+
+  it("keeps the names of pages that have digits in them, in any alphabet", () => {
+    for (const path of [
+      "/docs/oauth2/pkce",
+      "/docs/iso27001",
+      "/blog/i18n-and-l10n-in-2-steps",
+      "/guides/sha256-vs-md5",
+      "/learn/web3/3ds2",
+      "/v2/settings",
+      "/productos/categoría/niños",
+      "/help/top10-questions.html",
+      "/ForgotPasswordConfirmation",
+      "/blog/How-To-Verify-Your-Identity-In-2-Minutes",
+    ]) {
+      expect(defaultSanitizePath(path)).toBe(path);
+    }
+  });
+
+  it("reads a path of any length once", () => {
+    const long = `/${"a1-".repeat(100000)}`;
+    const started = performance.now();
+    defaultSanitizePath(long);
+    defaultSanitizePath(`/${"%".repeat(100000)}`);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   it("reports the path the integrator's own rule gives", () => {
     startAutocapture({
       monitoringToken: "token-1",
