@@ -250,10 +250,9 @@ the same as `"auto"` and is kept for compatibility. Set `"off"` to never send
 them.
 
 The bot score is the strongest automation signal found: `navigator.webdriver`,
-a headless or automation user agent or client hint, or a global left by an
-automation driver. Browser tests that drive your own sign-in screens are
-automation too: run them against a Sandbox application whose `bots` policy is
-off or in log mode.
+or a headless or automation user agent. Browser tests that drive your own
+sign-in screens are automation too: run them against a Sandbox application
+whose `bots` policy is off or in log mode.
 
 ## Server: verify access tokens
 
