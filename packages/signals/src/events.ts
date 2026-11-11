@@ -26,6 +26,8 @@ const LOW_VALUE =
   /^session\.(page_view|sdk_heartbeat|sdk_loaded|device_seen|bot_signal_observed)$|^bonus\.promotion_viewed$|^affiliate\.referral_clicked$/;
 
 const PRIORITY_NEVER_DROPPED = 2;
+/** What `fetch` accepts as a header value: no control character but the tab, nothing above U+00FF. */
+const HEADER_VALUE = /^[\t\x20-\x7e\x80-\xff]+$/;
 
 /**
  * Typed error for events Didit refused or the SDK had to drop. Thrown by
@@ -436,10 +438,16 @@ export function configureEvents(configuration: DiditEventsConfiguration): void {
  * environment has no fetch.
  */
 export function submitEvent(options: SubmitEventOptions): string {
-  const token = options?.monitoringToken;
+  // Without the white space around it, as `fetch` sends a header value.
+  const token = typeof options?.monitoringToken === "string" ? options.monitoringToken.trim() : "";
   const event = options?.event;
-  if (!token || typeof token !== "string") {
+  if (!token) {
     throw new DiditEventError("invalid_token", "monitoringToken is required.");
+  }
+  // A line break or a NUL inside it, or a character above U+00FF, makes `fetch` throw before any
+  // request is made. Queued, such an event looked like a network failure and was retried forever.
+  if (!HEADER_VALUE.test(token)) {
+    throw new DiditEventError("invalid_token", "monitoringToken is not a value a header can carry.");
   }
   if (!isRecord(event) || !event.category || typeof event.actionType !== "string" || !event.actionType.trim()) {
     throw new DiditEventError("validation", "event.category and event.actionType are required.");

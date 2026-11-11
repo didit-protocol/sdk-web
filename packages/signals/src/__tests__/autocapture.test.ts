@@ -346,6 +346,19 @@ describe("limits and stopping", () => {
     expect(sent()).toHaveLength(3);
   });
 
+  it("does not count an event the queue refused toward the session's limit", () => {
+    const refuse = () => {
+      throw new Error("refused");
+    };
+    // The session start and the first page view are refused (a token no header can carry, say).
+    submitEvent.mockImplementationOnce(refuse).mockImplementationOnce(refuse);
+    startAutocapture({ monitoringToken: "token-1", behavior: false, maxEvents: 3 });
+    for (const path of ["/a", "/b", "/c", "/d"]) history.pushState({}, "", path);
+
+    // Two refused, then the three the limit allows: /d is the first one held back.
+    expect(sent().map((event) => event.payload!.path)).toEqual(["/", "/", "/a", "/b", "/c"]);
+  });
+
   it("sends an event of the integrator's own with the session attached, and nothing once stopped", () => {
     const pushState = history.pushState;
     const stop = startAutocapture({ monitoringToken: "token-1", pageViews: false, behavior: false });

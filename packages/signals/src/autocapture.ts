@@ -271,12 +271,12 @@ function token(options: AutocaptureOptions): string | null {
 function send(current: State, monitoringToken: string, event: DiditEvent): void {
   const alreadySent = Number(read(COUNT_KEY)) || 0;
   if (alreadySent >= (current.options.maxEvents ?? 500)) return;
-  write(COUNT_KEY, String(alreadySent + 1));
   try {
     submitEvent({ monitoringToken, event, baseUrl: current.options.baseUrl });
+    write(COUNT_KEY, String(alreadySent + 1));
   } catch {
-    // An event that cannot be queued (a token with characters no header carries) is not worth
-    // breaking the page for: submitEvent has told onError already where it could.
+    // submitEvent refused it (a token no header can carry, a page with no fetch). That is not
+    // worth breaking the page for, and an event that was never queued does not count as sent.
   }
 }
 
