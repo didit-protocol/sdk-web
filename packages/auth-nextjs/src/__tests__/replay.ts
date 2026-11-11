@@ -1,9 +1,20 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import recorded from "./fixtures/runtime-responses.json";
+import responses from "./fixtures/runtime-responses.json";
 
-export { recorded };
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+// The recorded session ended thirty days after the recording was made. These tests are about a
+// session that is still alive (cookie lifetimes are counted from now to its end), so its end stays
+// as far ahead as it was on the day of the recording instead of sliding into the past.
+export const recorded = {
+  ...responses,
+  session: {
+    ...responses.session,
+    body: { ...responses.session.body, expires_at: new Date(Date.now() + THIRTY_DAYS_MS).toISOString() }
+  }
+};
 
 /** A scenario @didit-protocol/auth recorded against a local Didit auth service (its own test fixtures). */
 export function coreFixture(scenario: string) {
