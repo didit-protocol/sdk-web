@@ -219,7 +219,7 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
   const pendingPrefix = `${storageKey}:pending:`;
   const signals = options.deviceSignals ?? "auto";
   const request = createHttpClient(key.origin, options.fetch ?? ((input, init) => fetch(input, init)), () =>
-    deviceSignalsEnabled(signals, key.origin) ? deviceHeaders() : Promise.resolve({})
+    deviceSignalsEnabled(signals) ? deviceHeaders() : Promise.resolve({})
   );
   const listeners = new Set<DiditAuthListener>();
   let tokenStore: DiditAuthStorage | null = null;

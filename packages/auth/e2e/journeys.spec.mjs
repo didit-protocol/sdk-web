@@ -351,7 +351,17 @@ test("neither storage nor a reported error keeps the password, a code or a used 
   );
   expect(failure.code).toBe("invalid_credentials");
   expect(failure.text).not.toContain("Not-the-password-1");
-  expect(await page.evaluate(() => [localStorage.length, sessionStorage.length, document.cookie])).toEqual([0, 0, ""]);
+  // Only the device id of the device signals is kept, in storage and in its cookie: nothing of the attempt.
+  const stored = await page.evaluate(() => ({
+    local: Object.keys(localStorage),
+    session: sessionStorage.length,
+    cookie: document.cookie,
+    values: Object.values(localStorage).join("\n")
+  }));
+  expect(stored.local).toEqual(["didit-pid-v1"]);
+  expect(stored.session).toBe(0);
+  expect(stored.cookie).toMatch(/^(didit_pid=[A-Za-z0-9_-]{20,32})?$/);
+  expect(`${stored.values}\n${stored.cookie}`).not.toContain("Not-the-password-1");
 
   const recorded = fixture("password-sign-in");
   await loadRecording(request, "password-sign-in");
@@ -372,7 +382,7 @@ test("neither storage nor a reported error keeps the password, a code or a used 
     };
   }, TOKENS);
 
-  expect(kept.names).toEqual([TOKENS]);
+  expect([...kept.names].sort()).toEqual(["didit-pid-v1", TOKENS].sort());
   for (const secret of [PASSWORD, recorded.exchanges[1].response.body.code]) {
     expect(kept.values).not.toContain(secret);
     expect(kept.session).not.toContain(secret);

@@ -244,21 +244,29 @@ function detectWebViewKind(userAgent: string): string {
   return "browser";
 }
 
+// The score is the strongest flag found, not a count: one conclusive signal is not diluted because
+// the other checks came back clean. The Authentication API treats 0.8 and above as a bot, so only
+// what a browser never shows to a person (a driver's navigator.webdriver, a headless or automation
+// user agent) weighs that much.
 function detectBot(signals: DeviceFingerprintSignals): { score: number; flags: string[] } {
   const flags: string[] = [];
   const userAgent = signals.navigator.userAgent;
+  let score = 0;
 
   if (typeof navigator !== "undefined" && (navigator as Navigator & { webdriver?: boolean }).webdriver) {
     flags.push("webdriver");
+    score = 0.9;
   }
   if (/HeadlessChrome|PhantomJS|Selenium|puppeteer|playwright/i.test(userAgent)) {
     flags.push("headless-ua");
+    score = 0.9;
   }
   if (signals.navigator.uaDataMobile === false && /Android|iPhone|iPad/i.test(userAgent)) {
     flags.push("ua-mobile-mismatch");
+    score = score || 0.3;
   }
 
-  return { score: Math.min(1, flags.length / 4), flags };
+  return { score, flags };
 }
 
 function canonicalizeSignals(signals: DeviceFingerprintSignals): string {

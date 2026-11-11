@@ -7,13 +7,14 @@ import { buildFingerprintHeaders, getDeviceFingerprintPayload } from "@didit-pro
 export type DeviceSignalsOption = "auto" | "always" | "off";
 
 /**
- * Whether requests to `apiBase` carry device headers. Cross-origin requests
- * only do so with "always": the browser preflights custom headers, and the
- * Didit API must list them in Access-Control-Allow-Headers first.
+ * Whether auth requests carry device headers: in a browser, unless they are turned off.
+ * They go to the application's own Didit origin, which lists them in
+ * Access-Control-Allow-Headers for the application's allowed origins, so they cross
+ * origins the way the Authorization header does. "always" is kept for callers that set
+ * it while "auto" still meant same-origin only; the two now behave the same.
  */
-export function deviceSignalsEnabled(option: DeviceSignalsOption, apiBase: string): boolean {
-  if (option === "off" || typeof window === "undefined") return false;
-  return option === "always" || new URL(apiBase).origin === window.location.origin;
+export function deviceSignalsEnabled(option: DeviceSignalsOption): boolean {
+  return option !== "off" && typeof window !== "undefined";
 }
 
 export async function deviceHeaders(): Promise<Record<string, string>> {
