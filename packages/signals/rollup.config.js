@@ -14,6 +14,32 @@ const banner = `/**
 
 const plugins = () => [resolve(), typescript({ tsconfig: './tsconfig.json', declaration: false })];
 
+// The other entries reach the core through its package name, so an app that imports several of
+// them gets one event queue and one fingerprint, not a copy per entry.
+const external = ['@didit-protocol/signals'];
+
+/** ESM, CommonJS and type builds of one entry beside the core: `@didit-protocol/signals/<name>`. */
+const entry = (name) => [
+  {
+    input: `src/${name}.ts`,
+    external,
+    output: { file: `dist/${name}.esm.js`, format: 'esm', banner, sourcemap: true },
+    plugins: plugins(),
+  },
+  {
+    input: `src/${name}.ts`,
+    external,
+    output: { file: `dist/${name}.cjs`, format: 'cjs', banner, sourcemap: true, exports: 'named' },
+    plugins: plugins(),
+  },
+  {
+    input: `src/${name}.ts`,
+    external,
+    output: { file: `dist/${name}.d.ts`, format: 'esm' },
+    plugins: [dts()],
+  },
+];
+
 export default [
   {
     input: 'src/index.ts',
@@ -43,4 +69,6 @@ export default [
     output: { file: 'dist/index.d.ts', format: 'esm' },
     plugins: [dts()],
   },
+  ...entry('device'),
+  ...entry('autocapture'),
 ];

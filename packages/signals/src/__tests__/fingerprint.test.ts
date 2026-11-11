@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
-import { buildFingerprintHeaders, getDeviceFingerprintPayload, resetDeviceFingerprintForTesting } from "../fingerprint";
+import { installWebCryptoForTests } from "../device/__tests__/_test_setup";
+
+// The test browser has no WebCrypto; without it the composite hash is left out (see the last test).
+installWebCryptoForTests();
+import {
+  buildFingerprintHeaders,
+  getDeviceFingerprintPayload,
+  resetDeviceFingerprintForTesting,
+  setDeviceSignalsProvider,
+} from "../fingerprint";
 
 describe("getDeviceFingerprintPayload (browser environment)", () => {
   beforeEach(() => {
@@ -56,6 +65,95 @@ describe("buildFingerprintHeaders", () => {
     } else {
       expect(headers).not.toHaveProperty("X-Didit-FP-Bot-Score");
     }
+  });
+});
+
+describe("light fingerprint", () => {
+  beforeEach(() => {
+    resetDeviceFingerprintForTesting();
+    localStorage.clear();
+    document.cookie = "didit_pid=; Path=/; Max-Age=0";
+  });
+
+  it("says which signals it carries and which hash version it used", async () => {
+    const payload = await getDeviceFingerprintPayload();
+    expect(payload!.signals).toMatchObject({ platform: "web", tier: "lite", compositeHashVersion: 3 });
+    expect(payload!.signals.webview).toEqual({ kind: "browser", hostAppVersion: null, isStandaloneBrowser: true });
+    expect(payload).not.toHaveProperty("legacyCompatibilityHash");
+  });
+
+  it("keeps its hash across a browser update and a turned phone", async () => {
+    const nav = navigator as unknown as Record<string, unknown>;
+    async function hashWith(userAgent: string, width: number, height: number): Promise<string> {
+      Object.defineProperty(navigator, "userAgent", { configurable: true, get: () => userAgent });
+      Object.defineProperty(screen, "width", { configurable: true, get: () => width });
+      Object.defineProperty(screen, "height", { configurable: true, get: () => height });
+      resetDeviceFingerprintForTesting();
+      try {
+        return (await getDeviceFingerprintPayload())!.compositeHash;
+      } finally {
+        delete nav.userAgent;
+        delete (screen as unknown as Record<string, unknown>).width;
+        delete (screen as unknown as Record<string, unknown>).height;
+      }
+    }
+    const before = await hashWith(
+      "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7727.137 Mobile Safari/537.36",
+      412,
+      915,
+    );
+    const after = await hashWith(
+      "Mozilla/5.0 (Linux; Android 15; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7801.12 Mobile Safari/537.36",
+      915,
+      412,
+    );
+    const otherPhone = await hashWith(
+      "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.7727.137 Mobile Safari/537.36",
+      412,
+      915,
+    );
+    expect(before).toHaveLength(22);
+    expect(after).toBe(before);
+    expect(otherPhone).not.toBe(before);
+  });
+
+  it("sends the stored id without a hash where the browser has no WebCrypto", async () => {
+    const subtle = Object.getOwnPropertyDescriptor(globalThis.crypto, "subtle");
+    Object.defineProperty(globalThis.crypto, "subtle", { configurable: true, value: undefined });
+    try {
+      const payload = await getDeviceFingerprintPayload();
+      const headers = buildFingerprintHeaders(payload);
+      expect(payload!.compositeHash).toBe("");
+      expect(headers["X-Didit-PID"]).toBe(payload!.persistentId);
+      expect(headers).not.toHaveProperty("X-Didit-FP-Hash");
+    } finally {
+      if (subtle) Object.defineProperty(globalThis.crypto, "subtle", subtle);
+      else delete (globalThis.crypto as { subtle?: unknown }).subtle;
+    }
+  });
+});
+
+describe("full fingerprint as the source", () => {
+  afterEach(() => {
+    resetDeviceFingerprintForTesting();
+  });
+
+  it("sends what the provider collects, and falls back to a new collection after a failure", async () => {
+    const full = { persistentId: "pid-from-the-full-collector", signals: { tier: "full" } } as never;
+    let attempts = 0;
+    setDeviceSignalsProvider({
+      get: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("collection failed");
+        return full;
+      },
+      peek: () => (attempts > 1 ? full : null),
+    });
+
+    await expect(getDeviceFingerprintPayload()).rejects.toThrow("collection failed");
+    expect(await getDeviceFingerprintPayload()).toBe(full);
+    expect(await getDeviceFingerprintPayload()).toBe(full);
+    expect(attempts).toBe(2);
   });
 });
 

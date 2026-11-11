@@ -32,7 +32,7 @@
     "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "@didit-protocol/signals": "^0.1.0"
+    "@didit-protocol/signals": "^0.2.0"
   },
   "keywords": [
     "didit",

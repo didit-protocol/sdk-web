@@ -1,43 +1,13 @@
 import type { DiditEventError } from "./events";
 
+import type { NavigatorSignals } from "./device/signals/navigator";
+import type { DeviceFingerprintPayload, DeviceSignals } from "./device/types";
+
 /** Navigator-derived signals collected for the didit-fp-v2 device fingerprint. */
-export interface DeviceFingerprintNavigatorSignals {
-  userAgent: string;
-  platform: string | null;
-  language: string;
-  languages: string[];
-  hardwareConcurrency: number | null;
-  deviceMemory: number | null;
-  maxTouchPoints: number | null;
-  devicePixelRatio: number | null;
-  screenWidth: number | null;
-  screenHeight: number | null;
-  colorDepth: number | null;
-  timeZone: string | null;
-  uaDataPlatform: string | null;
-  uaDataMobile: boolean | null;
-  uaDataBrands: string[];
-}
-
-export interface DeviceFingerprintSignals {
-  platform: "web";
-  navigator: DeviceFingerprintNavigatorSignals;
-  webview: { kind: string };
-}
-
-/** The didit-fp-v2 device fingerprint payload sent as the `fingerprint_v2` body field. */
-export interface DeviceFingerprintPayload {
-  version: 2;
-  schema: "didit-fp-v2";
-  platform: "web";
-  collectedAt: string;
-  persistentId: string;
-  persistentIdSources: string[];
-  persistentIdWasCreated: boolean;
-  signals: DeviceFingerprintSignals;
-  bot: { score: number; flags: string[] };
-  compositeHash: string;
-}
+export type DeviceFingerprintNavigatorSignals = NavigatorSignals;
+/** The signals of a payload: the navigator and the webview kind, plus the full tier's families when it was used. */
+export type DeviceFingerprintSignals = DeviceSignals;
+export type { DeviceFingerprintPayload };
 
 /** The ten event categories the Didit events API accepts. */
 export type DiditEventCategory =

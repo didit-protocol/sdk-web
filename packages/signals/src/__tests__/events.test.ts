@@ -77,7 +77,10 @@ describe("submitEvent and flush against the recorded device lane", () => {
     expect(request.body.events).toEqual(scenario("accepted").request.events);
     expect(request.body.fingerprint_v2?.schema).toBe("didit-fp-v2");
     expect(request.init.headers["X-Didit-PID"]).toBe(request.body.fingerprint_v2?.persistentId);
-    expect(request.init.headers["X-Didit-FP-Hash"]).toBe(request.body.fingerprint_v2?.compositeHash);
+    // The test browser has no WebCrypto, so there is no composite hash: the header is left out, never
+    // filled with a weaker hash that would read as another device (fingerprint.test.ts covers the hash).
+    expect(request.body.fingerprint_v2?.compositeHash).toBe("");
+    expect(request.init.headers).not.toHaveProperty("X-Didit-FP-Hash");
 
     expect(ids).toEqual(["rec-signup-1", "rec-login-1", "rec-login-failed-1"]);
     expect(result).toMatchObject({ acceptedCount: 3, replayedCount: 0, rejectedCount: 0, pendingCount: 0 });

@@ -60,7 +60,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@didit-protocol/signals": "^0.1.0"
+    "@didit-protocol/signals": "^0.2.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.0",
