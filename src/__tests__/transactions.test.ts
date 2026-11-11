@@ -8,7 +8,11 @@ import {
   submitTransactionRequest
 } from "../transactions";
 import { resetDeviceFingerprintForTesting } from "../../packages/signals/src/fingerprint";
+import { installWebCryptoForTests } from "../../packages/signals/src/device/__tests__/_test_setup";
 import type { DiditTransactionPayload } from "../types";
+
+// The composite hash needs WebCrypto, which the test browser lacks: without it the hash is left out.
+installWebCryptoForTests();
 
 const fullPayload: DiditTransactionPayload = {
   txnId: "txn-123",

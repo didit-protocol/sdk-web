@@ -53,6 +53,7 @@ describe("DiditSdk.shared.submitEvent", () => {
         "default",
         "flush",
         "getDeviceFingerprintPayload",
+        "setDeviceSignalsProvider",
         "submitEvent"
       ].sort()
     );

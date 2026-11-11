@@ -1,9 +1,11 @@
 # @didit-protocol/signals
 
-Didit device signals and end-user event monitoring for the browser, in under 5 KB minified and gzipped.
+Didit device signals and end-user event monitoring for the browser, in under 6 KB minified and gzipped.
 
 - **`submitEvent`** sends sign-ups, logins, failed logins, logouts and any other end-user event to Didit's [event monitoring](https://docs.didit.me/transaction-monitoring/events), tied to the same person as their verifications and transactions.
 - **Device signals**: the didit-fp-v2 device fingerprint is attached to every batch. Page exit uses the available signals if its composite hash is still pending.
+- **`@didit-protocol/signals/device`** (optional, about 10 KB more) collects the full device fingerprint: the one Didit's hosted verification flow uses.
+- **`@didit-protocol/signals/autocapture`** (optional, about 3 KB more) sends page views, declared actions and interaction telemetry without a `submitEvent` call for each.
 - Works alone or together with the other Didit SDKs: [`@didit-protocol/sdk-web`](https://www.npmjs.com/package/@didit-protocol/sdk-web) depends on this package and re-exports it, so an app that uses both shares one event queue per module format. Standalone CDN and script-tag builds each carry their own queue.
 
 ## Installation
@@ -115,6 +117,95 @@ Sends everything that is waiting. Never rejects: events that could not be sent a
 - `getDeviceFingerprintPayload(): Promise<DeviceFingerprintPayload | null>` collects the didit-fp-v2 fingerprint (`null` outside a browser).
 - `buildFingerprintHeaders(payload)` returns the matching `X-Didit-*` headers.
 
+The fingerprint has two parts.
+The **stored id** (`persistentId`, header `X-Didit-PID`) is a random id kept in the browser's storage: it is what tells one device from another.
+The **composite hash** (`compositeHash`, header `X-Didit-FP-Hash`) is a hash of the signals that describe the device; devices of one kind share it, so it is evidence, never an id.
+It has no version numbers in it and reads the screen shorter side first, so a browser update or a turned phone does not change it.
+Where the browser has no WebCrypto (a page served without TLS) the hash is left out, and the stored id is still sent.
+
+This entry reads the light tier (`signals.tier: "lite"`): the stored id from `localStorage` and a cookie, the navigator and the kind of in-app browser.
+
+## Full device fingerprint: `@didit-protocol/signals/device`
+
+```ts
+import { enableDeviceIntelligence } from "@didit-protocol/signals/device";
+
+enableDeviceIntelligence(); // once, when your app starts
+```
+
+From then on every event, transaction and Didit Authentication request of the page carries the full tier (`signals.tier: "full"`).
+It is the collector Didit's hosted verification flow uses, so a device is described the same way wherever Didit sees it.
+
+What the full tier adds:
+
+| Signal family | What it tells |
+|---|---|
+| Stored id in `localStorage`, IndexedDB, a cookie and Cache storage | Clearing one of them does not make a known device look new |
+| Graphics (`webgl`), fonts, math, API support | What the composite hash is made of, besides the navigator |
+| Canvas, audio, hardware, media codecs | Sent for comparison; not part of the hash, because they are not steady enough on one device |
+| `environment` | Whether the page runs on an Android emulator or in a virtual machine (`null` when it cannot be told) |
+| `bot.flags` | `software-renderer`, `all-active-probes-blocked`, `desktop-no-plugins`, besides the light tier's `webdriver`, `headless-ua` and `ua-mobile-mismatch` |
+
+The collection is spread over short tasks, so the page stays responsive, and runs once per page.
+The composite hash of the two tiers differs for the same device, because the full one covers more of it; the stored id is the same.
+
+Other exports: `getFingerprintPayload(options?)`, `getCachedFingerprintPayload()`, `getCompositeDeviceId()`, `payloadToHeaders(payload)`, `attachFingerprintPayload(body, payload)`, `detectWebViewContext(userAgent)`, the `collect*Signals` functions of each family and their types.
+
+## Automatic capture: `@didit-protocol/signals/autocapture`
+
+```ts
+import { startAutocapture } from "@didit-protocol/signals/autocapture";
+
+const stop = startAutocapture({
+  // The monitoring token of the signed-in person; null while nobody is signed in.
+  monitoringToken: () => session?.monitoringToken ?? null,
+});
+```
+
+What it sends, through the same queue as `submitEvent`:
+
+| Event | When | Payload |
+|---|---|---|
+| `session.session_started` | Once per browser tab session | `path`, `referrer_host` |
+| `session.page_view` | Every page, and every navigation of a single-page app (History API, hash routes, back and forward) | `path`, `previous_path`, `seconds_on_previous` |
+| The event an element declares | `<a data-didit-event="auth.password_forgot">` on click, `<form data-didit-event="auth.login">` on submit | `path`, plus `data-didit-prop-*` attributes |
+| `session.bot_signal_observed` | Once per page the person acted on at least five times, when they leave it | See below |
+
+Every event carries `session.session_id` and a `sequence` number, so a person's path through your site can be read in order.
+`track(category, actionType, payload?)` sends an event of your own with the same session attached.
+
+**How the person interacted** (`session.bot_signal_observed`) is reported in numbers that [event rules](https://docs.didit.me/transaction-monitoring/event-rules) can read as `event.bot.*`:
+
+| Field | Meaning |
+|---|---|
+| `actions`, `observed_seconds`, `actions_per_minute` | How much the person did on the page |
+| `timing_variance_ms` | How regular the time between two actions is (standard deviation). A script's is close to 0 |
+| `reaction_time_ms_p50` | The median time between two actions |
+| `pointer_entropy` | How varied the pointer's direction was, 0 to 3 bits. Left out when the pointer hardly moved |
+| `keystroke_entropy` | How varied the rhythm of typing was, 0 to 3 bits, from the time between key presses alone |
+| `untrusted_actions` | Actions a script dispatched instead of a person |
+| `bot_score`, `bot_flags` | The device fingerprint's automation score on a 0-100 scale, and its flags |
+
+**What it never reads:** the value of any field, which keys are pressed, the text of the page, element ids or classes, query strings and URL fragments.
+A page is reported by its path, and every path segment that looks like an identifier (a number, a UUID, a long token, an email address) is replaced by `:id`: `/users/48213/orders` is sent as `/users/:id/orders`.
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `monitoringToken` | required | The token, or a function returning it (read for every event, so it can return a renewed one) |
+| `pageViews` | `true` | Send `session.session_started` and `session.page_view` |
+| `declaredActions` | `true` | Send the events elements declare with `data-didit-event` |
+| `behavior` | `true` | Send `session.bot_signal_observed` |
+| `sanitizePath` | see above | Your own rule for the path that is reported |
+| `preAuthBuffer` | `25` | Events kept while there is no token yet; they are sent with the first token, marked `pre_auth: true` |
+| `maxEvents` | `500` | Events autocapture may send in one browser tab session |
+| `baseUrl` | the configured one | Didit verification API base URL |
+
+A monitoring token belongs to one person, so nothing can be sent before your backend knows who is there.
+What happens before that (a visit to the forgotten-password page, then a sign-in) is kept in memory and sent once the token exists.
+For an action of somebody who never signs in, send the event from your backend with `POST /v3/events/`, and pass `await getDeviceContext()` from this entry as its `device_context`, so it meets the same device as the events sent from the browser.
+
+A token is good for a limited number of events (1,000 unless your backend asks for more with `max_uses`), and automatic capture uses about two per page.
+
 Full guide: [SDK Event Submission](https://docs.didit.me/transaction-monitoring/sdk-event-submission).
 
 ## Development
@@ -126,7 +217,7 @@ npm ci
 npm test -- --runInBand        # unit tests of both packages
 npm run typecheck
 npm run build                  # builds @didit-protocol/signals, then @didit-protocol/sdk-web
-npm run test:size              # fails above 5 KB minified and gzipped
+npm run test:size              # fails when an entry is over its budget (the core: 6 KB minified and gzipped)
 npm run test:e2e               # Chromium, Firefox and WebKit
 ```
 

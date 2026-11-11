@@ -30,6 +30,16 @@ const PUBLISHED_FILES = {
   "@didit-protocol/signals": [
     "LICENSE",
     "README.md",
+    "dist/autocapture.cjs",
+    "dist/autocapture.cjs.map",
+    "dist/autocapture.d.ts",
+    "dist/autocapture.esm.js",
+    "dist/autocapture.esm.js.map",
+    "dist/device.cjs",
+    "dist/device.cjs.map",
+    "dist/device.d.ts",
+    "dist/device.esm.js",
+    "dist/device.esm.js.map",
     "dist/didit-signals.cjs",
     "dist/didit-signals.cjs.map",
     "dist/didit-signals.esm.js",
@@ -83,6 +93,17 @@ try {
     assert.equal(web.getDeviceFingerprintPayload, signals.getDeviceFingerprintPayload);
     assert.equal(typeof sdk.shared.submitEvent, 'function');
     assert.equal(await signals.getDeviceFingerprintPayload(), null);
+    // The other entries share the core they were installed with: one queue, one fingerprint source.
+    const device = await import('@didit-protocol/signals/device');
+    const autocapture = await import('@didit-protocol/signals/autocapture');
+    assert.equal(typeof device.enableDeviceIntelligence, 'function');
+    assert.equal(typeof device.getFingerprintPayload, 'function');
+    assert.equal(device.COMPOSITE_HASH_VERSION, 4);
+    assert.equal(typeof autocapture.startAutocapture, 'function');
+    assert.equal(autocapture.defaultSanitizePath('/users/48213/orders'), '/users/:id/orders');
+    device.enableDeviceIntelligence();
+    assert.equal(await signals.getDeviceFingerprintPayload(), null);
+    signals.setDeviceSignalsProvider(null);
   `]);
   run(process.execPath, ["--input-type=commonjs", "-e", `
     const assert = require('node:assert/strict');
@@ -91,6 +112,8 @@ try {
     assert.equal(web.submitEvent, signals.submitEvent);
     assert.equal(web.flush, signals.flush);
     assert.equal(typeof web.default.shared.submitEvent, 'function');
+    assert.equal(typeof require('@didit-protocol/signals/device').enableDeviceIntelligence, 'function');
+    assert.equal(typeof require('@didit-protocol/signals/autocapture').startAutocapture, 'function');
   `]);
   await writeFile(join(destination, "consumer.mts"), `
     import sdk, { configureEvents, flush, type DiditEvent, type DeviceFingerprintPayload } from '@didit-protocol/sdk-web';
@@ -101,6 +124,16 @@ try {
     sdk.shared.submitEvent({ monitoringToken: 'example-token', event: { ...event, eventId: id } });
     flush().then(result => result.acceptedCount);
     export const fingerprint: DeviceFingerprintPayload | null = null;
+  `);
+  await writeFile(join(destination, "signals-consumer.mts"), `
+    import { getFingerprintPayload, enableDeviceIntelligence, type FullDeviceFingerprintPayload } from '@didit-protocol/signals/device';
+    import { startAutocapture, track, type AutocaptureOptions } from '@didit-protocol/signals/autocapture';
+    enableDeviceIntelligence({ budgetMs: 800 });
+    getFingerprintPayload().then((payload: FullDeviceFingerprintPayload) => payload.signals.webgl.unmaskedRenderer);
+    const options: AutocaptureOptions = { monitoringToken: () => null, sanitizePath: (pathname) => pathname };
+    const stop: () => void = startAutocapture(options);
+    track('auth', 'password_forgot', { method: 'email' });
+    stop();
   `);
   // @didit-protocol/auth imports the installed signals package, so these also check the exports it needs.
   // A key the Didit auth service minted (packages/auth/src/__tests__/fixtures/publishable-keys.json).
@@ -131,7 +164,7 @@ try {
     auth.stepUp({ action: 'payout', amount: '900.00', currency: 'USD' }).then((result: DiditStepUpResult) => result.approved);
     verifyToken('token', { publishableKey: 'pk_test_example' }).then((claims: DiditTokenClaims) => claims.sub);
   `);
-  run(process.execPath, [resolve(root, "node_modules/typescript/bin/tsc"), "--noEmit", "--strict", "--module", "nodenext", "--target", "ES2020", "consumer.mts", "auth-consumer.mts"]);
+  run(process.execPath, [resolve(root, "node_modules/typescript/bin/tsc"), "--noEmit", "--strict", "--module", "nodenext", "--target", "ES2020", "consumer.mts", "signals-consumer.mts", "auth-consumer.mts"]);
   const standalone = await readFile(join(root, "dist/didit-sdk.esm.js"), "utf8");
 
   assert.ok(!standalone.includes('from "@didit-protocol/signals"') && !standalone.includes("from '@didit-protocol/signals'"));
