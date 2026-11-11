@@ -77,7 +77,7 @@ describe("light fingerprint", () => {
 
   it("says which signals it carries and which hash version it used", async () => {
     const payload = await getDeviceFingerprintPayload();
-    expect(payload!.signals).toMatchObject({ platform: "web", tier: "lite", compositeHashVersion: 3 });
+    expect(payload!.signals).toMatchObject({ platform: "web", tier: "lite", compositeHashVersion: 4 });
     expect(payload!.signals.webview).toEqual({ kind: "browser", hostAppVersion: null, isStandaloneBrowser: true });
     expect(payload).not.toHaveProperty("legacyCompatibilityHash");
   });

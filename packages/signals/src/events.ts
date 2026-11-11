@@ -88,6 +88,16 @@ let listening = false;
 let exiting = false;
 let keepaliveBytes = 0;
 
+/**
+ * `value` without the slashes it ends with. A loop, not a regular expression: `/\/+$/` rescans a
+ * long run of slashes from every one of them.
+ */
+function withoutTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -405,7 +415,7 @@ function listen(): void {
  */
 export function configureEvents(configuration: DiditEventsConfiguration): void {
   const next = { ...settings, ...compact({ ...configuration }) } as Settings;
-  next.baseUrl = next.baseUrl.replace(/\/+$/, "");
+  next.baseUrl = withoutTrailingSlashes(next.baseUrl);
   next.batchSize = Math.min(Math.max(1, Math.floor(next.batchSize)), MAX_BATCH_EVENTS);
   next.flushIntervalMs = Math.max(0, next.flushIntervalMs);
   next.maxQueueSize = Math.max(1, Math.floor(next.maxQueueSize));
@@ -450,7 +460,7 @@ export function submitEvent(options: SubmitEventOptions): string {
     // UTF-8 length; JSON.stringify never leaves a lone surrogate for encodeURIComponent to reject.
     bytes: byteLength(json),
     token,
-    url: `${(options.baseUrl ?? settings.baseUrl).replace(/\/+$/, "")}${BATCH_PATH}`,
+    url: `${withoutTrailingSlashes(options.baseUrl ?? settings.baseUrl)}${BATCH_PATH}`,
     priority: NEVER_DROPPED.test(kind) ? PRIORITY_NEVER_DROPPED : LOW_VALUE.test(kind) ? 0 : 1,
     sending: false
   });

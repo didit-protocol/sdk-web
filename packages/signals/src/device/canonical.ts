@@ -6,7 +6,7 @@ import { type NavigatorSignals } from "./signals/navigator";
  * Didit stores, so a stored hash can be told apart from one of an earlier version. A change to
  * `canonicalNavigator` or to the full canonical form changes every device's hash once: raise it.
  */
-const COMPOSITE_HASH_VERSION = 3;
+const COMPOSITE_HASH_VERSION = 4;
 
 function stableStringify(value: unknown): string {
   if (value === null || value === undefined) return JSON.stringify(value ?? null);
@@ -38,9 +38,27 @@ function userAgentWithoutVersions(userAgent: string): string {
  */
 function brandNames(brands: string[]): string[] {
   return brands
-    .map((brand) => brand.split(":")[0])
-    .filter((name) => !/not.*brand/i.test(name))
+    .map(brandName)
+    .filter((name) => !isPlaceholderBrand(name))
     .sort();
+}
+
+/**
+ * `Google Chrome:147` is `Google Chrome`. The version follows the last colon, not the first: the
+ * placeholder has a colon of its own in two Chromium versions out of eleven (`Not:A-Brand:99`,
+ * `Not(A:Brand:8`). Cut at the first one it left `Not` or `Not(A` in the list as a brand of its
+ * own, and the hash changed with the browser's next update (version 3 did that).
+ */
+function brandName(brand: string): string {
+  const colon = brand.lastIndexOf(":");
+  return colon < 0 ? brand : brand.slice(0, colon);
+}
+
+/** "not" with "brand" somewhere after it, in any case. Two searches, so a long name costs its length once. */
+function isPlaceholderBrand(name: string): boolean {
+  const lower = name.toLowerCase();
+  const not = lower.indexOf("not");
+  return not >= 0 && lower.indexOf("brand", not + 3) >= 0;
 }
 
 /**

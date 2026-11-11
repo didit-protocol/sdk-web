@@ -3,7 +3,7 @@ import { installWebCryptoForTests } from "./_test_setup";
 installWebCryptoForTests();
 
 import { detectBot } from "../bot";
-import { COMPOSITE_HASH_VERSION } from "../canonical";
+import { brandNames, COMPOSITE_HASH_VERSION } from "../canonical";
 import { type CollectedSignals, composePayload } from "../compose";
 
 type FingerprintSignals = CollectedSignals;
@@ -189,6 +189,25 @@ describe("composePayload", () => {
     expect(b.signals.compositeHashVersion).toBe(COMPOSITE_HASH_VERSION);
   });
 
+  it("keeps the same hash through the Chromium versions whose placeholder brand has a colon in it", async () => {
+    // The brand list of Chromium 154 to 157, as each version sends it. Read up to the first colon,
+    // 155 left "Not(A" and 156 left "Not" in the list, and three updates in a row changed the hash.
+    const brandsByVersion = [
+      ["Chromium:154", "Google Chrome:154", "Not A(Brand:99"],
+      ["Chromium:155", "Google Chrome:155", "Not(A:Brand:24"],
+      ["Chromium:156", "Google Chrome:156", "Not:A-Brand:8"],
+      ["Chromium:157", "Google Chrome:157", "Not-A.Brand:99"],
+    ];
+    const hashes: string[] = [];
+    for (const uaDataBrands of brandsByVersion) {
+      const signals = makeSignals({ navigator: { ...makeSignals().navigator, uaDataBrands } });
+      const payload = await composePayload({ persistent: { id: "pid-A", sources: [], wasCreated: false }, signals });
+      hashes.push(payload.compositeHash);
+    }
+    expect(hashes[0]).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(new Set(hashes).size).toBe(1);
+  });
+
   it.each([
     [
       "device model",
@@ -212,6 +231,22 @@ describe("composePayload", () => {
     const a = await composePayload({ persistent: { id: "pid-A", sources: [], wasCreated: false }, signals: reference });
     const b = await composePayload({ persistent: { id: "pid-B", sources: [], wasCreated: false }, signals: other });
     expect(b.compositeHash).not.toBe(a.compositeHash);
+  });
+
+  it("leaves out Chromium's placeholder brand however it is spelled, and keeps every real one", () => {
+    expect(brandNames(["Google Chrome:147", "Not_A Brand:8", "Chromium:147"])).toEqual(["Chromium", "Google Chrome"]);
+    expect(brandNames(["NOT)A;BRAND:99", "Not;A=Brand:24", ";Not A Brand:99"])).toEqual([]);
+    // Two Chromium versions out of eleven put a colon in it: the version is what follows the last one.
+    expect(brandNames(["Not:A-Brand:99", "Chromium:156", "Google Chrome:156"])).toEqual(["Chromium", "Google Chrome"]);
+    expect(brandNames(["Chromium:155", "Not(A:Brand:8", "Google Chrome:155"])).toEqual(["Chromium", "Google Chrome"]);
+    // "brand" has to come after "not"; a name with only one of the two is a real brand.
+    expect(brandNames(["Brand Not:1", "Nothing:1", "Brandy:1"])).toEqual(["Brand Not", "Brandy", "Nothing"]);
+
+    // A name of 600,000 characters is read once: `/not.*brand/` would restart at every "not" in it.
+    const long = "not".repeat(200000);
+    const started = performance.now();
+    expect(brandNames([long])).toEqual([long]);
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 
   it("keeps the hash while the codec answers or the shader precision differ or go missing", async () => {
@@ -240,7 +275,7 @@ describe("composePayload", () => {
     });
     expect(payload.compositeHash).toBe("kxNH3FyDkPbsZPHk3rdUSw");
     expect(payload.legacyCompatibilityHash).toBe("didit-fp-054c6c571f474cde");
-    expect(payload.signals).toMatchObject({ platform: "web", tier: "full", compositeHashVersion: 3 });
+    expect(payload.signals).toMatchObject({ platform: "web", tier: "full", compositeHashVersion: 4 });
   });
 
   it("leaves the hash out, and keeps the stored id, where the browser has no WebCrypto", async () => {

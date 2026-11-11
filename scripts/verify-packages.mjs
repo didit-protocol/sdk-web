@@ -98,7 +98,7 @@ try {
     const autocapture = await import('@didit-protocol/signals/autocapture');
     assert.equal(typeof device.enableDeviceIntelligence, 'function');
     assert.equal(typeof device.getFingerprintPayload, 'function');
-    assert.equal(device.COMPOSITE_HASH_VERSION, 3);
+    assert.equal(device.COMPOSITE_HASH_VERSION, 4);
     assert.equal(typeof autocapture.startAutocapture, 'function');
     assert.equal(autocapture.defaultSanitizePath('/users/48213/orders'), '/users/:id/orders');
     device.enableDeviceIntelligence();

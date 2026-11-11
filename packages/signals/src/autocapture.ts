@@ -201,7 +201,15 @@ function token(options: AutocaptureOptions): string | null {
   }
 }
 
+/**
+ * Hands one event to the queue, unless this tab session has sent its share. An event counts when
+ * it is sent: one that was dropped, or is still waiting for a token, must not use up what the
+ * signed-in part of the visit has left.
+ */
 function send(current: State, monitoringToken: string, event: DiditEvent): void {
+  const alreadySent = Number(read(COUNT_KEY)) || 0;
+  if (alreadySent >= (current.options.maxEvents ?? 500)) return;
+  write(COUNT_KEY, String(alreadySent + 1));
   try {
     submitEvent({ monitoringToken, event, baseUrl: current.options.baseUrl });
   } catch {
@@ -213,7 +221,11 @@ function send(current: State, monitoringToken: string, event: DiditEvent): void 
 function emit(category: DiditEventCategory, actionType: string, payload: Record<string, unknown> = {}): void {
   const current = state;
   if (!current) return;
-  if (nextCount(COUNT_KEY) > (current.options.maxEvents ?? 500)) return;
+  const monitoringToken = token(current.options);
+  const bufferLimit = current.options.preAuthBuffer ?? 25;
+  // Nobody is signed in and nothing is kept for later: the event goes nowhere.
+  if (!monitoringToken && bufferLimit <= 0) return;
+  if ((Number(read(COUNT_KEY)) || 0) >= (current.options.maxEvents ?? 500)) return;
 
   const event: DiditEvent = {
     category,
@@ -228,18 +240,15 @@ function emit(category: DiditEventCategory, actionType: string, payload: Record<
     payload: { path: current.path, ...payload },
   };
 
-  const monitoringToken = token(current.options);
   if (monitoringToken) {
     for (const pending of current.buffer.splice(0)) send(current, monitoringToken, pending.event);
     send(current, monitoringToken, event);
     return;
   }
   // Nobody is signed in yet: keep the newest events, marked as from before the sign-in.
-  const limit = current.options.preAuthBuffer ?? 25;
-  if (limit <= 0) return;
   event.payload = { ...event.payload, pre_auth: true };
   current.buffer.push({ event });
-  if (current.buffer.length > limit) current.buffer.shift();
+  if (current.buffer.length > bufferLimit) current.buffer.shift();
 }
 
 /**
@@ -271,8 +280,10 @@ function onNavigation(): void {
   if (!current) return;
   const path = currentPath(current.options);
   if (path === current.path) return;
-  // What the person did on the page they are leaving is reported under that page.
+  // What the person did on the page they are leaving is reported under that page, and never
+  // carried into the next one: too few actions to say anything are dropped with the page.
   current.behavior?.report();
+  current.behavior?.reset();
   const previous = current.path;
   current.path = path;
   if (current.options.pageViews !== false) pageView(current, previous);
@@ -370,6 +381,8 @@ function entropy(buckets: number[]): number {
 interface BehaviorTracker {
   /** Sends what was observed on the current page, if it is enough to say anything, and starts over. */
   report: () => void;
+  /** Forgets what was observed so far: the page it was observed on is gone. */
+  reset: () => void;
   stop: () => void;
 }
 
@@ -476,6 +489,7 @@ function trackBehavior(): BehaviorTracker {
 
   return {
     report,
+    reset,
     stop: () => {
       for (const [type, listener] of listeners) document.removeEventListener(type, listener, true);
     },

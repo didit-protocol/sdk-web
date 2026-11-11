@@ -45,10 +45,12 @@ async function sha256Bytes(input: string | Uint8Array): Promise<Uint8Array> {
   }
   const bytes = toBytes(input);
   // crypto.subtle.digest needs a BufferSource; copy into a fresh ArrayBuffer-backed view
-  // so we are not handing over a SharedArrayBuffer-typed slice.
+  // so we are not handing over a SharedArrayBuffer-typed slice. The view itself is passed, not
+  // its buffer: a bare ArrayBuffer made in another realm (a test runner's sandbox on Node 20) is
+  // refused as "not an ArrayBuffer", and the hash would be left out; a view is accepted everywhere.
   const view = new Uint8Array(bytes.byteLength);
   view.set(bytes);
-  const digest = await crypto.subtle.digest("SHA-256", view.buffer);
+  const digest = await crypto.subtle.digest("SHA-256", view);
   return new Uint8Array(digest);
 }
 

@@ -174,6 +174,29 @@ describe("before somebody is signed in", () => {
     history.pushState({}, "", "/account");
     expect(sent().map((event) => event.payload!.path)).toEqual(["/account"]);
   });
+
+  it("does not let events nobody received use up the session's limit", () => {
+    let token: string | null = null;
+    startAutocapture({ monitoringToken: () => token, behavior: false, preAuthBuffer: 0, maxEvents: 3 });
+    for (const path of ["/a", "/b", "/c", "/d", "/e"]) history.pushState({}, "", path);
+    expect(sent()).toHaveLength(0);
+
+    token = "token-1";
+    for (const path of ["/account", "/orders", "/settings", "/help"]) history.pushState({}, "", path);
+    // Five events went nowhere before the sign-in; the three the limit allows are all sent after it.
+    expect(sent().map((event) => event.payload!.path)).toEqual(["/account", "/orders", "/settings"]);
+  });
+
+  it("counts an event kept for later when it is sent, and one that fell out of the buffer never", () => {
+    let token: string | null = null;
+    startAutocapture({ monitoringToken: () => token, behavior: false, preAuthBuffer: 2, maxEvents: 4 });
+    for (const path of ["/a", "/b", "/c", "/d", "/e"]) history.pushState({}, "", path);
+
+    token = "token-1";
+    for (const path of ["/account", "/orders", "/settings"]) history.pushState({}, "", path);
+    // The two newest from before the sign-in, then two more: four sent, the limit.
+    expect(sent().map((event) => event.payload!.path)).toEqual(["/d", "/e", "/account", "/orders"]);
+  });
 });
 
 describe("behaviour", () => {
@@ -251,6 +274,29 @@ describe("behaviour", () => {
 
     expect(kinds()).toEqual(["session.bot_signal_observed"]);
     expect(sent()[0].payload).toMatchObject({ path: "/", actions: 7 });
+  });
+
+  it("does not carry a barely-touched page's actions into the next page", async () => {
+    await start();
+    for (let step = 0; step < 3; step++) {
+      act("pointerdown");
+      jest.advanceTimersByTime(300);
+    }
+    history.pushState({}, "", "/checkout");
+    for (let step = 0; step < 3; step++) {
+      act("pointerdown");
+      jest.advanceTimersByTime(300);
+    }
+    history.pushState({}, "", "/done");
+    // Three actions on each page: neither is enough, and they are not six actions of the second.
+    expect(sent()).toHaveLength(0);
+
+    for (let step = 0; step < 5; step++) {
+      act("pointerdown");
+      jest.advanceTimersByTime(300);
+    }
+    history.pushState({}, "", "/receipt");
+    expect(sent()[0].payload).toMatchObject({ path: "/done", actions: 5 });
   });
 });
 

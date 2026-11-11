@@ -11,7 +11,7 @@ All notable changes to `@didit-protocol/signals` will be documented in this file
 
 ### Changed
 - One implementation of the device fingerprint: this entry is now built from the same files as `@didit-protocol/signals/device`, and uses the part of them that fits its size.
-- The composite hash no longer changes with a browser or system update, or when a phone is turned: it reads the user agent and the browser brands without their version numbers, and the screen shorter side first. Every browser's hash changes once with this release; the stored id does not.
+- The composite hash no longer changes with a browser or system update, or when a phone is turned: it reads the user agent and the browser brands without their version numbers, leaves out the placeholder brand Chromium adds (including the spellings that carry a colon, such as `Not:A-Brand`), and reads the screen shorter side first. `signals.compositeHashVersion` is 4. Every browser's hash changes once with this release; the stored id does not.
 - The kind of in-app browser (`signals.webview.kind`, header `X-Didit-FP-Webview`) names the app (`whatsapp`, `instagram`, `tiktok`, ...) or `generic-wv`, as the hosted verification flow reports it, instead of `android-webview`, `ios-webview` and `in-app-browser`.
 - Where the browser has no WebCrypto, the composite hash is left out instead of being replaced by a weaker hash that would read as another device. The stored id is still sent.
 - The entry is under 6 KB minified and gzipped (it was under 5 KB): sharing every line with the full fingerprint costs about 0.7 KB.

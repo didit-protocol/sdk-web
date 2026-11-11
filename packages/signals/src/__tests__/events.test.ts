@@ -306,6 +306,22 @@ describe("submitEvent and flush against the recorded device lane", () => {
     expect(sentRequests(fetchMock)[0].url).toBe("https://events.example.test/v1/events/batch/");
   });
 
+  it("drops every slash a base URL ends with, however many, in time that follows its length", async () => {
+    // 200,000 slashes: a regular expression that looks for the trailing run restarts at each of them.
+    const slashes = "/".repeat(200000);
+    fetchMock.mockImplementation(replay("exit"));
+
+    const started = performance.now();
+    configureEvents({ baseUrl: `https://events.example.test${slashes}` });
+    const [event] = recordedEvents("exit");
+    submitEvent({ monitoringToken: scenario("exit").token, event, baseUrl: `https://other.example.test/api${slashes}` });
+    expect(performance.now() - started).toBeLessThan(1000);
+    await flush();
+
+    // The address given with the event wins over the configured one; neither keeps a slash.
+    expect(sentRequests(fetchMock)[0].url).toBe("https://other.example.test/api/v1/events/batch/");
+  });
+
   it("sends with keepalive when the page is hidden, once", async () => {
     fetchMock.mockImplementation(replay("exit"));
 
