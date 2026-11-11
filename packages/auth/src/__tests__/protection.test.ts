@@ -93,7 +93,8 @@ describe("exchanging the code on the app's server", () => {
       session: expect.objectContaining({ email, userId: (session.response.body as DiditSessionResponse).sub, methods: ["password"] })
     });
     await expect(auth.getToken()).resolves.toBeNull();
-    expect(localStorage.length).toBe(0);
+    // Nothing of the session is kept in the browser: only the device id of the device signals.
+    expect(Object.keys(localStorage)).toEqual(["didit-pid-v1"]);
     expect(events).toEqual([]);
     api.verify();
   });

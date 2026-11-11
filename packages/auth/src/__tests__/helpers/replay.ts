@@ -65,6 +65,8 @@ export function publishableKeyFor(origin: string, mode: "test" | "live" = "test"
   return `pk_${mode}_${Buffer.from(origin).toString("base64url")}`;
 }
 
+const RECORDED_DEVICE_ID = "replayDevicePid0000001";
+
 /**
  * A fetch that answers with the recorded responses, in order, after checking
  * that the SDK sent exactly the recorded request (address, method, bearer
@@ -76,6 +78,12 @@ export function replay(fixture: Fixture) {
   const mismatches: string[] = [];
   const headers: Record<string, string>[] = [];
 
+  // The recordings were made on a device that already had its id. Auth requests carry device
+  // signals by default, and creating the id during a replay would take random values out of the
+  // seeded sequence that the recorded PKCE values come from.
+  if (typeof localStorage !== "undefined" && !localStorage.getItem("didit-pid-v1")) {
+    localStorage.setItem("didit-pid-v1", RECORDED_DEVICE_ID);
+  }
   jest.spyOn(globalThis.crypto, "getRandomValues").mockImplementation(seededRandomValues(fixture.scenario) as never);
 
   const fetch = jest.fn(async (url: string, init: RequestInit = {}) => {

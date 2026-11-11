@@ -23,9 +23,10 @@ export interface DiditAuthOptions {
   /** Language of the hosted page and of the codes and links Didit sends. Defaults to the browser's language. */
   language?: DiditAuthLanguage;
   /**
-   * Device signals on auth requests. "auto" (the default) sends them when the
-   * page and the Didit API share an origin; "always" also sends them across
-   * origins; "off" never does.
+   * Device signals on auth requests: a persistent device id, a fingerprint hash
+   * and a bot score, which the application's bot protection reads. "auto" (the
+   * default) sends them to the application's Didit origin; "always" is the same
+   * and is kept for compatibility; "off" never sends them.
    */
   deviceSignals?: DeviceSignalsOption;
   /**

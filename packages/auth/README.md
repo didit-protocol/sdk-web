@@ -243,10 +243,17 @@ if (result.status === "approved") location.assign(result.redirectTo);
 
 Auth requests carry the device signals of `@didit-protocol/signals`: a
 persistent device id, a fingerprint hash, the webview kind and a bot score.
-Browsers only send extra headers to another origin when that origin allows
-them, so by default (`deviceSignals: "auto"`) they are sent when your page and
-the Didit API share an origin. Set `"always"` once your sign-in domain allows
-them across origins, or `"off"` to never send them.
+They are sent by default (`deviceSignals: "auto"`) to your application's Didit
+origin, which accepts them from the origins you registered as allowed origins.
+Your application's bot protection reads them, so leave them on. `"always"` is
+the same as `"auto"` and is kept for compatibility. Set `"off"` to never send
+them.
+
+The bot score is the strongest automation signal found: `navigator.webdriver`,
+a headless or automation user agent or client hint, or a global left by an
+automation driver. Browser tests that drive your own sign-in screens are
+automation too: run them against a Sandbox application whose `bots` policy is
+off or in log mode.
 
 ## Server: verify access tokens
 

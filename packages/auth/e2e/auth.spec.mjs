@@ -123,8 +123,29 @@ test("signs in on the hosted page and completes on the redirect page", async ({ 
   const seen = await requestsSeen(request);
   expect(seen.map(({ method, path }) => `${method} ${path}`)).toEqual(["GET sign-in/", "POST token/", "GET session/"]);
   expect(seen.filter((entry) => entry.mismatch)).toEqual([]);
-  // Cross-origin, the API only allows Authorization and Content-Type: no device headers by default.
-  expect(seen.flatMap(deviceHeaders)).toEqual([]);
+  // The API allows the device headers across origins, so every call to it carries them by default.
+  const calls = seen.filter((entry) => entry.headers);
+  expect(calls.map(({ method, path }) => `${method} ${path}`)).toEqual(["POST token/", "GET session/"]);
+  for (const call of calls) {
+    expect(deviceHeaders(call)).toEqual(expect.arrayContaining(["x-didit-fp-v2", "x-didit-pid", "x-didit-fp-hash"]));
+    expect(call.headers["x-didit-pid"]).toBe(await page.evaluate(() => localStorage.getItem("didit-pid-v1")));
+  }
+  // This browser is driven by a test runner, and the bot score says so: 0.8 and above is what the
+  // application's bots policy matches.
+  if (await page.evaluate(() => navigator.webdriver === true)) {
+    expect(calls.map((call) => call.headers["x-didit-fp-bot-score"])).toEqual(["0.90", "0.90"]);
+  }
+});
+
+test("sends no device signals when they are turned off", async ({ page, request }) => {
+  await loadRecording(request, "password-reset");
+  await openApp(page, { create: false });
+  await page.evaluate((key) => window.didit.create({ publishableKey: key, deviceSignals: "off" }), PUBLISHABLE_KEY);
+
+  expect(await page.evaluate(() => window.auth.password.requestReset({ email: "person@example.com" }))).toEqual({ expiresIn: 1800 });
+  const [reset] = await requestsSeen(request);
+  expect(reset.mismatch).toBeUndefined();
+  expect(deviceHeaders(reset)).toEqual([]);
 });
 
 test("completes in another tab, as an emailed magic link does, and the first tab follows", async ({ context, page, request }) => {

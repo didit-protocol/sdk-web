@@ -79,7 +79,10 @@ function cors(request, headers) {
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     Object.assign(headers, {
       "Access-Control-Allow-Origin": origin,
-      "Access-Control-Allow-Headers": "Authorization, Content-Type",
+      // What the Didit API answers: the device headers of @didit-protocol/signals are allowed, so
+      // the browser lets the client send them to another origin.
+      "Access-Control-Allow-Headers":
+        "Authorization, Content-Type, X-Didit-PID, X-Didit-FP-Hash, X-Didit-FP-V2, X-Didit-FP-Webview, X-Didit-FP-Bot-Score",
       "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
       Vary: "Origin"
     });

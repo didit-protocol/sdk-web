@@ -25,6 +25,14 @@
         // Draws the same random values as the recording of `scenario`, from `skip` bytes in: a second
         // tab of that recording continues where the first one stopped.
         seed(scenario, skip = 0) {
+          // The recordings were made on a device that already had its id. Auth requests carry device
+          // signals by default, and creating the id after this point would take random values out of
+          // the seeded sequence that the recorded PKCE values come from.
+          if (!localStorage.getItem("didit-pid-v1")) {
+            const bytes = crypto.getRandomValues(new Uint8Array(16));
+            const id = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+            localStorage.setItem("didit-pid-v1", id);
+          }
           crypto.getRandomValues = seededRandomValues(scenario);
           crypto.getRandomValues(new Uint8Array(skip));
         },

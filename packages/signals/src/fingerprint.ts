@@ -244,21 +244,69 @@ function detectWebViewKind(userAgent: string): string {
   return "browser";
 }
 
+// How sure each flag makes us that no person is driving this browser. The score is the strongest
+// flag found, not a count: one conclusive signal (a driver's own global, navigator.webdriver) is
+// not diluted because the other checks came back clean. The Authentication API treats 0.8 and
+// above as a bot, so only flags that browsers never show to a person may weigh that much.
+const BOT_FLAG_WEIGHTS: Readonly<Record<string, number>> = {
+  "automation-artifact": 1,
+  webdriver: 0.9,
+  "headless-ua": 0.9,
+  "ua-mobile-mismatch": 0.3
+};
+
+// Globals that automation drivers leave on the page. A browser a person uses defines none of them.
+const AUTOMATION_GLOBALS = [
+  "callPhantom",
+  "_phantom",
+  "__nightmare",
+  "domAutomation",
+  "domAutomationController",
+  "__webdriver_evaluate",
+  "__webdriver_script_fn",
+  "__selenium_evaluate",
+  "__selenium_unwrapped",
+  "__driver_evaluate",
+  "__fxdriver_evaluate",
+  "__playwright__binding__",
+  "__pwInitScripts",
+  "__puppeteer_evaluation_script__"
+] as const;
+
+function hasAutomationArtifact(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const scope = window as unknown as Record<string, unknown>;
+    if (AUTOMATION_GLOBALS.some((name) => name in scope)) return true;
+    // chromedriver keeps its state on the document under a "$cdc_" or "cdc_" prefixed key.
+    if (typeof document !== "undefined" && Object.getOwnPropertyNames(document).some((key) => /^\$?cdc_/.test(key))) return true;
+    const root = typeof document !== "undefined" ? document.documentElement : null;
+    return !!root && ["webdriver", "selenium", "driver"].some((name) => root.hasAttribute(name));
+  } catch {
+    return false;
+  }
+}
+
 function detectBot(signals: DeviceFingerprintSignals): { score: number; flags: string[] } {
   const flags: string[] = [];
   const userAgent = signals.navigator.userAgent;
+  const headlessName = /HeadlessChrome|PhantomJS|Selenium|puppeteer|playwright/i;
 
-  if (typeof navigator !== "undefined" && (navigator as Navigator & { webdriver?: boolean }).webdriver) {
+  if (hasAutomationArtifact()) {
+    flags.push("automation-artifact");
+  }
+  if (typeof navigator !== "undefined" && (navigator as Navigator & { webdriver?: boolean }).webdriver === true) {
     flags.push("webdriver");
   }
-  if (/HeadlessChrome|PhantomJS|Selenium|puppeteer|playwright/i.test(userAgent)) {
+  // The user agent string is easy to replace; the client hint brands are set by the browser itself.
+  if (headlessName.test(userAgent) || signals.navigator.uaDataBrands.some((brand) => headlessName.test(brand))) {
     flags.push("headless-ua");
   }
   if (signals.navigator.uaDataMobile === false && /Android|iPhone|iPad/i.test(userAgent)) {
     flags.push("ua-mobile-mismatch");
   }
 
-  return { score: Math.min(1, flags.length / 4), flags };
+  return { score: flags.reduce((score, flag) => Math.max(score, BOT_FLAG_WEIGHTS[flag] ?? 0), 0), flags };
 }
 
 function canonicalizeSignals(signals: DeviceFingerprintSignals): string {

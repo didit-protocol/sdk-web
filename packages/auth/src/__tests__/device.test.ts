@@ -34,14 +34,17 @@ describe("device signals on auth requests", () => {
     expect(headers["X-Didit-FP-Webview"]).toBe("browser");
   });
 
-  it("does not send them across origins by default, because the API does not allow those headers yet", async () => {
+  it("sends them across origins by default: the application's Didit origin allows those headers", async () => {
     const headers = await headersSent(undefined);
 
-    expect(Object.keys(headers).sort()).toEqual(["Accept", "Content-Type"]);
+    expect(headers["X-Didit-FP-V2"]).toBe("1");
+    expect(headers["X-Didit-PID"]).toMatch(/^[A-Za-z0-9_-]{20,32}$/);
+    expect(headers["X-Didit-FP-Hash"]).toBeTruthy();
   });
 
-  it("sends them across origins when asked, and never when turned off", async () => {
+  it("keeps \"always\" working, and never sends them when turned off", async () => {
     expect((await headersSent("always"))["X-Didit-PID"]).toMatch(/^[A-Za-z0-9_-]{20,32}$/);
+    expect(Object.keys(await headersSent("off")).sort()).toEqual(["Accept", "Content-Type"]);
     expect((await headersSent("off", SAME_ORIGIN))["X-Didit-PID"]).toBeUndefined();
   });
 });
