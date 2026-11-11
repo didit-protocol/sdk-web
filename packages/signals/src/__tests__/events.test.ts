@@ -295,6 +295,16 @@ describe("submitEvent and flush against the recorded device lane", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("sends a token without the white space around it, as a header carries it", async () => {
+    fetchMock.mockImplementation(replay("exit"));
+    const [event] = recordedEvents("exit");
+
+    submitEvent({ monitoringToken: `  ${scenario("exit").token}\n`, event });
+    await flush();
+
+    expect(sentRequests(fetchMock)[0].init.headers["X-Monitoring-Token"]).toBe(scenario("exit").token);
+  });
+
   it("follows the configured batch size, interval and base URL", async () => {
     jest.useFakeTimers();
     configureEvents({ batchSize: 2, flushIntervalMs: 1000, baseUrl: "https://events.example.test/" });
@@ -523,6 +533,20 @@ describe("submitEvent input", () => {
     expect(() => submitEvent({ monitoringToken: "", event: { category: "auth", actionType: "login" } })).toThrow(
       expect.objectContaining({ name: "DiditEventError", type: "invalid_token" })
     );
+  });
+
+  it.each([
+    ["a line break inside it", "tok\nen"],
+    ["a NUL inside it", "tok\u0000en"],
+    ["a character above U+00FF", "tok\u20acn"],
+    ["nothing but white space", " \n\t"]
+  ])("refuses a monitoring token with %s instead of queueing an event no request can carry", (_, monitoringToken) => {
+    // fetch throws on such a header before any request is made. Queued, the event read as a
+    // network failure and was retried for as long as the page lived.
+    expect(() => submitEvent({ monitoringToken, event: { category: "auth", actionType: "login" } })).toThrow(
+      expect.objectContaining({ name: "DiditEventError", type: "invalid_token" })
+    );
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it.each([

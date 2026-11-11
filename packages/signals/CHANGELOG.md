@@ -16,6 +16,9 @@ All notable changes to `@didit-protocol/signals` will be documented in this file
 - Where the browser has no WebCrypto, the composite hash is left out instead of being replaced by a weaker hash that would read as another device. The stored id is still sent.
 - The entry is under 6 KB minified and gzipped (it was under 5 KB): sharing every line with the full fingerprint costs about 0.7 KB.
 
+### Fixed
+- `submitEvent` refuses a monitoring token that no header can carry (a line break or a NUL inside it, a character above U+00FF) with `invalid_token`. It used to queue the event and retry it for as long as the page lived, as if the network had failed. White space around a token is ignored.
+
 ## [0.1.0] - 2026-11-01
 
 ### Added
