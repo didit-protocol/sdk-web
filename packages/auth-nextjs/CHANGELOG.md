@@ -2,6 +2,19 @@
 
 All notable changes to `@didit-protocol/auth-nextjs` are documented in this file.
 
+## [0.2.0] - 2026-11-12
+
+### Fixed
+
+- A browser that asks to reauthenticate after its session has ended is sent to the sign-in page, with
+  `redirect_url`, instead of being answered with JSON. A call from the client components still gets `401`.
+- A new sign-in is no longer refused when Didit cannot end the earlier session of that browser.
+
+### Changed
+
+- Depends on `@didit-protocol/auth` 0.2.0 and `@didit-protocol/auth-react` 0.2.0: device signals are sent
+  with sign-in calls by default.
+
 ## [0.1.0] - 2026-10-27
 
 First release of Didit Authentication for the Next.js App Router, with
