@@ -1,0 +1,97 @@
+name: Release signals
+
+# @didit-protocol/signals is released from its own tags (signals-v0.1.0), so it
+# never shares a version or a release with @didit-protocol/sdk-web (v* tags).
+# Publish it before any sdk-web release that depends on a new version of it.
+on:
+  push:
+    tags:
+      - 'signals-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  github-release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Verify tag and create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#signals-v}"
+          PACKAGE_VERSION=$(node -p "require('./packages/signals/package.json').version")
+
+          if [ "$PACKAGE_VERSION" != "$VERSION" ]; then
+            echo "packages/signals/package.json has version $PACKAGE_VERSION but the tag says $VERSION" >&2
+            exit 1
+          fi
+
+          awk -v version="$VERSION" '
+            $0 ~ "^## \\[" version "\\]" { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' packages/signals/CHANGELOG.md > release-notes.md
+
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "packages/signals/CHANGELOG.md has no section for $VERSION" >&2
+            exit 1
+          fi
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists - skipping."
+            exit 0
+          fi
+
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "@didit-protocol/signals $VERSION" \
+            --notes-file release-notes.md
+
+  publish-npm:
+    name: Publish to npm
+    if: vars.NPM_TRUSTED_PUBLISHING == 'true'
+    needs: github-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify package
+        run: |
+          npm test -- --runInBand packages/signals
+          npm run typecheck
+          npm run build -w @didit-protocol/signals
+          npm run test:size
+
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: Publish
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#signals-v}"
+          if npm view "@didit-protocol/signals@$VERSION" version >/dev/null 2>&1; then
+            echo "@didit-protocol/signals@$VERSION is already published - skipping."
+            exit 0
+          fi
+          npm publish -w @didit-protocol/signals --access public

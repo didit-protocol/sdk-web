@@ -1,0 +1,71 @@
+{
+  "scenario": "redirect-sign-in",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "signInUrl": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db/sign-in/?redirect_uri=http%3A%2F%2Flocalhost%3A4174%2Fe2e%2Ffixtures%2Fapp.html&state=EZ-UQd4w6wv50IBXYB4IQg&code_challenge=NNN_snEpK-MWNZmrzVFZfbF_9SGVcmhfuWYgBqMpvAc&code_challenge_method=S256&language=en",
+  "callbackUrl": "http://localhost:4174/e2e/fixtures/app.html?code=aleZu8pDpLdkTm6k7EE2bK0rklih1fdYwzo32e50HQc&state=EZ-UQd4w6wv50IBXYB4IQg",
+  "returnTo": "/account",
+  "replay": {
+    "error": {
+      "code": "invalid_state"
+    }
+  },
+  "events": [
+    "SIGNED_IN"
+  ],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "aleZu8pDpLdkTm6k7EE2bK0rklih1fdYwzo32e50HQc",
+          "code_verifier": "SkFOA2uR4MW9tSNyD3vfVp0DzepRfnUJ-a0ZZg6bb7Q",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "fcL5RCnQy5vV2-naLkkmZUrd9fXGg9nkpydxWugAvVk",
+          "refresh_token": "tHasI197Yi95PS9KG7pZQHWwSgjoIzGvQoPa8XSWGkjfKuu5rkv5_IiIQdDmkOo8",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "ef1c8e3f-399f-4e63-8c48-2f69a07095f4"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer fcL5RCnQy5vV2-naLkkmZUrd9fXGg9nkpydxWugAvVk"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "6e911151-6862-4541-851d-23ad36e85ed6",
+          "sid": "ef1c8e3f-399f-4e63-8c48-2f69a07095f4",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T08:14:28.070625Z",
+          "organizations": [
+            {
+              "organization_id": "3eae0a81-3bff-49c1-8398-8cdc02d88280",
+              "organization__name": "Example Team",
+              "role": "member"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "source": "Recorded from the Didit Authentication runtime API (local stack, 2026-10-12). Identifiers, tokens and the email are replaced; shapes, fields and statuses are as returned.",
+  "tokenIssued": {
+    "status": 200,
+    "body": {
+      "access_token": "accessToken1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "refresh_token": "refreshToken2xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "token_type": "Bearer",
+      "expires_in": 299,
+      "session_id": "00000000-0000-4000-8000-000000000001"
+    }
+  },
+  "tokenRotated": {
+    "status": 200,
+    "body": {
+      "access_token": "accessToken3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "refresh_token": "refreshToken4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "token_type": "Bearer",
+      "expires_in": 299,
+      "session_id": "00000000-0000-4000-8000-000000000001"
+    }
+  },
+  "tokenInvalidGrant": {
+    "status": 400,
+    "body": {
+      "error": "invalid_grant"
+    }
+  },
+  "session": {
+    "status": 200,
+    "body": {
+      "sub": "00000000-0000-4000-8000-000000000002",
+      "sid": "00000000-0000-4000-8000-000000000001",
+      "application_id": "00000000-0000-4000-8000-000000000003",
+      "amr": [
+        "password"
+      ],
+      "mfa_verified": false,
+      "email": "person@example.com",
+      "email_verified": true,
+      "phone": null,
+      "verified_identity": null,
+      "expires_at": "2026-11-11T08:30:56.519812Z",
+      "organizations": []
+    }
+  },
+  "sessionInvalid": {
+    "status": 401,
+    "body": {
+      "detail": "invalid_token"
+    }
+  },
+  "sessionEnded": {
+    "status": 204,
+    "body": null
+  },
+  "grants": {
+    "status": 200,
+    "body": {
+      "count": 2,
+      "next": null,
+      "previous": null,
+      "results": [
+        {
+          "id": "00000000-0000-4000-8000-000000000004",
+          "agent_id": "00000000-0000-4000-8000-000000000005",
+          "agent__name": "Agent One",
+          "scopes": [
+            "balance:read",
+            "settings:write",
+            "payouts:request"
+          ],
+          "expires_at": "2026-10-19T08:30:59.111812Z",
+          "revoked_at": null
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000006",
+          "agent_id": "00000000-0000-4000-8000-000000000007",
+          "agent__name": "Agent Two",
+          "scopes": [
+            "payouts:read"
+          ],
+          "expires_at": "2026-10-26T08:30:59.108990Z",
+          "revoked_at": null
+        }
+      ]
+    }
+  },
+  "grantRevoked": {
+    "status": 204,
+    "body": null
+  },
+  "grantMissing": {
+    "status": 404,
+    "body": {
+      "detail": "No AgentGrant matches the given query."
+    }
+  }
+}

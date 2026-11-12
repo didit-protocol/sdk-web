@@ -1,0 +1,275 @@
+{
+  "scenario": "agents",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "before": [],
+  "passkeyChallenge": "LSOptgIgTfiToGTDIdm6Gv_LoLqnl-cI0dGS8_cq7Qs",
+  "passkeyRequired": {
+    "error": {
+      "code": "passkey_required",
+      "status": 403
+    }
+  },
+  "denyChallenge": "Xhf04eqspSg9P-XnHJGAiQY0OFqflVczOEIte6ffnhE",
+  "denied": {
+    "status": "denied"
+  },
+  "approveChallenge": "lHPxHWumDBsoLPrK3DQ4DylYANPD4bPdqDT5lVtO7TY",
+  "approved": {
+    "status": "approved",
+    "redirectTo": "http://localhost:4174/agent-callback?code=VS2TVlI6qcBuCtQgBs_WdOt7r7mV2-y3eLrX6JcjoiU&state=agent-state-3"
+  },
+  "grant": 200,
+  "listed": [
+    {
+      "id": "cdd20b53-340d-45c9-a145-2d00bb342bb1",
+      "agentId": "d73d7dc9-dac1-42f1-a2d2-56799dbe843a",
+      "agentName": "Local Agent",
+      "scopes": [
+        "read"
+      ],
+      "expiresAt": "2026-10-19T08:14:27.534696Z",
+      "revokedAt": null
+    }
+  ],
+  "after": [
+    {
+      "id": "cdd20b53-340d-45c9-a145-2d00bb342bb1",
+      "agentId": "d73d7dc9-dac1-42f1-a2d2-56799dbe843a",
+      "agentName": "Local Agent",
+      "scopes": [
+        "read"
+      ],
+      "expiresAt": "2026-10-19T08:14:27.534696Z",
+      "revokedAt": "2026-10-12T08:14:27.674566Z"
+    }
+  ],
+  "events": [],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "jg3cOQoyYxFvKAQPWaLBYA",
+          "code_challenge": "7MuFgRdKme8OPaNlh308KjkIVrgFbzUWrbvZ8FRRBHs",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "9dLwKW-UpehRRdTMZ5p_-rG1eJZq61EnZe3vFWR7lIg",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "9dLwKW-UpehRRdTMZ5p_-rG1eJZq61EnZe3vFWR7lIg",
+          "email": "person@example.com",
+          "password": "Correct-horse-battery-91"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "code": "_SDYQfoFutNOB-1ZQdqFsLe-2RzEZC8wles1o7GNnd4",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "jg3cOQoyYxFvKAQPWaLBYA"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "_SDYQfoFutNOB-1ZQdqFsLe-2RzEZC8wles1o7GNnd4",
+          "code_verifier": "6Lk2jZnk9ElduimbHSuL9Y8_8FamCzvpA7e-C3OkjEo",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "CbClCI8s8D-IJ5TkBHIHPginle2mLUqWlrqmjfUK7XY",
+          "refresh_token": "NGHyYq5AyEPRv3D10Gs3mfNqmzow9zcHcdYxmwoWpvf0ovCP7UGZeCA2s-iRMQM6",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "a6820385-0f81-480e-94d4-d4bb18669b61"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer CbClCI8s8D-IJ5TkBHIHPginle2mLUqWlrqmjfUK7XY"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "6e911151-6862-4541-851d-23ad36e85ed6",
+          "sid": "a6820385-0f81-480e-94d4-d4bb18669b61",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T08:14:27.071109Z",
+          "organizations": [
+            {
+              "organization_id": "3eae0a81-3bff-49c1-8398-8cdc02d88280",
+              "organization__name": "Example Team",
+              "role": "member"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "grants/?limit=100&offset=0",
+        "authorization": "Bearer CbClCI8s8D-IJ5TkBHIHPginle2mLUqWlrqmjfUK7XY"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "count": 0,
+          "next": null,
+          "previous": null,
+          "results": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "agents/consent/",
+        "authorization": "Bearer CbClCI8s8D-IJ5TkBHIHPginle2mLUqWlrqmjfUK7XY",
+        "body": {
+          "challenge": "LSOptgIgTfiToGTDIdm6Gv_LoLqnl-cI0dGS8_cq7Qs",
+          "decision": "approve"
+        }
+      },
+      "response": {
+        "status": 403,
+        "body": {
+          "detail": "passkey_required"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "agents/consent/",
+        "authorization": "Bearer CbClCI8s8D-IJ5TkBHIHPginle2mLUqWlrqmjfUK7XY",
+        "body": {
+          "challenge": "Xhf04eqspSg9P-XnHJGAiQY0OFqflVczOEIte6ffnhE",
+          "decision": "deny"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "status": "denied"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "agents/consent/",
+        "authorization": "Bearer CbClCI8s8D-IJ5TkBHIHPginle2mLUqWlrqmjfUK7XY",
+        "body": {
+          "challenge": "lHPxHWumDBsoLPrK3DQ4DylYANPD4bPdqDT5lVtO7TY",
+          "decision": "approve"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "code": "VS2TVlI6qcBuCtQgBs_WdOt7r7mV2-y3eLrX6JcjoiU",
+          "redirect_uri": "http://localhost:4174/agent-callback",
+          "state": "agent-state-3"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "grants/?limit=100&offset=0",
+        "authorization": "Bearer CbClCI8s8D-IJ5TkBHIHPginle2mLUqWlrqmjfUK7XY"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "count": 1,
+          "next": null,
+          "previous": null,
+          "results": [
+            {
+              "id": "cdd20b53-340d-45c9-a145-2d00bb342bb1",
+              "agent_id": "d73d7dc9-dac1-42f1-a2d2-56799dbe843a",
+              "agent__name": "Local Agent",
+              "scopes": [
+                "read"
+              ],
+              "expires_at": "2026-10-19T08:14:27.534696Z",
+              "revoked_at": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "path": "grants/cdd20b53-340d-45c9-a145-2d00bb342bb1/",
+        "authorization": "Bearer CbClCI8s8D-IJ5TkBHIHPginle2mLUqWlrqmjfUK7XY"
+      },
+      "response": {
+        "status": 204,
+        "body": null
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "grants/?limit=100&offset=0",
+        "authorization": "Bearer CbClCI8s8D-IJ5TkBHIHPginle2mLUqWlrqmjfUK7XY"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "count": 1,
+          "next": null,
+          "previous": null,
+          "results": [
+            {
+              "id": "cdd20b53-340d-45c9-a145-2d00bb342bb1",
+              "agent_id": "d73d7dc9-dac1-42f1-a2d2-56799dbe843a",
+              "agent__name": "Local Agent",
+              "scopes": [
+                "read"
+              ],
+              "expires_at": "2026-10-19T08:14:27.534696Z",
+              "revoked_at": "2026-10-12T08:14:27.674566Z"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

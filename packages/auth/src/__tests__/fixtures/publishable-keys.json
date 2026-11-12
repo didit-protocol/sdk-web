@@ -1,0 +1,32 @@
+{
+  "scenario": "publishable-keys",
+  "localSandbox": {
+    "zone": "http://auth.localhost:8766",
+    "applicationId": "b4b999a5-2c6a-4186-b746-329c000c2756",
+    "origin": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766",
+    "publishableKey": "pk_test_aHR0cDovL2V4YW1wbGUtb3JnYW5pemF0aW9uLTg2MjRlYWI1NzYyMjUwNDlmYThhNDE1MTViYTE3NWQ4LnNhbmRib3guYXV0aC5sb2NhbGhvc3Q6ODc2Ng"
+  },
+  "sandbox": {
+    "zone": "https://auth.didit.me",
+    "applicationId": "b4b999a5-2c6a-4186-b746-329c000c2756",
+    "origin": "https://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.didit.me",
+    "publishableKey": "pk_test_aHR0cHM6Ly9leGFtcGxlLW9yZ2FuaXphdGlvbi04NjI0ZWFiNTc2MjI1MDQ5ZmE4YTQxNTE1YmExNzVkOC5zYW5kYm94LmF1dGguZGlkaXQubWU"
+  },
+  "live": {
+    "zone": "https://auth.didit.me",
+    "applicationId": "26246464-353e-47a6-94e8-aafb2dc6eb36",
+    "origin": "https://example-app-b23027697c7f34b4f1f0bfbb0d3fffe4.auth.didit.me",
+    "publishableKey": "pk_live_aHR0cHM6Ly9leGFtcGxlLWFwcC1iMjMwMjc2OTdjN2YzNGI0ZjFmMGJmYmIwZDNmZmZlNC5hdXRoLmRpZGl0Lm1l"
+  },
+  "customDomain": {
+    "applicationId": "243e5d9a-2518-484d-bb3c-33dc84cadc8a",
+    "origin": "https://auth.example.com",
+    "publishableKey": "pk_live_aHR0cHM6Ly9hdXRoLmV4YW1wbGUuY29t"
+  },
+  "localLive": {
+    "zone": "http://auth.localhost:8766",
+    "applicationId": "26246464-353e-47a6-94e8-aafb2dc6eb36",
+    "origin": "http://example-app-b23027697c7f34b4f1f0bfbb0d3fffe4.auth.localhost:8766",
+    "publishableKey": null
+  }
+}

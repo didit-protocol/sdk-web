@@ -1,0 +1,50 @@
+{
+  "scenario": "phone-invalid",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "result": {
+    "error": {
+      "code": "invalid_phone",
+      "status": 400
+    }
+  },
+  "events": [],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "E0vkWNGHZ8JlzJyg5LqasA",
+          "code_challenge": "gFwKS28rPB_BVRSMiXXLVKtBowV2odrtAZE3GHyttzE",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "09zDokeS4dJU7Y7H9P5rUA3oKVHEisqyLiJybpjE1U4",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "phone/start/",
+        "body": {
+          "transaction": "09zDokeS4dJU7Y7H9P5rUA3oKVHEisqyLiJybpjE1U4",
+          "phone": "123",
+          "language": "en"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "phone": "invalid_phone"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,352 @@
+{
+  "scenario": "protection-passkey",
+  "origin": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766",
+  "publishableKey": "pk_test_aHR0cDovL2V4YW1wbGUtb3JnYW5pemF0aW9uLTg2MjRlYWI1NzYyMjUwNDlmYThhNDE1MTViYTE3NWQ4LnNhbmRib3guYXV0aC5sb2NhbGhvc3Q6ODc2Ng",
+  "redirectUri": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766/e2e/fixtures/app.html",
+  "email": "passkey-person@example.com",
+  "wrongPassword": "Not-the-password-0000",
+  "deviceSignals": "off",
+  "failures": [
+    "invalid_credentials",
+    "invalid_credentials",
+    "invalid_credentials",
+    "invalid_credentials",
+    "invalid_credentials"
+  ],
+  "challenged": {
+    "status": "protection_required",
+    "methods": [
+      "passkey",
+      "email_code"
+    ],
+    "expiresIn": 300
+  },
+  "result": {
+    "status": "signed_in",
+    "methods": [
+      "password"
+    ],
+    "mfaVerified": true
+  },
+  "events": [
+    "SIGNED_IN"
+  ],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766/e2e/fixtures/app.html",
+          "state": "JGCYvOOofxtDd9RJ6r2Qaw",
+          "code_challenge": "JgBCb-Ys7KAwPPgraMvMXKWjaCtcYPlGkBrwysvXD2g",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "Vd_dwcwMeRWq4f8pEfjjnEROQXJhgs1DygjraP3JmU0",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "Vd_dwcwMeRWq4f8pEfjjnEROQXJhgs1DygjraP3JmU0",
+          "email": "passkey-person@example.com",
+          "password": "Not-the-password-0000"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "invalid_credentials"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766/e2e/fixtures/app.html",
+          "state": "fW50AZxO2bJvHCe0mAZMEA",
+          "code_challenge": "alA9vbwt9prxXEAlWJooKCXPd9SksYxdQP5195Wsbpo",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "zQlOUsAzQfxVyU9gOcsaXw9V2cvahM3-aGwar-wXnlM",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "zQlOUsAzQfxVyU9gOcsaXw9V2cvahM3-aGwar-wXnlM",
+          "email": "passkey-person@example.com",
+          "password": "Not-the-password-0000"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "invalid_credentials"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766/e2e/fixtures/app.html",
+          "state": "plj7d9Ih5tft-chXULit1A",
+          "code_challenge": "yWBnQ14alaIUC8_BavUcfKE5EJnnem9m9c1aYPZg6mE",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "53JaASrcu-pksNJmYWXLUiDwqld_Yi_PpfOPyPgmL7Q",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "53JaASrcu-pksNJmYWXLUiDwqld_Yi_PpfOPyPgmL7Q",
+          "email": "passkey-person@example.com",
+          "password": "Not-the-password-0000"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "invalid_credentials"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766/e2e/fixtures/app.html",
+          "state": "iUPO1WLxFfn1y1AtMi4ThQ",
+          "code_challenge": "yJi3fZ1tUPH6YQjwrqutGxqOHapPt6Yo7tQPVx241Lg",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "-x7C79lbys-83biyQqeVTD_a3beR0px7MqvJPizOWgI",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "-x7C79lbys-83biyQqeVTD_a3beR0px7MqvJPizOWgI",
+          "email": "passkey-person@example.com",
+          "password": "Not-the-password-0000"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "invalid_credentials"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766/e2e/fixtures/app.html",
+          "state": "VG4LtHGB5znnSEvs8KK1Aw",
+          "code_challenge": "tjB7e_zPRNNqKAkR86qrCpJ83XmpdRg1I-kZDLeTO7U",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "sd1aylUwXRXQqkOFfGV4rSvQupum10k3nX4DEGyaq0A",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "sd1aylUwXRXQqkOFfGV4rSvQupum10k3nX4DEGyaq0A",
+          "email": "passkey-person@example.com",
+          "password": "Not-the-password-0000"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "invalid_credentials"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766/e2e/fixtures/app.html",
+          "state": "mLNm8fLsEmcbnv7m3y4lYQ",
+          "code_challenge": "_k4YzMFSTyRqBNbRGo77C2omlw1tPTC-NugjQTjFj7M",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "KyStmjz9VSudueePk2f12mfmH5-h-yfICimsEk73FiY",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "KyStmjz9VSudueePk2f12mfmH5-h-yfICimsEk73FiY",
+          "email": "passkey-person@example.com",
+          "password": "Correct-horse-battery-91"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "protection_required": true,
+          "challenge": "JEnS5kCjQY5NXr5oyGVuxaa-OjfiJ3_GLObcDnVYSds",
+          "methods": [
+            "passkey",
+            "email_code"
+          ],
+          "options": {
+            "challenge": "U56Sp7Fp_-bsbthmEwC20vPd0tCwXUb_dB11KNgUo8luvbfrKqmJKF09Fmx5TkprYRfkiltAaFpFN8hwPetGCQ",
+            "timeout": 60000,
+            "rpId": "example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost",
+            "allowCredentials": [
+              {
+                "id": "R7djljEsRyfe9i_MRgWUC4-39WAlyV0L63jwjAcLLKw",
+                "type": "public-key"
+              }
+            ],
+            "userVerification": "required"
+          },
+          "expires_in": 300
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "protection/complete/",
+        "body": {
+          "challenge": "JEnS5kCjQY5NXr5oyGVuxaa-OjfiJ3_GLObcDnVYSds",
+          "method": "passkey",
+          "response": {
+            "id": "R7djljEsRyfe9i_MRgWUC4-39WAlyV0L63jwjAcLLKw",
+            "rawId": "R7djljEsRyfe9i_MRgWUC4-39WAlyV0L63jwjAcLLKw",
+            "type": "public-key",
+            "response": {
+              "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiVTU2U3A3RnBfLWJzYnRobUV3QzIwdlBkMHRDd1hVYl9kQjExS05nVW84bHV2YmZyS3FtSktGMDlGbXg1VGtwcllSZmtpbHRBYUZwRk44aHdQZXRHQ1EiLCJvcmlnaW4iOiJodHRwOi8vZXhhbXBsZS1vcmdhbml6YXRpb24tODYyNGVhYjU3NjIyNTA0OWZhOGE0MTUxNWJhMTc1ZDguc2FuZGJveC5hdXRoLmxvY2FsaG9zdDo4NzY2IiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+              "authenticatorData": "VKBn58tP3kORX85V3wrEHPClm3ICwtRZjeYlwGNFPhMFAAAAAg",
+              "signature": "MEUCICQ6AhIZcUnGyLx9mVfErnICQ-QretWEocLpRQon76d_AiEAkVov8cRqi5X9eJG-tAAxVUEK4OBp7IRJO3bz1fFLBd4",
+              "userHandle": "papg0N4ASJqklLJ-3V8JRg"
+            },
+            "clientExtensionResults": {},
+            "authenticatorAttachment": "platform"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "code": "SW6h55gaZnJkyEBuba-uOEnzE5XQaSVQ_pn1GE19SY8",
+          "redirect_uri": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766/e2e/fixtures/app.html",
+          "state": "mLNm8fLsEmcbnv7m3y4lYQ"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "SW6h55gaZnJkyEBuba-uOEnzE5XQaSVQ_pn1GE19SY8",
+          "code_verifier": "wROPT-7o7TNj4eiNDx0XYQliYQvT2JUrM97RCTtsEpQ",
+          "redirect_uri": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtfWmFScXRUZ3dTa0pSLU9hcHFYazhadyIsInR5cCI6ImF0K2p3dCJ9.eyJpc3MiOiJodHRwOi8vZXhhbXBsZS1vcmdhbml6YXRpb24tODYyNGVhYjU3NjIyNTA0OWZhOGE0MTUxNWJhMTc1ZDguc2FuZGJveC5hdXRoLmxvY2FsaG9zdDo4NzY2IiwiYXVkIjoiYjRiOTk5YTUtMmM2YS00MTg2LWI3NDYtMzI5YzAwMGMyNzU2Iiwic3ViIjoiYTVhYTYwZDAtZGUwMC00ODlhLWE0OTQtYjI3ZWRkNWYwOTQ2Iiwic2lkIjoiY2E5OWMxODAtZjBhNC00NGI2LWI0OWMtYjZhYjU1NGFjMGRmIiwianRpIjoiVEhveW54RkwyLTZGMi1BYlA5WDdZZyIsImlhdCI6MTc5MTg4NDAzNSwiZXhwIjoxNzkxODg0MzM1LCJ2ZW5kb3JfZGF0YSI6ImE1YWE2MGQwLWRlMDAtNDg5YS1hNDk0LWIyN2VkZDVmMDk0NiIsIm9yZyI6bnVsbCwidmVyaWZpZWQiOnt9LCJhbXIiOlsicGFzc3dvcmQiXSwiYWN0IjpudWxsLCJjbGllbnRfaWQiOiJiNGI5OTlhNS0yYzZhLTQxODYtYjc0Ni0zMjljMDAwYzI3NTYifQ.zPGuUhHP7uKUqkcY8pjWnndrLVn2hds9RMTrXOWTDN28Ka6hYmSwbi5bxPkjnnzj0SGcLYf7mlGeLa5XE6WYTw",
+          "id_token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImtfWmFScXRUZ3dTa0pSLU9hcHFYazhadyIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwOi8vZXhhbXBsZS1vcmdhbml6YXRpb24tODYyNGVhYjU3NjIyNTA0OWZhOGE0MTUxNWJhMTc1ZDguc2FuZGJveC5hdXRoLmxvY2FsaG9zdDo4NzY2IiwiYXVkIjoiYjRiOTk5YTUtMmM2YS00MTg2LWI3NDYtMzI5YzAwMGMyNzU2Iiwic3ViIjoiYTVhYTYwZDAtZGUwMC00ODlhLWE0OTQtYjI3ZWRkNWYwOTQ2Iiwic2lkIjoiY2E5OWMxODAtZjBhNC00NGI2LWI0OWMtYjZhYjU1NGFjMGRmIiwianRpIjoiT24zMFo3bk1NUmZhMlNzU0FUZzh4ZyIsImlhdCI6MTc5MTg4NDAzNSwiZXhwIjoxNzkxODg0MzM1LCJ2ZW5kb3JfZGF0YSI6ImE1YWE2MGQwLWRlMDAtNDg5YS1hNDk0LWIyN2VkZDVmMDk0NiIsIm9yZyI6bnVsbCwidmVyaWZpZWQiOnt9LCJhbXIiOlsicGFzc3dvcmQiXSwiYWN0IjpudWxsLCJhdXRoX3RpbWUiOjE3OTE4ODQwMzUsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJlbWFpbCI6InBhc3NrZXktcGVyc29uQGV4YW1wbGUuY29tIn0.tmpYrniyy7QAXhHdEWNC6a-jLvgktBA0giYJxW9QESlTAIv4BZyTOCEmiBIbDXCcnX6vy2mDxjBvDb8HxfHX9Q",
+          "refresh_token": "qCGVgA6fgcUlbT-KLthyrGWuiBql0ZU00vvgmr6VYlzeiNHmhenc59h3_W-tmvo_",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "ca99c180-f0a4-44b6-b49c-b6ab554ac0df"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer eyJhbGciOiJFUzI1NiIsImtpZCI6ImtfWmFScXRUZ3dTa0pSLU9hcHFYazhadyIsInR5cCI6ImF0K2p3dCJ9.eyJpc3MiOiJodHRwOi8vZXhhbXBsZS1vcmdhbml6YXRpb24tODYyNGVhYjU3NjIyNTA0OWZhOGE0MTUxNWJhMTc1ZDguc2FuZGJveC5hdXRoLmxvY2FsaG9zdDo4NzY2IiwiYXVkIjoiYjRiOTk5YTUtMmM2YS00MTg2LWI3NDYtMzI5YzAwMGMyNzU2Iiwic3ViIjoiYTVhYTYwZDAtZGUwMC00ODlhLWE0OTQtYjI3ZWRkNWYwOTQ2Iiwic2lkIjoiY2E5OWMxODAtZjBhNC00NGI2LWI0OWMtYjZhYjU1NGFjMGRmIiwianRpIjoiVEhveW54RkwyLTZGMi1BYlA5WDdZZyIsImlhdCI6MTc5MTg4NDAzNSwiZXhwIjoxNzkxODg0MzM1LCJ2ZW5kb3JfZGF0YSI6ImE1YWE2MGQwLWRlMDAtNDg5YS1hNDk0LWIyN2VkZDVmMDk0NiIsIm9yZyI6bnVsbCwidmVyaWZpZWQiOnt9LCJhbXIiOlsicGFzc3dvcmQiXSwiYWN0IjpudWxsLCJjbGllbnRfaWQiOiJiNGI5OTlhNS0yYzZhLTQxODYtYjc0Ni0zMjljMDAwYzI3NTYifQ.zPGuUhHP7uKUqkcY8pjWnndrLVn2hds9RMTrXOWTDN28Ka6hYmSwbi5bxPkjnnzj0SGcLYf7mlGeLa5XE6WYTw"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "a5aa60d0-de00-489a-a494-b27edd5f0946",
+          "sid": "ca99c180-f0a4-44b6-b49c-b6ab554ac0df",
+          "application_id": "b4b999a5-2c6a-4186-b746-329c000c2756",
+          "vendor_data": "a5aa60d0-de00-489a-a494-b27edd5f0946",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": true,
+          "email": "passkey-person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "verified": null,
+          "expires_at": "2026-11-12T09:33:55.608932Z",
+          "post_logout_redirect_uri": "",
+          "organizations": []
+        }
+      }
+    }
+  ]
+}
