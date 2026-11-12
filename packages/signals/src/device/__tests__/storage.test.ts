@@ -5,6 +5,7 @@ installWebCryptoForTests();
 import {
   COOKIE_NAME,
   loadOrCreatePersistentId,
+  readStoredPersistentId,
   resetPersistentIdForTesting,
   STORAGE_KEY,
   type StorageLayer,
@@ -156,6 +157,101 @@ describe("stored id across every browser storage", () => {
   });
 
   it("reads the real localStorage and cookie layers, where a browser has no IndexedDB or Cache storage", async () => {
+    const first = loadOrCreatePersistentId();
+    resetPersistentIdForTesting();
+
+    const again = await loadOrCreatePersistentIdFromBrowserStorage();
+
+    expect(again.id).toBe(first.id);
+    expect(again.sources).toEqual(expect.arrayContaining(["localStorage", "cookie"]));
+  });
+});
+
+describe("asking for the stored id without creating one", () => {
+  beforeEach(() => {
+    clearAllStorage();
+    resetPersistentIdForTesting();
+  });
+
+  it("answers null and leaves the page as it was: no storage entry, no cookie", () => {
+    expect(readStoredPersistentId()).toBeNull();
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(document.cookie).not.toContain(COOKIE_NAME);
+  });
+
+  it("answers the id the page keeps, from localStorage or from the cookie alone", () => {
+    const { id } = loadOrCreatePersistentId();
+    expect(readStoredPersistentId()).toBe(id);
+
+    localStorage.removeItem(STORAGE_KEY);
+    expect(readStoredPersistentId()).toBe(id);
+  });
+
+  it("answers null for a stored value that is not an id", () => {
+    localStorage.setItem(STORAGE_KEY, "not an id");
+    expect(readStoredPersistentId()).toBeNull();
+  });
+});
+
+describe("a framed page and the id of the page that embeds it", () => {
+  beforeEach(() => {
+    clearAllStorage();
+    resetPersistentIdForTesting();
+  });
+
+  it("goes by the embedding page's id when its own storage has none, and writes it nowhere", async () => {
+    const layers = [fakeLayer("localStorage", null), fakeLayer("idb", null), fakeLayer("cache", null)];
+
+    const result = await loadOrCreatePersistentIdFromBrowserStorage(
+      layers.map((entry) => entry.layer),
+      ID_A,
+    );
+
+    expect(result).toEqual({ id: ID_A, sources: ["embedder"], wasCreated: false });
+    for (const entry of layers) expect(entry.written).toEqual([]);
+    // Not kept in memory either: without the embedding page's id the next read starts fresh.
+    const alone = await loadOrCreatePersistentIdFromBrowserStorage(layers.map((entry) => entry.layer));
+    expect(alone.id).not.toBe(ID_A);
+    expect(alone.sources).toEqual(["fresh"]);
+  });
+
+  it("keeps the id it already stores, whatever the embedding page passes", async () => {
+    const layers = [fakeLayer("localStorage", ID_B), fakeLayer("idb", ID_B), fakeLayer("cache", null)];
+
+    const result = await loadOrCreatePersistentIdFromBrowserStorage(
+      layers.map((entry) => entry.layer),
+      ID_A,
+    );
+
+    expect(result.id).toBe(ID_B);
+    expect(result.sources).toEqual(["localStorage", "idb"]);
+    expect(layers[2].written).toEqual([ID_B]);
+  });
+
+  it.each([["a script"], ["<script>alert(1)</script>"], [""], ["short"], [`${"A".repeat(22)}\n`]])(
+    "ignores %j, which is not a stored id, and creates its own",
+    async (passed) => {
+      const layers = [fakeLayer("localStorage", null)];
+
+      const result = await loadOrCreatePersistentIdFromBrowserStorage(
+        layers.map((entry) => entry.layer),
+        passed,
+      );
+
+      expect(result.sources).toEqual(["fresh"]);
+      expect(result.id).not.toBe(passed);
+      expect(layers[0].written).toEqual([result.id]);
+    },
+  );
+});
+
+describe("the layered loader on a real page", () => {
+  beforeEach(() => {
+    clearAllStorage();
+    resetPersistentIdForTesting();
+  });
+
+  it("still reads the real layers after the checks above", async () => {
     const first = loadOrCreatePersistentId();
     resetPersistentIdForTesting();
 

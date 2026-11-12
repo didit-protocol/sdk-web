@@ -3,7 +3,7 @@ import { canonicalNavigator, COMPOSITE_HASH_VERSION, compositeHashOf } from "./d
 import { payloadToHeaders } from "./device/headers";
 import { collectNavigatorSignals } from "./device/signals/navigator";
 import { detectWebViewContext } from "./device/signals/webview";
-import { loadOrCreatePersistentId, resetPersistentIdForTesting } from "./device/storage";
+import { loadOrCreatePersistentId, readStoredPersistentId, resetPersistentIdForTesting } from "./device/storage";
 import type { DeviceFingerprintPayload } from "./device/types";
 
 /**
@@ -119,6 +119,13 @@ export function setDeviceSignalsProvider(next: DeviceSignalsProvider | null): vo
 
 /** The device headers a Didit API reads from the payload. */
 export const buildFingerprintHeaders = payloadToHeaders;
+
+/**
+ * The device id this page already keeps for Didit, or null when it keeps none. It never creates
+ * one: `@didit-protocol/sdk-web` hands it to the verification it opens, so a site that sends no
+ * events, transactions or sign-ins gets no cookie and no storage entry from being asked.
+ */
+export const getStoredDeviceId = readStoredPersistentId;
 
 export function resetDeviceFingerprintForTesting(): void {
   setDeviceSignalsProvider(null);

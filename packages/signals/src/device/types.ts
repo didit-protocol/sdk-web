@@ -25,6 +25,12 @@ interface DeviceSignals {
   compositeHashVersion: typeof COMPOSITE_HASH_VERSION;
   navigator: NavigatorSignals;
   webview: WebViewSignals;
+  /**
+   * The page that embeds this one, when it passed its own stored id (`@didit-protocol/sdk-web`
+   * passes it to the verification it opens). It links what happens in the frame with the events
+   * of the site around it. Not part of the composite hash.
+   */
+  embedder?: { persistentId: string };
 }
 
 interface FullDeviceSignals extends DeviceSignals {

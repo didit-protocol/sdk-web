@@ -89,6 +89,26 @@ function makeSignals(overrides: Partial<FingerprintSignals> = {}): FingerprintSi
 }
 
 describe("composePayload", () => {
+  it("reports the embedding page's id beside the signals, and leaves both hashes as they were", async () => {
+    const persistent = { id: "pid-test-aaaaaaaaaaaaaa", sources: [], wasCreated: false };
+    const alone = await composePayload({ persistent, signals: makeSignals() });
+    const framed = await composePayload({
+      persistent,
+      signals: makeSignals(),
+      embedderPersistentId: "EEEEEEEEEEEEEEEEEEEEEE",
+    });
+
+    expect(alone.signals.embedder).toBeUndefined();
+    expect(framed.signals.embedder).toEqual({ persistentId: "EEEEEEEEEEEEEEEEEEEEEE" });
+    // The frame's own id stays its id; the embedding page's is a link, not an identity.
+    expect(framed.persistentId).toBe("pid-test-aaaaaaaaaaaaaa");
+    expect(framed.compositeHash).toBe(alone.compositeHash);
+    expect(framed.legacyCompatibilityHash).toBe(alone.legacyCompatibilityHash);
+    // Anything that is not a stored id is left out, never passed on.
+    const junk = await composePayload({ persistent, signals: makeSignals(), embedderPersistentId: "<b>x</b>" });
+    expect(junk.signals.embedder).toBeUndefined();
+  });
+
   it("produces a stable v2 payload with required fields", async () => {
     const payload = await composePayload({
       persistent: { id: "pid-test-aaaaaaaaaaaaaa", sources: ["fresh"], wasCreated: true },

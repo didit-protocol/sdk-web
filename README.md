@@ -482,6 +482,13 @@ Delivery is best effort: the queue is in memory, and browsers can terminate pend
 
 Full guide: [SDK Event Submission](https://docs.didit.me/transaction-monitoring/sdk-event-submission).
 
+### One device across your site and the verification
+
+A browser keeps the storage of the verification's frame apart from your page's, so the two would never share a device id.
+When your page already keeps one for Didit (it has sent events, transactions or sign-ins), `startVerification` passes it to the verification as the `sdk_device_id` query parameter.
+The verification then reports it next to its own signals, and goes by it where the browser gives the frame no storage that lasts.
+A page that keeps no id gets none created: opening a verification adds no cookie and no storage entry to your site.
+
 ## API Reference
 
 ### DiditSdk.shared

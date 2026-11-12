@@ -1,11 +1,11 @@
 import { type BotDetection, detectBot } from "./bot";
 import { canonicalNavigator, COMPOSITE_HASH_VERSION, compositeHashOf } from "./canonical";
-import { type PersistentIdResult } from "./storage";
+import { isValidPersistentId, type PersistentIdResult } from "./storage";
 import { canonicalRendererKey } from "./signals/webgl";
 import { type FullDeviceFingerprintPayload, type FullDeviceSignals } from "./types";
 
 /** The signal families a collector fills in; `composePayload` adds what is the same for every payload. */
-type CollectedSignals = Omit<FullDeviceSignals, "platform" | "tier" | "compositeHashVersion">;
+type CollectedSignals = Omit<FullDeviceSignals, "platform" | "tier" | "compositeHashVersion" | "embedder">;
 
 /**
  * The fields the full composite hash is made of: what describes the device and its browser, and
@@ -88,10 +88,13 @@ function legacyCompatibilityHash(signals: CollectedSignals): string {
 async function composePayload(args: {
   persistent: PersistentIdResult;
   signals: CollectedSignals;
+  /** The embedding page's stored id, if it passed one: reported as `signals.embedder`, never hashed. */
+  embedderPersistentId?: string | null;
 }): Promise<FullDeviceFingerprintPayload> {
-  const { persistent, signals } = args;
+  const { persistent, signals, embedderPersistentId } = args;
   const compositeHash = await compositeHashOf(canonicalize(signals));
   const bot: BotDetection = detectBot(signals);
+  const embedder = isValidPersistentId(embedderPersistentId) ? { embedder: { persistentId: embedderPersistentId } } : {};
   return {
     version: 2,
     schema: "didit-fp-v2",
@@ -100,7 +103,7 @@ async function composePayload(args: {
     persistentId: persistent.id,
     persistentIdSources: persistent.sources,
     persistentIdWasCreated: persistent.wasCreated,
-    signals: { platform: "web", tier: "full", compositeHashVersion: COMPOSITE_HASH_VERSION, ...signals },
+    signals: { platform: "web", tier: "full", compositeHashVersion: COMPOSITE_HASH_VERSION, ...signals, ...embedder },
     bot,
     compositeHash,
     legacyCompatibilityHash: legacyCompatibilityHash(signals),

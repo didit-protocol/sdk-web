@@ -2,6 +2,15 @@
 
 All notable changes to `@didit-protocol/sdk-web` will be documented in this file.
 
+## [0.6.0] - 2026-11-12
+
+### Added
+- A verification opened by the SDK is told the device id the page already keeps for Didit, when it keeps one (it has sent events, transactions or sign-ins with `@didit-protocol/signals`). A browser gives the verification's frame storage of its own, apart from the page's, so until now a verification and the same site's events never shared a device id. The id travels as the `sdk_device_id` query parameter of the verification URL. A page that keeps no id gets none created: no cookie and no storage entry are added.
+- `getStoredDeviceId()`, re-exported from `@didit-protocol/signals`.
+
+### Changed
+- Requires `@didit-protocol/signals` 0.2.0.
+
 ## [0.5.3] - 2026-11-01
 
 ### Changed

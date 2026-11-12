@@ -22,6 +22,33 @@ function verificationIframeUrl(sdk: DiditSdk): URL {
   return new URL(iframe.src);
 }
 
+describe("startVerification and the page's stored device id", () => {
+  afterEach(() => {
+    DiditSdk.shared.destroy();
+    localStorage.clear();
+    document.cookie = "didit_pid=; Path=/; Max-Age=0";
+  });
+
+  it("hands the verification the id the page already keeps", async () => {
+    localStorage.setItem("didit-pid-v1", "AbCdEfGhIjKlMnOpQrStUv");
+    await DiditSdk.shared.startVerification({ url: "https://verify.didit.me/session/token" });
+    expect(verificationIframeUrl(DiditSdk.shared).searchParams.get("sdk_device_id")).toBe("AbCdEfGhIjKlMnOpQrStUv");
+  });
+
+  it("creates nothing on a page that keeps no id: no parameter, no storage entry, no cookie", async () => {
+    await DiditSdk.shared.startVerification({ url: "https://verify.didit.me/session/token" });
+    expect(verificationIframeUrl(DiditSdk.shared).searchParams.has("sdk_device_id")).toBe(false);
+    expect(localStorage.getItem("didit-pid-v1")).toBeNull();
+    expect(document.cookie).not.toContain("didit_pid");
+  });
+
+  it("does not hand over a stored value that is not a device id", async () => {
+    localStorage.setItem("didit-pid-v1", "<script>alert(1)</script>");
+    await DiditSdk.shared.startVerification({ url: "https://verify.didit.me/session/token" });
+    expect(verificationIframeUrl(DiditSdk.shared).searchParams.has("sdk_device_id")).toBe(false);
+  });
+});
+
 describe("startVerification defaultLivenessCamera", () => {
   afterEach(() => {
     DiditSdk.shared.destroy();
