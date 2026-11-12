@@ -103,9 +103,12 @@ jobs:
           VERSION="${GITHUB_REF_NAME#auth-v}"
           cd "$(mktemp -d)"
           echo '{"private":true}' > package.json
-          # The registry can take a moment to serve a version it just accepted.
+          # The registry can take a moment to serve a version it just accepted. --prefer-online makes
+          # npm ask the registry each time: the Publish step's `npm view` cached each package's version
+          # list from before the publish, and npm trusts that copy for five minutes, longer than these
+          # retries last, so without it every attempt reads the old list and fails with ETARGET.
           for ATTEMPT in 1 2 3 4 5 6; do
-            if npm install --no-audit --no-fund --ignore-scripts "@didit-protocol/auth-nextjs@$VERSION"; then
+            if npm install --prefer-online --no-audit --no-fund --ignore-scripts "@didit-protocol/auth-nextjs@$VERSION"; then
               npm ls --all >/dev/null
               exit 0
             fi
