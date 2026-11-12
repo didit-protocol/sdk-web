@@ -1,6 +1,6 @@
 {
   "name": "@didit-protocol/auth-nextjs",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Didit Authentication for Next.js: components, server-side auth() and a proxy with httpOnly session cookies",
   "type": "module",
   "sideEffects": false,
@@ -50,8 +50,8 @@
     "node": ">=20.9.0"
   },
   "dependencies": {
-    "@didit-protocol/auth": "0.1.0",
-    "@didit-protocol/auth-react": "0.1.0"
+    "@didit-protocol/auth": "0.2.0",
+    "@didit-protocol/auth-react": "0.2.0"
   },
   "peerDependencies": {
     "next": "^15.5.0 || ^16.0.0",

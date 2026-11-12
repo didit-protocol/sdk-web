@@ -1,6 +1,6 @@
 {
   "name": "@didit-protocol/auth",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Didit Authentication for web applications: hosted and headless sign-in, sessions and server-side token verification",
   "type": "module",
   "main": "./dist/index.cjs",

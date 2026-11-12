@@ -2,6 +2,20 @@
 
 All notable changes to `@didit-protocol/auth` are documented in this file.
 
+## [0.2.0] - 2026-11-12
+
+### Changed
+
+- Device signals are sent with sign-in calls by default. `deviceSignals: "auto"`, the default, now sends the
+  device id, the fingerprint hash and the bot score to your application's Didit origin. It used to send them
+  only when your page and that origin were the same origin, which no application on its own domain is, so
+  most integrations sent none. `"always"` keeps working and `"off"` still sends none. Nothing changes in your
+  code: the Didit API accepts these headers from your allowed origins.
+- Requires `@didit-protocol/signals` `^0.2.0`. Its bot score is the strongest signal found, so it can reach
+  the 0.8 at which an application's `bots` policy matches. Its fingerprint hash no longer changes with a
+  browser update or a turned phone, and is left out where the page has no WebCrypto. A browser reports a new
+  hash once after this update.
+
 ## [0.1.0] - 2026-10-27
 
 First release of the headless Didit Authentication client for the browser, with
