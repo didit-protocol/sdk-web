@@ -8,6 +8,18 @@ describe("buildVerificationUrl", () => {
     SDKLogger.isEnabled = false;
   });
 
+  it("adds the page's stored device id when it has one, and nothing when it has none", () => {
+    const url = "https://verify.didit.me/session/token?vendor_data=user-1";
+    const withId = new URL(buildVerificationUrl(url, {}, "AbCdEfGhIjKlMnOpQrStUv"));
+    expect(withId.searchParams.get("sdk_device_id")).toBe("AbCdEfGhIjKlMnOpQrStUv");
+    expect(withId.searchParams.get("vendor_data")).toBe("user-1");
+    expect(new URL(buildVerificationUrl(url, {}, null)).searchParams.has("sdk_device_id")).toBe(false);
+    expect(new URL(buildVerificationUrl(url, {})).searchParams.has("sdk_device_id")).toBe(false);
+    // The page's own id wins over one somebody put on the link.
+    const overridden = new URL(buildVerificationUrl(`${url}&sdk_device_id=planted`, {}, "AbCdEfGhIjKlMnOpQrStUv"));
+    expect(overridden.searchParams.getAll("sdk_device_id")).toEqual(["AbCdEfGhIjKlMnOpQrStUv"]);
+  });
+
   it("adds only the presentation parameters when no camera option is configured", () => {
     const url = "https://verify.didit.me/session/token";
     const modal = "https://verify.didit.me/session/token?sdk_presentation=modal&sdk_close_button=true";

@@ -1,5 +1,10 @@
 export { submitEvent, flush, configureEvents, DiditEventError, DEFAULT_EVENTS_BASE_URL } from "./events";
-export { getDeviceFingerprintPayload, buildFingerprintHeaders, setDeviceSignalsProvider } from "./fingerprint";
+export {
+  getDeviceFingerprintPayload,
+  buildFingerprintHeaders,
+  getStoredDeviceId,
+  setDeviceSignalsProvider
+} from "./fingerprint";
 
 export type {
   DiditEvent,

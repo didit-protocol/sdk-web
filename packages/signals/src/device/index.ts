@@ -17,6 +17,13 @@ import { type FullDeviceFingerprintPayload } from "./types";
 interface BuildOptions {
   /** How long the canvas, audio and hardware probes may take together before they are left out. */
   budgetMs?: number;
+  /**
+   * For a page shown inside another site's frame: the stored id the embedding page passed, if it
+   * passed one. This page goes by it when its own storage has no id (a framed page's storage is
+   * kept apart per embedding site, and some browsers empty it when they close), never writes it to
+   * its own storage, and reports it as `signals.embedder`. Anything that is not a stored id is ignored.
+   */
+  embedderPersistentId?: string | null;
 }
 
 const DEFAULT_BUDGET_MS = 800;
@@ -87,7 +94,7 @@ async function buildPayload(options?: BuildOptions): Promise<FullDeviceFingerpri
     // gives up on its own (LAYER_TIMEOUT_MS). Under it, one long task on a busy page lets the
     // budget's timer run before the read's answer, and the request goes out with no stored id at
     // all while the id sits untouched in storage.
-    loadOrCreatePersistentIdFromBrowserStorage().catch(() => {
+    loadOrCreatePersistentIdFromBrowserStorage(undefined, options?.embedderPersistentId).catch(() => {
       return { id: "", sources: [], wasCreated: false } as PersistentIdResult;
     }),
     withBudget(collectCanvasSignals(), perCollectorBudget, { pngHash: "", chunkSketch: [], blocked: true }),
@@ -117,7 +124,7 @@ async function buildPayload(options?: BuildOptions): Promise<FullDeviceFingerpri
     environment,
   };
 
-  return composePayload({ persistent, signals });
+  return composePayload({ persistent, signals, embedderPersistentId: options?.embedderPersistentId });
 }
 
 /**

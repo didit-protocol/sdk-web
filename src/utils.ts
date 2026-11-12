@@ -2,6 +2,7 @@ import {
   CAMERA_LENSES,
   CAMERA_QUERY_PARAMS,
   DEFAULT_CONFIG,
+  DEVICE_ID_QUERY_PARAM,
   PRESENTATION_QUERY_PARAMS,
   RTL_LANGUAGES,
   languages
@@ -88,15 +89,24 @@ const CAMERA_SWITCH_OPTIONS = ["showDocumentCameraSwitchButton", "showLivenessCa
  * `showDocumentCameraSwitchButton` -> `document_camera_switch=true|false`,
  * `showLivenessCameraSwitchButton` -> `liveness_camera_switch=true|false`.
  * How the SDK presents the flow is always added: `sdk_presentation=modal|embedded`
- * and, in a modal, `sdk_close_button=true|false`.
+ * and, in a modal, `sdk_close_button=true|false`. `storedDeviceId`, when the
+ * page has one, is added as `sdk_device_id`.
  * Each parameter is set (not appended) so the configuration wins over a value
  * already on the URL; existing query parameters and the hash are kept. A
  * value of the wrong shape is ignored with a warning rather than forwarded,
  * and a URL the browser cannot parse is returned as it came (the modal
  * reports it when it loads).
  */
-export function buildVerificationUrl(url: string, configuration: DiditSdkConfiguration = {}): string {
+export function buildVerificationUrl(
+  url: string,
+  configuration: DiditSdkConfiguration = {},
+  storedDeviceId: string | null = null
+): string {
   const params = presentationParams(configuration);
+  // The id this page already keeps for Didit (see getStoredDeviceId): the flow in the frame, whose
+  // own storage the browser keeps apart from this page's, can then be told apart as the same
+  // device as this site's events. Absent when the page keeps none; nothing is created for it.
+  if (storedDeviceId) params.push([DEVICE_ID_QUERY_PARAM, storedDeviceId]);
   for (const option of CAMERA_LENS_OPTIONS) {
     const value = configuration[option];
     if (value === undefined) continue;

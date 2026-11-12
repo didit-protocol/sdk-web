@@ -56,6 +56,14 @@ export const PRESENTATION_QUERY_PARAMS = {
 } as const;
 
 /**
+ * The verification-URL query parameter that carries the device id this page
+ * already keeps for Didit, when it keeps one. A browser gives the flow in the
+ * frame storage of its own, apart from this page's, so without it a
+ * verification and this site's events never share a device id.
+ */
+export const DEVICE_ID_QUERY_PARAM = "sdk_device_id";
+
+/**
  * Posted by the hosted flow when it lays itself out for the modal, with
  * `data: { contentHeight, colorScheme?, dir?, kind? }` (`kind` is `handoff` or `step`, `step` when missing). The modal then grows to the
  * handoff card on a computer and follows the content height in a narrow

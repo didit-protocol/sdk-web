@@ -2,12 +2,14 @@
 
 All notable changes to `@didit-protocol/signals` will be documented in this file.
 
-## [0.2.0] - Unreleased
+## [0.2.0] - 2026-11-12
 
 ### Added
 - `@didit-protocol/signals/device`: the full device fingerprint, the one Didit's hosted verification flow collects. `enableDeviceIntelligence()` makes it the fingerprint every event, transaction and Authentication request of the page carries. It keeps the stored id in `localStorage`, IndexedDB, a cookie and Cache storage, and adds the graphics, font, math, API support, canvas, audio, hardware and codec signals, whether the page runs on emulated hardware, and three more automation flags.
 - `@didit-protocol/signals/autocapture`: `startAutocapture()` sends `session.session_started`, a `session.page_view` for every page and single-page-app navigation, the event an element declares with `data-didit-event`, and `session.bot_signal_observed` with how the person interacted (action counts, timing regularity, pointer and typing rhythm). It never reads field values, key presses or page content, and reports a page by its path with identifiers replaced by `:id`. `track()` sends your own event with the session attached, and `getDeviceContext()` gives the device identifiers for an event your backend sends.
 - `signals.tier` (`lite` or `full`) and `signals.compositeHashVersion` in the fingerprint payload.
+- `getStoredDeviceId()`: the stored id the page already keeps, or `null`. It never creates one.
+- For a page shown inside another site's frame: `getFingerprintPayload({ embedderPersistentId })` of `@didit-protocol/signals/device` takes the stored id the embedding page passed. The framed page goes by it when its own storage has none, never stores it, and reports it as `signals.embedder.persistentId`.
 
 ### Changed
 - One implementation of the device fingerprint: this entry is now built from the same files as `@didit-protocol/signals/device`, and uses the part of them that fits its size.

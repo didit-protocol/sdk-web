@@ -152,14 +152,19 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Pr
 /**
  * The stored id from every layer, each held to LAYER_TIMEOUT_MS so one blocked store cannot hold
  * the id back, then written back to the layers that missed it.
+ *
+ * `embedderId` is the stored id of the page that embeds this one, when it passed it. It is used
+ * only when no layer has an id (a first visit, or a browser that gives a framed page no storage
+ * that lasts), and is never written here.
  */
 async function loadOrCreatePersistentIdFromBrowserStorage(
   layers: StorageLayer[] = BROWSER_STORAGE_LAYERS,
+  embedderId?: string | null,
 ): Promise<PersistentIdResult> {
   const values = await Promise.all(
     layers.map((layer) => withTimeout(Promise.resolve(layer.read()), LAYER_TIMEOUT_MS, null)),
   );
-  const { result, stale } = choosePersistentId(layers, values);
+  const { result, stale } = choosePersistentId(layers, values, embedderId);
   await Promise.all(
     stale.map((layer) => withTimeout(Promise.resolve(layer.write(result.id)), LAYER_TIMEOUT_MS, false)),
   );

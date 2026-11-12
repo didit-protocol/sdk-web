@@ -116,6 +116,7 @@ Sends everything that is waiting. Never rejects: events that could not be sent a
 
 - `getDeviceFingerprintPayload(): Promise<DeviceFingerprintPayload | null>` collects the didit-fp-v2 fingerprint (`null` outside a browser).
 - `buildFingerprintHeaders(payload)` returns the matching `X-Didit-*` headers.
+- `getStoredDeviceId(): string | null` returns the stored id this page already keeps, or `null`. It never creates one.
 
 The fingerprint has two parts.
 The **stored id** (`persistentId`, header `X-Didit-PID`) is a random id kept in the browser's storage: it is what tells one device from another.
@@ -150,6 +151,20 @@ The collection is spread over short tasks, so the page stays responsive, and run
 The composite hash of the two tiers differs for the same device, because the full one covers more of it; the stored id is the same.
 
 Other exports: `getFingerprintPayload(options?)`, `getCachedFingerprintPayload()`, `getCompositeDeviceId()`, `payloadToHeaders(payload)`, `attachFingerprintPayload(body, payload)`, `detectWebViewContext(userAgent)`, the `collect*Signals` functions of each family and their types.
+
+### A page inside another site's frame
+
+A browser keeps the storage of a framed page apart for every site that embeds it, and some browsers empty it when they close.
+So a page shown in a frame, such as a verification opened by `@didit-protocol/sdk-web`, does not see the stored id of the site around it.
+The embedding page can pass its own:
+
+```ts
+getFingerprintPayload({ embedderPersistentId }); // the id the embedding page passed, or null
+```
+
+The framed page goes by that id only when its own storage has none, never writes it to its own storage, and reports it as `signals.embedder.persistentId`, so what happens in the frame can be linked with the events of the site around it.
+A value that is not a stored id is ignored.
+`@didit-protocol/sdk-web` passes the id by itself when the page already keeps one (`getStoredDeviceId()`); it creates nothing on a page that keeps none.
 
 ## Automatic capture: `@didit-protocol/signals/autocapture`
 

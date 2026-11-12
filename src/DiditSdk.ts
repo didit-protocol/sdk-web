@@ -16,7 +16,7 @@ import type {
 } from "./types";
 import type { SubmitEventOptions } from "@didit-protocol/signals";
 
-import { submitEvent } from "@didit-protocol/signals";
+import { getStoredDeviceId, submitEvent } from "@didit-protocol/signals";
 import { VerificationModal } from "./modal";
 import { DEFAULT_CONFIG } from "./constants";
 import { SDKLogger, buildVerificationUrl, createVerificationError } from "./utils";
@@ -43,6 +43,18 @@ function assertEmbeddedHostExists(configuration: DiditSdkConfiguration | undefin
   }
   if (typeof document === "undefined" || !document.getElementById(containerId)) {
     throw new Error(`Embedded container "#${containerId}" was not found in the page.`);
+  }
+}
+
+/**
+ * The device id this page already keeps for Didit (it has sent events, transactions or sign-ins),
+ * or null. Reading it never creates one, and a browser that refuses the read is not an error.
+ */
+function storedDeviceId(): string | null {
+  try {
+    return getStoredDeviceId();
+  } catch {
+    return null;
   }
 }
 
@@ -144,7 +156,7 @@ export class DiditSdk {
         onIframeLoad: () => this.handleIframeLoad()
       });
 
-      this._url = buildVerificationUrl(url, config);
+      this._url = buildVerificationUrl(url, config, storedDeviceId());
       this.setState("loading");
 
       this.emitInternalEvent("didit:started", {});

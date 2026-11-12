@@ -5,7 +5,7 @@ const COOKIE_NAME = "didit_pid";
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365 * 2;
 const PERSISTENT_ID_BYTE_LENGTH = 16;
 
-type StorageSource = "localStorage" | "idb" | "cookie" | "cache" | "memory" | "fresh";
+type StorageSource = "localStorage" | "idb" | "cookie" | "cache" | "memory" | "embedder" | "fresh";
 
 /**
  * One place the stored id lives in. A layer that answers at once (localStorage, a cookie) returns
@@ -122,11 +122,18 @@ function pickWinner(candidates: { id: string; source: StorageSource }[]): { id: 
 function choosePersistentId(
   layers: StorageLayer[],
   values: (string | null)[],
+  embedderId?: string | null,
 ): { result: PersistentIdResult; stale: StorageLayer[] } {
   const candidates: { id: string; source: StorageSource }[] = [];
   values.forEach((value, index) => {
     if (value) candidates.push({ id: value, source: layers[index].source });
   });
+  // No layer has an id, and the page that embeds this one passed its own: this visit goes by it.
+  // It is not written to any layer and not kept in memory: the embedding page is where it lives,
+  // and a value another page supplies never becomes this origin's stored id.
+  if (!candidates.length && isValidPersistentId(embedderId)) {
+    return { result: { id: embedderId, sources: ["embedder"], wasCreated: false }, stale: [] };
+  }
   if (!candidates.length && memoryFallback && isValidPersistentId(memoryFallback)) {
     candidates.push({ id: memoryFallback, source: "memory" });
   }
@@ -154,6 +161,18 @@ function loadOrCreatePersistentId(): PersistentIdResult {
   return result;
 }
 
+/**
+ * The id this page already keeps, or null. It only reads: nothing is created and nothing is
+ * written, so asking never adds a cookie or a storage entry to a site that had none.
+ */
+function readStoredPersistentId(): string | null {
+  for (const layer of SYNC_STORAGE_LAYERS) {
+    const value = layer.read() as string | null;
+    if (value) return value;
+  }
+  return null;
+}
+
 function resetPersistentIdForTesting(): void {
   memoryFallback = null;
 }
@@ -164,6 +183,7 @@ export {
   isValidPersistentId,
   loadOrCreatePersistentId,
   type PersistentIdResult,
+  readStoredPersistentId,
   resetPersistentIdForTesting,
   STORAGE_KEY,
   type StorageLayer,
