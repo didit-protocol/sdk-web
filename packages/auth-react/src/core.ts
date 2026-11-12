@@ -78,11 +78,26 @@ export function createCoreAuthClient(options: CoreClientOptions): AuthClient {
     return core;
   }
 
+  // A return from Didit that did not complete: a step-up another person finished, a sign-in that was
+  // cancelled or whose code expired. Whoever was signed in before still is, so the caller reads that
+  // session instead of showing the person as signed out; the failure itself is reported, not thrown.
+  async function completeReturn(client: ReturnType<typeof createDiditAuth>) {
+    try {
+      return await client.handleRedirectCallback();
+    } catch (error) {
+      const code = (error as { code?: unknown } | null)?.code;
+
+      console.error(`[didit-auth] The return from Didit did not complete${typeof code === "string" ? ` (${code})` : ""}.`);
+
+      return null;
+    }
+  }
+
   async function restore() {
     const client = getCore();
     const query = new URLSearchParams(window.location.search);
     const callback = query.has("state") && (query.has("code") || query.has("error"))
-      ? await client.handleRedirectCallback() : null;
+      ? await completeReturn(client) : null;
     const target = safeReturnTo(callback?.returnTo);
     const next = snapshotOf(toSession(callback?.session ?? await client.getSession()));
 
