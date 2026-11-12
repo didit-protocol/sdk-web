@@ -11,6 +11,9 @@ All notable changes to `@didit-protocol/auth-react` are documented in this file.
 - Two `<DiditAuth>` providers on one page stay in agreement: a sign-in or sign-out in one is followed by the other.
 - A token refresh that arrives before the first session read no longer signs the person out.
 - The browser language is read after mount, so server rendering and hydration agree.
+- A return from Didit that does not complete (a step-up another person finished, a cancelled or expired
+  sign-in) no longer shows the person as signed out: whoever was signed in before stays signed in, and the
+  console names the reason.
 
 ### Changed
 

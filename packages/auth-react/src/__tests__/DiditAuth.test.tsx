@@ -57,10 +57,46 @@ describe("<DiditAuth publishableKey>", () => {
     expect(window.location.pathname + window.location.search).toBe("/account");
   });
 
-  it("reads as signed out when the session cannot be restored", async () => {
-    jest.spyOn(console, "error").mockImplementation(() => undefined);
+  it("keeps the person signed in when a return from Didit fails", async () => {
+    const errors = jest.spyOn(console, "error").mockImplementation(() => undefined);
+
+    // A step-up that another person completed: the core refuses it and leaves the earlier session alone.
     window.history.replaceState(null, "", "/callback?code=c&state=s");
+    core.handleRedirectCallback.mockRejectedValue(
+      Object.assign(new Error("A different person completed the sign-in."), { code: "step_up_user_mismatch" })
+    );
+    core.getSession.mockResolvedValue(coreSession);
+
+    render(
+      <DiditAuth publishableKey="pk_test_example">
+        <SignedIn>signed in</SignedIn>
+        <SignedOut>signed out</SignedOut>
+      </DiditAuth>
+    );
+    await screen.findByText("signed in");
+    expect(screen.queryByText("signed out")).toBeNull();
+    expect(errors.mock.calls.map((call) => String(call[0])).join(" ")).toContain("step_up_user_mismatch");
+  });
+
+  it("reads as signed out when a return fails and nobody was signed in", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    window.history.replaceState(null, "", "/callback?error=access_denied&state=s");
     core.handleRedirectCallback.mockRejectedValue(new Error("state mismatch"));
+    core.getSession.mockResolvedValue(null);
+
+    render(
+      <DiditAuth publishableKey="pk_test_example">
+        <SignedIn>signed in</SignedIn>
+        <SignedOut>signed out</SignedOut>
+      </DiditAuth>
+    );
+    await screen.findByText("signed out");
+    expect(screen.queryByText("signed in")).toBeNull();
+  });
+
+  it("reads as signed out when the session cannot be read", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    core.getSession.mockRejectedValue(new Error("offline"));
 
     render(
       <DiditAuth publishableKey="pk_test_example">
