@@ -1,0 +1,71 @@
+{
+  "scenario": "issuer",
+  "origin": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766",
+  "publishableKey": "pk_test_aHR0cDovL2V4YW1wbGUtb3JnYW5pemF0aW9uLTg2MjRlYWI1NzYyMjUwNDlmYThhNDE1MTViYTE3NWQ4LnNhbmRib3guYXV0aC5sb2NhbGhvc3Q6ODc2Ng",
+  "applicationId": "b4b999a5-2c6a-4186-b746-329c000c2756",
+  "discovery": {
+    "issuer": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766",
+    "authorization_endpoint": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766/sign-in",
+    "token_endpoint": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766/token/",
+    "jwks_uri": "http://example-organization-8624eab576225049fa8a41515ba175d8.sandbox.auth.localhost:8766/.well-known/jwks.json",
+    "response_types_supported": [
+      "code"
+    ],
+    "response_modes_supported": [
+      "query"
+    ],
+    "grant_types_supported": [
+      "authorization_code",
+      "refresh_token"
+    ],
+    "subject_types_supported": [
+      "public"
+    ],
+    "id_token_signing_alg_values_supported": [
+      "ES256"
+    ],
+    "token_endpoint_auth_methods_supported": [
+      "none"
+    ],
+    "code_challenge_methods_supported": [
+      "S256"
+    ],
+    "scopes_supported": [
+      "openid",
+      "email",
+      "phone",
+      "profile",
+      "offline_access"
+    ],
+    "claims_supported": [
+      "iss",
+      "aud",
+      "sub",
+      "sid",
+      "auth_time",
+      "nonce",
+      "vendor_data",
+      "amr",
+      "org",
+      "verified",
+      "act",
+      "email",
+      "email_verified",
+      "name",
+      "phone_number"
+    ]
+  },
+  "jwks": {
+    "keys": [
+      {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "J7gCqqh_Hlk68FgiB32t7ZhALloN14bxwGbIpKPVN24",
+        "y": "rDM9hM7HyL_R6U3prHC4AklMRspeCjpu5jO4ASuykls",
+        "kid": "k_ZaRqtTgwSkJR-OapqXk8Zw",
+        "use": "sig",
+        "alg": "ES256"
+      }
+    ]
+  }
+}
