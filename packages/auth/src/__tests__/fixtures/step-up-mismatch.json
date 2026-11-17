@@ -1,0 +1,197 @@
+{
+  "scenario": "step-up-mismatch",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "sessionBefore": "71c7b77c-a4be-40fb-9fbe-418ae39b2e46",
+  "signInUrl": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db/sign-in/?redirect_uri=http%3A%2F%2Flocalhost%3A4174%2Fe2e%2Ffixtures%2Fapp.html&state=k5vfxBDW3kZWlDL06x3KuA&code_challenge=weDonZH47ACvcPKlv2VO4V-smqpe5GxFAf9oyEnpGQs&code_challenge_method=S256&language=en",
+  "callbackUrl": "http://localhost:4174/e2e/fixtures/app.html?code=cWKGg29xYDyAovGBBbUFiedFUH4htuVzpxcGJaULcTQ&state=k5vfxBDW3kZWlDL06x3KuA",
+  "result": {
+    "error": {
+      "code": "step_up_user_mismatch"
+    }
+  },
+  "sessionAfter": "71c7b77c-a4be-40fb-9fbe-418ae39b2e46",
+  "events": [],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "ccdJV_D6U4_6_uBg0YXgyQ",
+          "code_challenge": "3RzmwiN9HGe0HOfdgBKwPFX41Oo8vJKi1kaNb9Npc5s",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "WPsZJnWsx8e7gboUtYNqBcl_YJUzBidBipmfYPySfBY",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "WPsZJnWsx8e7gboUtYNqBcl_YJUzBidBipmfYPySfBY",
+          "email": "person@example.com",
+          "password": "Correct-horse-battery-91"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "code": "GXw-cCEbBk7NmWa8UCKuRyGd7CLProj-ahz4VRXkICg",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "ccdJV_D6U4_6_uBg0YXgyQ"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "GXw-cCEbBk7NmWa8UCKuRyGd7CLProj-ahz4VRXkICg",
+          "code_verifier": "VEc3B_qUcf_7SLxcFWl1npvEjkqjXC4oKAj16MB0Ev8",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "XsIZKikfx1BGee94JZy1A2bEqo45DNsiHaEzY43OD24",
+          "refresh_token": "3_zKRkTl9P7zmjPIltWZxH8F0JifSdIgptENsPI-M7e5DgOGaQoz3JXyu1PPpBkD",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "71c7b77c-a4be-40fb-9fbe-418ae39b2e46"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer XsIZKikfx1BGee94JZy1A2bEqo45DNsiHaEzY43OD24"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "6e911151-6862-4541-851d-23ad36e85ed6",
+          "sid": "71c7b77c-a4be-40fb-9fbe-418ae39b2e46",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T08:14:29.546742Z",
+          "organizations": [
+            {
+              "organization_id": "3eae0a81-3bff-49c1-8398-8cdc02d88280",
+              "organization__name": "Example Team",
+              "role": "member"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer XsIZKikfx1BGee94JZy1A2bEqo45DNsiHaEzY43OD24"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "6e911151-6862-4541-851d-23ad36e85ed6",
+          "sid": "71c7b77c-a4be-40fb-9fbe-418ae39b2e46",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T08:14:29.546742Z",
+          "organizations": [
+            {
+              "organization_id": "3eae0a81-3bff-49c1-8398-8cdc02d88280",
+              "organization__name": "Example Team",
+              "role": "member"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "cWKGg29xYDyAovGBBbUFiedFUH4htuVzpxcGJaULcTQ",
+          "code_verifier": "Fn2UOO3SDSLH8kITHnyA_ue8rBmUlCl3ItV88GP8ADU",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "cPFfghVRpiLAQIadqLUhcSrdKPwVJttt1Z46_cEWcfU",
+          "refresh_token": "KdOJmBjg-X6xHoVW22iWkR7aXeW_bFhSljbFzvOcjqbuTmBg-FS_dHaQNzbwVsF1",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "90149cae-c7a7-4c76-ba5b-103787c7ca27"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer cPFfghVRpiLAQIadqLUhcSrdKPwVJttt1Z46_cEWcfU"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "8b712903-344b-4aec-80f1-79ac52f60edd",
+          "sid": "90149cae-c7a7-4c76-ba5b-103787c7ca27",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "other-person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T08:14:29.969616Z",
+          "organizations": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "path": "session/",
+        "authorization": "Bearer cPFfghVRpiLAQIadqLUhcSrdKPwVJttt1Z46_cEWcfU"
+      },
+      "response": {
+        "status": 204,
+        "body": null
+      }
+    }
+  ]
+}
