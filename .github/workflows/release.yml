@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  github-release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Verify tag and create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+
+          if [ "$PACKAGE_VERSION" != "$VERSION" ]; then
+            echo "package.json has version $PACKAGE_VERSION but the tag says $VERSION" >&2
+            exit 1
+          fi
+
+          awk -v version="$VERSION" '
+            $0 ~ "^## \\[" version "\\]" { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "CHANGELOG.md has no section for $VERSION" >&2
+            exit 1
+          fi
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists - skipping."
+            exit 0
+          fi
+
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "$TAG" \
+            --notes-file release-notes.md
+
+  publish-npm:
+    name: Publish to npm
+    if: vars.NPM_TRUSTED_PUBLISHING == 'true'
+    needs: github-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify package
+        run: |
+          npm test -- --runInBand
+          npm run typecheck
+          npm run test:build-version
+
+      - name: Require the published @didit-protocol/signals
+        run: |
+          set -euo pipefail
+          # npm ci links the workspace copy, so check what an installer will actually get.
+          RANGE=$(node -p "require('./package.json').dependencies['@didit-protocol/signals']")
+          if [ -z "$(npm view "@didit-protocol/signals@$RANGE" version 2>/dev/null)" ]; then
+            echo "No published @didit-protocol/signals matches $RANGE: release it (signals-v* tag) first." >&2
+            exit 1
+          fi
+
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: Publish
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          if npm view "@didit-protocol/sdk-web@$VERSION" version >/dev/null 2>&1; then
+            echo "@didit-protocol/sdk-web@$VERSION is already published - skipping."
+            exit 0
+          fi
+          npm publish --access public

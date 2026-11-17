@@ -1,0 +1,32 @@
+{
+  "scenario": "invalid-redirect",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "result": {
+    "error": {
+      "code": "invalid_redirect_uri",
+      "status": 400
+    }
+  },
+  "events": [],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/not-registered",
+          "state": "xSkrEbh2o1h2StPek59E-w",
+          "code_challenge": "lvIOodnIDXKW47WVD5mpiqJmgaAWO2ENwIokg2htUI4",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "invalid_redirect_uri"
+        }
+      }
+    }
+  ]
+}
