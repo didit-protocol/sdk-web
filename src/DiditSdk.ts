@@ -81,6 +81,7 @@ export class DiditSdk {
   private _url: string | undefined;
   private _modal: VerificationModal | null = null;
   private _errorMessage: string | undefined;
+  private _completed = false;
   private _actionModal: VerificationModal | null = null;
   private _actionModalSettle: ((outcome: TransactionActionOutcome) => void) | null = null;
   /**
@@ -140,6 +141,7 @@ export class DiditSdk {
     }
     // A new launch is not in an error state any more, whatever the last one did.
     this._errorMessage = undefined;
+    this._completed = false;
 
     try {
       const { url } = options;
@@ -406,6 +408,13 @@ export class DiditSdk {
   private handleModalCloseConfirmed(): void {
     SDKLogger.log("Modal close confirmed");
 
+    if (this._completed) {
+      this._modal?.close();
+      this.reset();
+      this.setState("idle");
+      return;
+    }
+
     const sessionData = this.buildSessionData();
 
     this._modal?.close();
@@ -521,6 +530,9 @@ export class DiditSdk {
       this._modal?.close();
       this.reset();
       this.setState("idle");
+    } else {
+      this._completed = true;
+      this._modal?.skipExitConfirmation();
     }
 
     const result: VerificationResult = {
@@ -591,6 +603,7 @@ export class DiditSdk {
   }
 
   private reset(): void {
+    this._completed = false;
     this._sessionId = undefined;
     this._url = undefined;
     this._errorMessage = undefined;
