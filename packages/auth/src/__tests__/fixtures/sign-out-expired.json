@@ -1,0 +1,135 @@
+{
+  "scenario": "sign-out-expired",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "session": "a48fb057-e330-411e-adc4-595a653a29ce",
+  "afterSignOut": null,
+  "sessionRevoked": true,
+  "events": [
+    "SIGNED_OUT"
+  ],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "kTQFfVe7RxDOBsDLOINL8w",
+          "code_challenge": "sctpZo1tF71qHQSR42VLedRWGTk9fXl5JjzYw00s2bk",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "wmBx_D6oFrvtyTBFcwGRWBUAgCllsghv_-KqZFAn3V8",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "wmBx_D6oFrvtyTBFcwGRWBUAgCllsghv_-KqZFAn3V8",
+          "email": "person@example.com",
+          "password": "Correct-horse-battery-91"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "code": "kpNRnOOE3GOeJILpawcKhPX4HSysfQkbDG384ycSKB4",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "kTQFfVe7RxDOBsDLOINL8w"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "kpNRnOOE3GOeJILpawcKhPX4HSysfQkbDG384ycSKB4",
+          "code_verifier": "1LNU5_g50TiqG03qcYeO7J_gIWOr4nG78FE9fnxzpiM",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "jPDNmw8aQsStEUVSKTBmzErdLUuJkAMyhcXJ_k8oyOM",
+          "refresh_token": "NcpQHxdo4zL8G79CMBVsTaLZUJp_A2FR5S1TdyzvwVNV7Xp9Ix-EWfl0NtPOY9tF",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "a48fb057-e330-411e-adc4-595a653a29ce"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer jPDNmw8aQsStEUVSKTBmzErdLUuJkAMyhcXJ_k8oyOM"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "6e911151-6862-4541-851d-23ad36e85ed6",
+          "sid": "a48fb057-e330-411e-adc4-595a653a29ce",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T09:16:48.855146Z",
+          "organizations": [
+            {
+              "organization_id": "3eae0a81-3bff-49c1-8398-8cdc02d88280",
+              "organization__name": "Example Team",
+              "role": "member"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "refresh_token",
+          "refresh_token": "NcpQHxdo4zL8G79CMBVsTaLZUJp_A2FR5S1TdyzvwVNV7Xp9Ix-EWfl0NtPOY9tF"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "nkqv2ps27xzkWHTfVP-_PL69ikczWuJp8Ld_0wqnlKk",
+          "refresh_token": "eT92P9HoKD8Ngoz8jA7xWS2_U1S7GBz0BYIXpWPPC2HDy8NwntlokLeVuca4E0UM",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "a48fb057-e330-411e-adc4-595a653a29ce"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "path": "session/",
+        "authorization": "Bearer nkqv2ps27xzkWHTfVP-_PL69ikczWuJp8Ld_0wqnlKk"
+      },
+      "response": {
+        "status": 204,
+        "body": null
+      }
+    }
+  ]
+}
