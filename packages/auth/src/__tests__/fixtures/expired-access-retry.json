@@ -1,0 +1,164 @@
+{
+  "scenario": "expired-access-retry",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "result": "person@example.com",
+  "events": [],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "EJjyFBGcQae5b4KjuwdiWA",
+          "code_challenge": "PL1p5A5AtEYnZW19QOcyQtwtvnbu5ukoE2dmDHxN5OU",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "Slpem3JjHLVxJ7rS7kZr2N46v8lvV_M_MhsfL4X5uxc",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "Slpem3JjHLVxJ7rS7kZr2N46v8lvV_M_MhsfL4X5uxc",
+          "email": "person@example.com",
+          "password": "Correct-horse-battery-91"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "code": "Sr5S1X8W9Xfshm1ctZwTZdgMyjHviohz_vlocrCzR3w",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "EJjyFBGcQae5b4KjuwdiWA"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "Sr5S1X8W9Xfshm1ctZwTZdgMyjHviohz_vlocrCzR3w",
+          "code_verifier": "7-moei0Y1yYXwAenrUmdHJG2fjNgyCOeJZcMNj7SjpA",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "lRk6Gexq75VneWB2MB5FMiW2cVkxzVik82NgCpJUbIc",
+          "refresh_token": "X1wS82F715Y3WnpRRHdPYsbO--Ffytrg3COh63LPl6qJVjF-V-FKStKdXHRlRjrM",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "79006148-1fe3-4a59-8186-02ba7fbdbc52"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer lRk6Gexq75VneWB2MB5FMiW2cVkxzVik82NgCpJUbIc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "6e911151-6862-4541-851d-23ad36e85ed6",
+          "sid": "79006148-1fe3-4a59-8186-02ba7fbdbc52",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T08:14:30.879097Z",
+          "organizations": [
+            {
+              "organization_id": "3eae0a81-3bff-49c1-8398-8cdc02d88280",
+              "organization__name": "Example Team",
+              "role": "member"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer lRk6Gexq75VneWB2MB5FMiW2cVkxzVik82NgCpJUbIc"
+      },
+      "response": {
+        "status": 401,
+        "body": {
+          "detail": "invalid_token"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "refresh_token",
+          "refresh_token": "X1wS82F715Y3WnpRRHdPYsbO--Ffytrg3COh63LPl6qJVjF-V-FKStKdXHRlRjrM"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "tkp8qIFL3pV0vgh-3uSmqiH5hXBop31ccdEXqQwCWck",
+          "refresh_token": "5cs8TbbnLW5H77fw3Y1G6byz-LLowQxRg7ytidrG6t4J_VwwTc0nZ3L5t5RMCRHu",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "79006148-1fe3-4a59-8186-02ba7fbdbc52"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer tkp8qIFL3pV0vgh-3uSmqiH5hXBop31ccdEXqQwCWck"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "6e911151-6862-4541-851d-23ad36e85ed6",
+          "sid": "79006148-1fe3-4a59-8186-02ba7fbdbc52",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T08:14:30.879097Z",
+          "organizations": [
+            {
+              "organization_id": "3eae0a81-3bff-49c1-8398-8cdc02d88280",
+              "organization__name": "Example Team",
+              "role": "member"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

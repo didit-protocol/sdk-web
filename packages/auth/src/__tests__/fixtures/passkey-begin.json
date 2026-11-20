@@ -1,0 +1,54 @@
+{
+  "scenario": "passkey-begin",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "result": {
+    "error": {
+      "code": "passkey_unavailable"
+    }
+  },
+  "events": [],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "303R-38oAjOLbicfTkBk-Q",
+          "code_challenge": "OdICXeFU6z4kzLvrryMBvvZsfFSXlJCVuVpK-f8B06s",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "b5DfjqnJuSvOdKT-L2f5AV0TOn9xtE4GUkbxJmMu1dI",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "passkeys/begin/",
+        "body": {
+          "transaction": "b5DfjqnJuSvOdKT-L2f5AV0TOn9xtE4GUkbxJmMu1dI"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "challenge": "xBH_zgnu1nnziQPUxZSFfc-BUCVxDFPVGKVhAvAFND4",
+          "options": {
+            "challenge": "kbzseSY1D0Ij0r1y2VvZjz6t1aaxVL-h2hby5pqeHE8eLjtAJVvMq0b-eYoXULynVdlVjTjzWCqjMEj4YR35ZQ",
+            "timeout": 60000,
+            "rpId": "localhost",
+            "allowCredentials": [],
+            "userVerification": "required"
+          }
+        }
+      }
+    }
+  ]
+}
