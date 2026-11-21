@@ -381,7 +381,7 @@ export interface BankLinkOptions {
    */
   baseUrl?: string;
   /**
-   * The API origin asked, before any frame exists, whether this token may be embedded on this page.
+   * The API origin asked, before any frame exists, whether this token (or resume code) may be embedded on this page.
    * @default "https://verification.didit.me"
    */
   apiBaseUrl?: string;

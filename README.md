@@ -511,6 +511,7 @@ A hash route in your page's address is kept in the return URL; the hosted page a
 const { resumed } = await DiditSdk.shared.resumeBankLink({ onSuccess, onExit });
 ```
 
+Like `openBankLink`, it first asks the API (with the resume code, which the call does not consume) whether the page may embed the flow, and refuses in the same way.
 It reopens the flow at its state on Didit's servers and fires `onSuccess` or `onExit` once, with `resumed: true`.
 The result never travels between windows: it always comes from Didit's servers.
 

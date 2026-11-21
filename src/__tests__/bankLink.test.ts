@@ -408,15 +408,59 @@ describe("resumeBankLink", () => {
   });
 });
 
+describe("frame policy for a resume", () => {
+  const record = () =>
+    window.sessionStorage.setItem(
+      BANK_LINK_RESUME_STORAGE_KEY,
+      JSON.stringify({ v: 1, instance_id: "6e1b8c34-7d02-4f95-a3c6-0b9e5d2a7f18", link_ref: null, container: null, ts: Date.now() })
+    );
+
+  it("asks with the resume code, then loads the frame at the answered frame_id with the code in the fragment", async () => {
+    record();
+    window.history.replaceState(null, "", "/return?didit_resume=rc_abcdefgh12");
+    await DiditSdk.shared.resumeBankLink();
+    await flush();
+    const [url, body] = jest.spyOn(bankLinkRuntime, "fetchPolicy").mock.calls[0];
+    expect(url).toBe("https://verification.didit.me/v3/bank/link-session/frame-policy/");
+    expect(body).toEqual({ resume_code: "rc_abcdefgh12" });
+    expect(new URL(frame().src).pathname).toBe(`/bank/frame/${FRAME_ID}`);
+    expect(fragment().get("resume_code")).toBe("rc_abcdefgh12");
+    expect(fragment().get("instance_id")).toBe("6e1b8c34-7d02-4f95-a3c6-0b9e5d2a7f18");
+  });
+
+  it("applies the same refusals: invalid code, origin not allowed, network", async () => {
+    const cases: Array<[() => void, unknown[]]> = [
+      [() => jest.spyOn(bankLinkRuntime, "fetchPolicy").mockResolvedValue({ valid: false }),
+        [{ name: "error", code: "invalid_token" }, { name: "exit", reason: "not_allowed", step: null }]],
+      [() => jest.spyOn(bankLinkRuntime, "fetchPolicy").mockResolvedValue({ valid: true, frame_id: FRAME_ID, allowed_origins: ["https://other.example"] }),
+        [{ name: "error", code: "origin_not_allowed" }, { name: "exit", reason: "not_allowed", step: null }]],
+      [() => jest.spyOn(bankLinkRuntime, "fetchPolicy").mockRejectedValue(new Error("offline")),
+        [{ name: "error", code: "network" }, { name: "exit", reason: "failed", step: null }]]
+    ];
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    for (const [arrange, expected] of cases) {
+      DiditSdk.reset();
+      record();
+      window.history.replaceState(null, "", "/return?didit_resume=rc_abcdefgh12");
+      arrange();
+      const onEvent = jest.fn();
+      await DiditSdk.shared.resumeBankLink({ onEvent });
+      await flush();
+      expect(document.querySelector("iframe")).toBeNull();
+      expect(onEvent.mock.calls.map((c) => c[0])).toEqual(expected);
+    }
+  });
+});
+
 describe("frame policy", () => {
   const policy = () => jest.spyOn(bankLinkRuntime, "fetchPolicy");
 
   it("asks the API with the token, then loads the frame at the answered frame_id, in state opening until opened", async () => {
     const handle = await open({ token: TOKEN });
     expect(policy()).toHaveBeenCalledTimes(1);
-    const [url, token] = policy().mock.calls[0];
+    const [url, body] = policy().mock.calls[0];
     expect(url).toBe("https://verification.didit.me/v3/bank/link-session/frame-policy/");
-    expect(token).toBe(TOKEN);
+    expect(body).toEqual({ token: TOKEN });
     const src = new URL(frame().src);
     expect(src.pathname).toBe(`/bank/frame/${FRAME_ID}`);
     expect(fragment().get("t")).toBe(TOKEN);

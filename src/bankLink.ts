@@ -44,11 +44,11 @@ export const bankLinkRuntime = {
   navigate: (url: string): void => window.location.assign(url),
   now: (): number => Date.now(),
   /** The frame-policy call: JSON in, the parsed JSON out; it throws on a network error, a timeout or a non-2xx answer. */
-  fetchPolicy: async (url: string, token: string, signal: AbortSignal): Promise<unknown> => {
+  fetchPolicy: async (url: string, body: { token: string } | { resume_code: string }, signal: AbortSignal): Promise<unknown> => {
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify(body),
       credentials: "omit",
       referrerPolicy: "no-referrer",
       signal
@@ -357,7 +357,7 @@ function readResumeRecord(): ResumeRecord | null {
  */
 export function buildBankLinkFrameUrl(input: {
   origin: string;
-  /** The path segment: the `frame_id` of the policy answer, or the instance id on a resume. */
+  /** The path segment: the `frame_id` of the policy answer. */
   framePath: string;
   instanceId: string;
   secret: { token: string } | { resumeCode: string };
@@ -399,8 +399,8 @@ function isTouchFirstDevice(): boolean {
 interface SessionInit {
   options: BankLinkOptions | BankLinkResumeOptions;
   origin: string;
-  /** The API origin of the frame-policy call; null on a resume, which has no token to ask with. */
-  apiOrigin: string | null;
+  /** The API origin of the frame-policy call. */
+  apiOrigin: string;
   instanceId: string;
   secret: { token: string } | { resumeCode: string };
   token: string | null;
@@ -453,14 +453,9 @@ class BankLinkSession implements BankLinkHandle {
   /**
    * Asks the API whether this token may be embedded on this page, then loads the frame at the path of the
    * answer's `frame_id`. Any refusal or failure ends the flow with events and no frame, never a hung
-   * "opening" state. A resume has no token to ask with: it loads the frame with its resume code, and the
-   * frame's own server route enforces the origins.
+   * "opening" state. A resume asks with its resume code, which the call does not consume.
    */
   async start(): Promise<void> {
-    if (!this.init.apiOrigin || !("token" in this.init.secret)) {
-      this.loadFrame(this.init.instanceId);
-      return;
-    }
     const controller = new AbortController();
     this.policyAbort = controller;
     const timer = window.setTimeout(() => controller.abort(), BANK_LINK_FRAME_POLICY_TIMEOUT_MS);
@@ -468,7 +463,7 @@ class BankLinkSession implements BankLinkHandle {
     try {
       answer = await bankLinkRuntime.fetchPolicy(
         `${this.init.apiOrigin}${BANK_LINK_FRAME_POLICY_PATH}`,
-        this.init.secret.token,
+        "token" in this.init.secret ? { token: this.init.secret.token } : { resume_code: this.init.secret.resumeCode },
         controller.signal
       );
     } catch {
@@ -783,6 +778,7 @@ export function resumeBankLink(options: BankLinkResumeOptions = {}): Promise<Ban
       // a browser that refuses to rewrite the address still resumes
     }
     const origin = resolveBankLinkOrigin(options.baseUrl);
+    const apiOrigin = resolveBankLinkOrigin(options.apiBaseUrl, "apiBaseUrl", BANK_LINK_DEFAULT_API_ORIGIN);
     const containerOption = options.container ?? record.container ?? undefined;
     let element: HTMLElement | null = null;
     try {
@@ -794,7 +790,7 @@ export function resumeBankLink(options: BankLinkResumeOptions = {}): Promise<Ban
     const session = new BankLinkSession({
       options,
       origin,
-      apiOrigin: null,
+      apiOrigin,
       instanceId: record.instance_id,
       secret: { resumeCode: code },
       token: null,

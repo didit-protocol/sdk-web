@@ -93,7 +93,9 @@ async function serveFramePolicy(request, response) {
     response.end();
     return;
   }
-  const { token } = JSON.parse(await readBody(request));
+  const body = JSON.parse(await readBody(request));
+  // A resume code is asked the same way (and not consumed): `_invalid` codes are unknown, `_otherorigin` ones are not allowed here.
+  const token = body.token ?? body.resume_code;
   let answer = { valid: true, frame_id: "frame_stub_0001", allowed_origins: [`http://${HOST}:${PORT}`] };
   if (token.includes("_invalid")) answer = { valid: false, frame_id: null, allowed_origins: [] };
   if (token.includes("_otherorigin")) answer.allowed_origins = ["https://other.example"];
