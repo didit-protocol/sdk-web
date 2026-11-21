@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import type { BankLinkHandle } from "../types";
 import { DiditSdk } from "../DiditSdk";
 import { DiditBankLinkError, bankLinkRuntime, buildBankLinkFrameUrl, parseBankLinkToken, readBankLinkEvent } from "../bankLink";
 import { BANK_LINK_RESUME_STORAGE_KEY } from "../constants";
@@ -22,11 +23,26 @@ function msg(name: string, data: unknown = {}, linkRef?: string): unknown {
   return { type: `didit:bank_link:${name}`, v: 1, data, timestamp: 1, ...(linkRef ? { link_ref: linkRef } : {}) };
 }
 
+const FRAME_ID = "frame_0123456789ab";
+const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+/** Opens a link and waits for the frame-policy answer (the default one allows this page). */
+async function open(options: Parameters<typeof DiditSdk.shared.openBankLink>[0]): Promise<BankLinkHandle> {
+  const handle = DiditSdk.shared.openBankLink(options);
+  await flush();
+  return handle;
+}
+
 function fragment(): URLSearchParams {
   return new URLSearchParams(new URL(frame().src).hash.slice(1));
 }
 
 beforeEach(() => {
+  jest.spyOn(bankLinkRuntime, "fetchPolicy").mockResolvedValue({
+    valid: true,
+    frame_id: FRAME_ID,
+    allowed_origins: [window.location.origin]
+  });
   DiditSdk.reset();
   document.body.innerHTML = '<div id="bank"></div>';
   window.sessionStorage.clear();
@@ -39,10 +55,10 @@ afterEach(() => {
 });
 
 describe("return URL", () => {
-  it("keeps a hash route in the return URL", () => {
+  it("keeps a hash route in the return URL", async () => {
     const navigate = jest.spyOn(bankLinkRuntime, "navigate").mockImplementation(() => undefined);
     window.history.replaceState(null, "", "/app?x=1#/checkout");
-    DiditSdk.shared.openBankLink({ token: TOKEN });
+    await open({ token: TOKEN });
     send(msg("redirect_request", { request_id: "r1", resume_code: "rc_abcdefgh12" }));
     const params = new URLSearchParams(new URL(navigate.mock.calls[0][0]).hash.slice(1));
     expect(params.get("return")).toBe(`${window.location.origin}/app?x=1#/checkout`);
@@ -50,13 +66,13 @@ describe("return URL", () => {
 });
 
 describe("option validation", () => {
-  it("accepts a client token and refuses everything else before any frame exists", () => {
+  it("accepts a client token and refuses everything else before any frame exists", async () => {
     for (const bad of ["blt_x", "", "bearer abc", "https://evil.example/bank/link/blu_0123456789abcdefghij", undefined, 5]) {
       expect(() => DiditSdk.shared.openBankLink({ token: bad as string })).toThrow(DiditBankLinkError);
     }
     expect(document.querySelector("iframe")).toBeNull();
     try {
-      DiditSdk.shared.openBankLink({ token: "blt_short" });
+      await open({ token: "blt_short" });
     } catch (error) {
       expect((error as DiditBankLinkError).code).toBe("invalid_token");
       expect((error as Error).message).not.toContain("blt_short");
@@ -81,8 +97,8 @@ describe("option validation", () => {
 });
 
 describe("frame and token", () => {
-  it("puts the token in the fragment only, never the path or query, and sets no referrer", () => {
-    DiditSdk.shared.openBankLink({ token: TOKEN, locale: "es", theme: "dark" });
+  it("puts the token in the fragment only, never the path or query, and sets no referrer", async () => {
+    await open({ token: TOKEN, locale: "es", theme: "dark" });
     const url = new URL(frame().src);
     expect(url.origin).toBe(ORIGIN);
     expect(url.search).toBe("");
@@ -100,12 +116,12 @@ describe("frame and token", () => {
     expect(JSON.stringify({ ...window.sessionStorage })).not.toContain(TOKEN);
   });
 
-  it("renders inline in a container and labels the modal in the link language", () => {
-    DiditSdk.shared.openBankLink({ token: TOKEN, container: "#bank" });
+  it("renders inline in a container and labels the modal in the link language", async () => {
+    await open({ token: TOKEN, container: "#bank" });
     expect(document.querySelector("#bank iframe")).not.toBeNull();
     expect(fragment().get("presentation")).toBe("inline");
     DiditSdk.reset();
-    DiditSdk.shared.openBankLink({ token: TOKEN, locale: "es" });
+    await open({ token: TOKEN, locale: "es" });
     expect(document.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("Conexión bancaria Didit");
   });
 
@@ -115,7 +131,7 @@ describe("frame and token", () => {
 
   it("builds a resume URL with the code in the fragment", () => {
     const url = buildBankLinkFrameUrl({
-      origin: ORIGIN, instanceId: "6e1b8c34-7d02-4f95-a3c6-0b9e5d2a7f18", secret: { resumeCode: "rc_abcdefgh" },
+      origin: ORIGIN, framePath: FRAME_ID, instanceId: "6e1b8c34-7d02-4f95-a3c6-0b9e5d2a7f18", secret: { resumeCode: "rc_abcdefgh" },
       parentOrigin: "https://app.example.com", presentation: "modal"
     });
     expect(new URL(url).search).toBe("");
@@ -124,9 +140,9 @@ describe("frame and token", () => {
 });
 
 describe("origin and source checks", () => {
-  it("ignores a message from another origin, a look-alike origin or another window", () => {
+  it("ignores a message from another origin, a look-alike origin or another window", async () => {
     const onEvent = jest.fn();
-    DiditSdk.shared.openBankLink({ token: TOKEN, onEvent });
+    await open({ token: TOKEN, onEvent });
     const opened = msg("opened", { link_id: "l1", mode: "connect", access: "ongoing" });
     send(opened, { origin: "https://evil.example" });
     send(opened, { origin: "https://verify.didit.me.evil.example" });
@@ -138,18 +154,18 @@ describe("origin and source checks", () => {
     expect(onEvent).toHaveBeenCalledTimes(1);
   });
 
-  it("ignores a message from the exact origin when it comes from another instance's frame", () => {
+  it("ignores a message from the exact origin when it comes from another instance's frame", async () => {
     const onEvent = jest.fn();
-    DiditSdk.shared.openBankLink({ token: TOKEN, onEvent });
+    await open({ token: TOKEN, onEvent });
     const stranger = document.createElement("iframe");
     document.body.appendChild(stranger);
     send(msg("opened", { link_id: "l1", mode: "connect", access: "ongoing" }), { source: stranger.contentWindow });
     expect(onEvent).not.toHaveBeenCalled();
   });
 
-  it("drops a wrong protocol version, a wrong prefix and a link_ref that differs from the first one", () => {
+  it("drops a wrong protocol version, a wrong prefix and a link_ref that differs from the first one", async () => {
     const onEvent = jest.fn();
-    DiditSdk.shared.openBankLink({ token: TOKEN, onEvent });
+    await open({ token: TOKEN, onEvent });
     send({ ...(msg("opened", { link_id: "l1", mode: "connect", access: "ongoing" }) as object), v: 2 });
     send({ ...(msg("opened", { link_id: "l1", mode: "connect", access: "ongoing" }) as object), type: "didit:other:opened" });
     expect(onEvent).not.toHaveBeenCalled();
@@ -161,9 +177,9 @@ describe("origin and source checks", () => {
 });
 
 describe("event mapping", () => {
-  it("maps every event name and strips keys outside the allow-list", () => {
+  it("maps every event name and strips keys outside the allow-list", async () => {
     const onEvent = jest.fn();
-    DiditSdk.shared.openBankLink({ token: TOKEN, onEvent });
+    await open({ token: TOKEN, onEvent });
     send(msg("opened", { link_id: "l1", mode: "renew", access: "one_time", presentation: "modal", token: "leak", email: "a@b.c" }));
     send(msg("consent_shown", { link_id: "l1", consent_version: "2" }));
     send(msg("consent_accepted", { link_id: "l1", consent_version: "2" }));
@@ -190,11 +206,11 @@ describe("event mapping", () => {
     expect(readBankLinkEvent("exit", { reason: "closed" })).toEqual({ name: "exit", reason: "closed", step: null });
   });
 
-  it("fires onSuccess once, with the same payload as the success event, and never an exit after it", () => {
+  it("fires onSuccess once, with the same payload as the success event, and never an exit after it", async () => {
     const onSuccess = jest.fn();
     const onExit = jest.fn();
     const onEvent = jest.fn();
-    const handle = DiditSdk.shared.openBankLink({ token: TOKEN, onSuccess, onExit, onEvent });
+    const handle = await open({ token: TOKEN, onSuccess, onExit, onEvent });
     send(msg("opened", { link_id: "l1", mode: "connect", access: "ongoing" }));
     expect(handle.state).toBe("open");
     send(msg("success", { link_id: "l1", connection_id: "c1", check_id: null }));
@@ -210,9 +226,9 @@ describe("event mapping", () => {
     expect(onEvent.mock.calls.map((c) => (c[0] as { name: string }).name)).toEqual(["opened", "success"]);
   });
 
-  it("fires onExit once for a terminal exit, and for a close request or handle.close()", () => {
+  it("fires onExit once for a terminal exit, and for a close request or handle.close()", async () => {
     const onExit = jest.fn();
-    DiditSdk.shared.openBankLink({ token: TOKEN, onExit });
+    await open({ token: TOKEN, onExit });
     send(msg("exit", { reason: "expired", step: "consent" }));
     send(msg("exit", { reason: "failed", step: null }));
     expect(onExit).toHaveBeenCalledTimes(1);
@@ -220,7 +236,7 @@ describe("event mapping", () => {
 
     DiditSdk.reset();
     const second = jest.fn();
-    const handle = DiditSdk.shared.openBankLink({ token: TOKEN, onExit: second });
+    const handle = await open({ token: TOKEN, onExit: second });
     send(msg("opened", { link_id: "l9", mode: "connect", access: "one_time" }));
     handle.close();
     handle.close();
@@ -228,18 +244,18 @@ describe("event mapping", () => {
     expect(second).toHaveBeenCalledWith({ reason: "closed", step: null, link_id: "l9" });
   });
 
-  it("a host callback that throws does not break the flow", () => {
+  it("a host callback that throws does not break the flow", async () => {
     const onEvent = jest.fn(() => { throw new Error("host bug"); });
     const onSuccess = jest.fn();
-    DiditSdk.shared.openBankLink({ token: TOKEN, onEvent, onSuccess });
+    await open({ token: TOKEN, onEvent, onSuccess });
     send(msg("success", { link_id: "l1" }));
     expect(onSuccess).toHaveBeenCalledTimes(1);
   });
 
-  it("a second openBankLink closes the first with exit closed", () => {
+  it("a second openBankLink closes the first with exit closed", async () => {
     const first = jest.fn();
-    const a = DiditSdk.shared.openBankLink({ token: TOKEN, onExit: first });
-    const b = DiditSdk.shared.openBankLink({ token: TOKEN });
+    const a = await open({ token: TOKEN, onExit: first });
+    const b = await open({ token: TOKEN });
     expect(first).toHaveBeenCalledWith({ reason: "closed", step: null });
     expect(a.state).toBe("closed");
     expect(b.state).not.toBe("closed");
@@ -258,11 +274,11 @@ describe("the bank hop", () => {
     return { closed: false, close: jest.fn(), location: { href: "" }, opener: {} };
   }
 
-  it("opens the popup, reports it to the exact origin, navigates it to an https address and reports when it closes", () => {
+  it("opens the popup, reports it to the exact origin, navigates it to an https address and reports when it closes", async () => {
+    const onEvent = jest.fn();
+    await open({ token: TOKEN, onEvent });
     jest.useFakeTimers();
     try {
-      const onEvent = jest.fn();
-      DiditSdk.shared.openBankLink({ token: TOKEN, onEvent });
       const posted = listenToFrame();
       const popup = fakePopup();
       jest.spyOn(bankLinkRuntime, "openPopup").mockReturnValue(popup as unknown as Window);
@@ -284,9 +300,9 @@ describe("the bank hop", () => {
     }
   });
 
-  it("reports blocked and raises error popup_blocked when the browser blocks the popup", () => {
+  it("reports blocked and raises error popup_blocked when the browser blocks the popup", async () => {
     const onEvent = jest.fn();
-    DiditSdk.shared.openBankLink({ token: TOKEN, onEvent });
+    await open({ token: TOKEN, onEvent });
     const posted = listenToFrame();
     jest.spyOn(bankLinkRuntime, "openPopup").mockReturnValue(null);
     send(msg("open_bank", { request_id: "r1" }));
@@ -294,8 +310,8 @@ describe("the bank hop", () => {
     expect(onEvent).toHaveBeenCalledWith({ name: "error", code: "popup_blocked" });
   });
 
-  it("does not try a popup on a touch-first device", () => {
-    DiditSdk.shared.openBankLink({ token: TOKEN });
+  it("does not try a popup on a touch-first device", async () => {
+    await open({ token: TOKEN });
     const posted = listenToFrame();
     const openPopup = jest.spyOn(bankLinkRuntime, "openPopup");
     window.matchMedia = ((q: string) => ({ matches: q.includes("coarse") })) as never;
@@ -310,10 +326,10 @@ describe("the bank hop", () => {
     expect(posted.mock.calls[0][0]).toMatchObject({ data: { state: "blocked" } });
   });
 
-  it("redirects the page on a redirect request, stores a record without the token, and reports no exit", () => {
+  it("redirects the page on a redirect request, stores a record without the token, and reports no exit", async () => {
     const navigate = jest.spyOn(bankLinkRuntime, "navigate").mockImplementation(() => undefined);
     const onExit = jest.fn();
-    DiditSdk.shared.openBankLink({ token: TOKEN, container: "#bank", onExit });
+    await open({ token: TOKEN, container: "#bank", onExit });
     send(msg("redirect_request", { request_id: "r1", resume_code: "rc_abcdefgh12" }, "ref-1"));
     expect(navigate).toHaveBeenCalledTimes(1);
     const target = new URL(navigate.mock.calls[0][0]);
@@ -331,9 +347,9 @@ describe("the bank hop", () => {
     expect(document.querySelector("iframe")).toBeNull();
   });
 
-  it("continues with the token when the frame gave no resume code", () => {
+  it("continues with the token when the frame gave no resume code", async () => {
     const navigate = jest.spyOn(bankLinkRuntime, "navigate").mockImplementation(() => undefined);
-    DiditSdk.shared.openBankLink({ token: TOKEN });
+    await open({ token: TOKEN });
     send(msg("redirect_request", { request_id: "r1" }));
     expect(new URLSearchParams(new URL(navigate.mock.calls[0][0]).hash.slice(1)).get("t")).toBe(TOKEN);
   });
@@ -389,5 +405,119 @@ describe("resumeBankLink", () => {
     send(msg("exit", { reason: "cancelled", step: "bank_hop" }));
     expect(onExit).toHaveBeenCalledWith({ reason: "cancelled", step: "bank_hop", resumed: true });
     expect(document.querySelector("iframe")).toBeNull();
+  });
+});
+
+describe("frame policy", () => {
+  const policy = () => jest.spyOn(bankLinkRuntime, "fetchPolicy");
+
+  it("asks the API with the token, then loads the frame at the answered frame_id, in state opening until opened", async () => {
+    const handle = await open({ token: TOKEN });
+    expect(policy()).toHaveBeenCalledTimes(1);
+    const [url, token] = policy().mock.calls[0];
+    expect(url).toBe("https://verification.didit.me/v3/bank/link-session/frame-policy/");
+    expect(token).toBe(TOKEN);
+    const src = new URL(frame().src);
+    expect(src.pathname).toBe(`/bank/frame/${FRAME_ID}`);
+    expect(fragment().get("t")).toBe(TOKEN);
+    expect(fragment().get("instance_id")).toMatch(/^[0-9a-f-]{36}$/);
+    expect(handle.state).toBe("opening");
+    send(msg("opened", { link_id: "l1", mode: "connect", access: "ongoing" }));
+    expect(handle.state).toBe("open");
+  });
+
+  it("uses apiBaseUrl for the call and validates it", async () => {
+    await open({ token: TOKEN, apiBaseUrl: "https://api.example.test/" });
+    expect(policy().mock.calls[0][0]).toBe("https://api.example.test/v3/bank/link-session/frame-policy/");
+    expect(() => DiditSdk.shared.openBankLink({ token: TOKEN, apiBaseUrl: "http://api.example.test" })).toThrow(/apiBaseUrl/);
+  });
+
+  it("opens no frame for an invalid token: error invalid_token, then exit not_allowed", async () => {
+    policy().mockResolvedValue({ valid: false });
+    const onEvent = jest.fn();
+    const onExit = jest.fn();
+    const handle = await open({ token: TOKEN, onEvent, onExit });
+    expect(document.querySelector("iframe")).toBeNull();
+    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([
+      { name: "error", code: "invalid_token" },
+      { name: "exit", reason: "not_allowed", step: null }
+    ]);
+    expect(onExit).toHaveBeenCalledWith({ reason: "not_allowed", step: null });
+    expect(handle.state).toBe("closed");
+  });
+
+  it("opens no frame when this page's origin is not allowed, and warns the developer once with the origin", async () => {
+    policy().mockResolvedValue({ valid: true, frame_id: FRAME_ID, allowed_origins: ["https://other.example"] });
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onEvent = jest.fn();
+    const onExit = jest.fn();
+    await open({ token: TOKEN, onEvent, onExit });
+    expect(document.querySelector("iframe")).toBeNull();
+    expect(onEvent.mock.calls.map((c) => (c[0] as { code?: string }).code ?? "exit")).toEqual(["origin_not_allowed", "exit"]);
+    expect(onExit).toHaveBeenCalledWith({ reason: "not_allowed", step: null });
+    expect(warn).toHaveBeenCalledTimes(1);
+    const text = String(warn.mock.calls[0][0]);
+    expect(text).toContain(window.location.origin);
+    expect(text).toContain("allowed_origins");
+    expect(text).not.toContain(TOKEN);
+  });
+
+  it("ends with error network and exit on a failed call, a timeout or an answer of the wrong shape", async () => {
+    for (const failure of [
+      () => policy().mockRejectedValue(new Error("offline")),
+      () => policy().mockRejectedValue(new DOMException("aborted", "AbortError")),
+      () => policy().mockResolvedValue({ valid: true, frame_id: "../x", allowed_origins: [window.location.origin] }),
+      () => policy().mockResolvedValue("nope")
+    ]) {
+      DiditSdk.reset();
+      failure();
+      const onEvent = jest.fn();
+      const handle = await open({ token: TOKEN, onEvent });
+      expect(document.querySelector("iframe")).toBeNull();
+      expect(onEvent.mock.calls.map((c) => c[0])).toEqual([
+        { name: "error", code: "network" },
+        { name: "exit", reason: "failed", step: null }
+      ]);
+      expect(handle.state).toBe("closed");
+    }
+  });
+
+  it("aborts the call and shows nothing when the host closes before the answer", async () => {
+    let release: (value: unknown) => void = () => undefined;
+    let signal: AbortSignal | undefined;
+    policy().mockImplementation((_url, _token, s) => {
+      signal = s;
+      return new Promise((resolve) => { release = resolve; });
+    });
+    const onExit = jest.fn();
+    const handle = DiditSdk.shared.openBankLink({ token: TOKEN, onExit });
+    expect(handle.state).toBe("opening");
+    handle.close();
+    expect(signal?.aborted).toBe(true);
+    release({ valid: true, frame_id: FRAME_ID, allowed_origins: [window.location.origin] });
+    await flush();
+    expect(document.querySelector("iframe")).toBeNull();
+    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(onExit).toHaveBeenCalledWith({ reason: "closed", step: null });
+  });
+
+  it("sends no credentials: the default call is JSON only, without cookies or a referrer", async () => {
+    const calls: RequestInit[] = [];
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (_url: string, init: RequestInit) => {
+      calls.push(init);
+      return { ok: true, json: async () => ({ valid: false }) };
+    }) as never;
+    try {
+      jest.restoreAllMocks();
+      DiditSdk.shared.openBankLink({ token: TOKEN });
+      await flush();
+    } finally {
+      globalThis.fetch = real;
+    }
+    expect(calls[0].credentials).toBe("omit");
+    expect(calls[0].referrerPolicy).toBe("no-referrer");
+    expect(calls[0].headers).toEqual({ "Content-Type": "application/json" });
+    expect(calls[0].body).toBe(JSON.stringify({ token: TOKEN }));
   });
 });

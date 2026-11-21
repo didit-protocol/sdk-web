@@ -77,8 +77,33 @@ async function serveEventLane(request, response, pathname) {
   return true;
 }
 
+/**
+ * The Bank Link frame-policy call, POST /v3/bank/link-session/frame-policy/ (cross-origin from the host page, so it
+ * answers the preflight). The token picks the answer: `_invalid` is an unknown link, `_otherorigin` allows only
+ * another origin, anything else is allowed for the host page's origin.
+ */
+async function serveFramePolicy(request, response) {
+  const cors = {
+    "Access-Control-Allow-Origin": request.headers.origin ?? "*",
+    "Access-Control-Allow-Headers": "content-type",
+    "Access-Control-Allow-Methods": "POST"
+  };
+  if (request.method === "OPTIONS") {
+    response.writeHead(204, cors);
+    response.end();
+    return;
+  }
+  const { token } = JSON.parse(await readBody(request));
+  let answer = { valid: true, frame_id: "frame_stub_0001", allowed_origins: [`http://${HOST}:${PORT}`] };
+  if (token.includes("_invalid")) answer = { valid: false, frame_id: null, allowed_origins: [] };
+  if (token.includes("_otherorigin")) answer.allowed_origins = ["https://other.example"];
+  response.writeHead(200, { ...cors, "Content-Type": "application/json" });
+  response.end(JSON.stringify(answer));
+}
+
 async function serve(request, response) {
   const { pathname } = new URL(request.url ?? "/", `http://${HOST}:${PORT}`);
+  if (pathname === "/v3/bank/link-session/frame-policy/") return serveFramePolicy(request, response);
   if (pathname.startsWith("/e2e/lane/")) {
     try {
       if (await serveEventLane(request, response, pathname)) return;

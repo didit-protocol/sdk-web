@@ -22,6 +22,7 @@ test.describe("Bank Link in the web SDK, against a stub frame that speaks the co
     await expect(page.locator(OVERLAY)).toHaveClass(/active/);
     const src = new URL(await page.locator(FRAME).getAttribute("src"));
     expect(src.origin).toBe("http://localhost:4173");
+    expect(src.pathname).toBe("/bank/frame/frame_stub_0001"); // the frame_id of the policy answer
     expect(src.search).toBe("");
     expect(await page.locator(FRAME).getAttribute("referrerpolicy")).toBe("no-referrer");
 
@@ -98,5 +99,33 @@ test.describe("Bank Link in the web SDK, against a stub frame that speaks the co
     });
     await page.waitForTimeout(200);
     expect(await names(page)).toEqual(["opened"]);
+  });
+
+  test("an unknown link opens no frame: error invalid_token, then exit not_allowed", async ({ page }) => {
+    await page.goto(`${HOST_PAGE}?token=blt_invalid_0123456789abc`);
+    await page.evaluate(() => window.openModal());
+    await expect.poll(async () => (await records(page)).exit).toEqual([{ reason: "not_allowed", step: null }]);
+    expect(await names(page)).toEqual(["error", "exit"]);
+    expect((await records(page)).events[0].code).toBe("invalid_token");
+    await expect(page.locator(FRAME)).toHaveCount(0);
+  });
+
+  test("a page origin the link does not list opens no frame and warns the developer", async ({ page }) => {
+    const warnings = [];
+    page.on("console", (message) => message.type() === "warning" && warnings.push(message.text()));
+    await page.goto(`${HOST_PAGE}?token=blt_otherorigin_0123456789`);
+    await page.evaluate(() => window.openModal());
+    await expect.poll(async () => (await records(page)).exit).toEqual([{ reason: "not_allowed", step: null }]);
+    expect((await records(page)).events[0].code).toBe("origin_not_allowed");
+    await expect(page.locator(FRAME)).toHaveCount(0);
+    expect(warnings.some((text) => text.includes("http://127.0.0.1:4173") && text.includes("allowed_origins"))).toBe(true);
+  });
+
+  test("an unreachable API ends with error network and exit, never a hung opening state", async ({ page }) => {
+    await page.goto(`${HOST_PAGE}?api=http://localhost:1`);
+    await page.evaluate(() => window.openModal());
+    await expect.poll(async () => (await records(page)).exit).toEqual([{ reason: "failed", step: null }]);
+    expect((await records(page)).events[0].code).toBe("network");
+    await expect(page.locator(FRAME)).toHaveCount(0);
   });
 });

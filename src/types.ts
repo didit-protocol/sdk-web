@@ -311,8 +311,11 @@ export type BankLinkMode = "connect" | "renew";
 /** How much access the link asks for. */
 export type BankLinkAccess = "one_time" | "ongoing";
 
-/** Why a Bank Link ended without a connection. */
-export type BankLinkExitReason = "closed" | "cancelled" | "bank_unavailable" | "expired" | "failed";
+/**
+ * Why a Bank Link ended without a connection. `not_allowed`: the link cannot be embedded here (an unknown or
+ * closed link, or this page's origin is not in its `allowed_origins`); no frame was created.
+ */
+export type BankLinkExitReason = "closed" | "cancelled" | "bank_unavailable" | "expired" | "failed" | "not_allowed";
 
 /** How the person came back from the bank. */
 export type BankLinkBankResult = "ok" | "cancelled" | "failed" | "timeout" | "unsupported";
@@ -377,6 +380,11 @@ export interface BankLinkOptions {
    * @default "https://verify.didit.me"
    */
   baseUrl?: string;
+  /**
+   * The API origin asked, before any frame exists, whether this token may be embedded on this page.
+   * @default "https://verification.didit.me"
+   */
+  apiBaseUrl?: string;
 }
 
 /** The options of `resumeBankLink`: the same callbacks and placement as `openBankLink`, without a token. */

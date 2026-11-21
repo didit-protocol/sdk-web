@@ -1,5 +1,8 @@
 import {
+  BANK_LINK_DEFAULT_API_ORIGIN,
   BANK_LINK_DEFAULT_ORIGIN,
+  BANK_LINK_FRAME_POLICY_PATH,
+  BANK_LINK_FRAME_POLICY_TIMEOUT_MS,
   BANK_LINK_IFRAME_ALLOW,
   BANK_LINK_INSTANCE_STORAGE_KEY,
   BANK_LINK_MESSAGE_PREFIX,
@@ -40,6 +43,19 @@ export class DiditBankLinkError extends Error {
 export const bankLinkRuntime = {
   navigate: (url: string): void => window.location.assign(url),
   now: (): number => Date.now(),
+  /** The frame-policy call: JSON in, the parsed JSON out; it throws on a network error, a timeout or a non-2xx answer. */
+  fetchPolicy: async (url: string, token: string, signal: AbortSignal): Promise<unknown> => {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+      signal
+    });
+    if (!response.ok) throw new Error(`frame-policy answered ${response.status}`);
+    return response.json();
+  },
   openPopup: (): Window | null => window.open("about:blank", BANK_LINK_POPUP_NAME, "popup,width=520,height=760")
 };
 
@@ -54,16 +70,16 @@ const POPUP_POLL_MS = 500;
 // ---------------------------------------------------------------------------------------------
 
 /** The exact origin the SDK reads from and posts to, from `baseUrl`. HTTPS only (HTTP only for localhost). */
-export function resolveBankLinkOrigin(baseUrl: string | undefined): string {
+export function resolveBankLinkOrigin(baseUrl: string | undefined, name = "baseUrl", fallback = BANK_LINK_DEFAULT_ORIGIN): string {
   let parsed: URL;
   try {
-    parsed = new URL(baseUrl ?? BANK_LINK_DEFAULT_ORIGIN);
+    parsed = new URL(baseUrl ?? fallback);
   } catch {
-    throw new DiditBankLinkError("invalid_options", "baseUrl is not a valid URL.");
+    throw new DiditBankLinkError("invalid_options", `${name} is not a valid URL.`);
   }
   const isLocal = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "[::1]";
   if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && isLocal)) {
-    throw new DiditBankLinkError("invalid_options", "baseUrl must be an https URL.");
+    throw new DiditBankLinkError("invalid_options", `${name} must be an https URL.`);
   }
   return parsed.origin;
 }
@@ -141,7 +157,7 @@ type FieldRule =
   | { kind: "enum"; values: readonly string[]; optional?: boolean }
   | { kind: "code" };
 
-const EXIT_REASONS = ["closed", "cancelled", "bank_unavailable", "expired", "failed"] as const;
+const EXIT_REASONS = ["closed", "cancelled", "bank_unavailable", "expired", "failed", "not_allowed"] as const;
 
 /** The keys of each event's payload; anything else the page sends is stripped, never forwarded. */
 const EVENT_FIELDS: Record<BankLinkEventName, Record<string, FieldRule>> = {
@@ -245,6 +261,19 @@ export function parseBankLinkEnvelope(raw: unknown): ParsedMessage | null {
   return { name, data, linkRef: typeof linkRef === "string" && linkRef.length <= MAX_STRING_LENGTH ? linkRef : null };
 }
 
+const FRAME_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
+
+/** The frame-policy answer, or null when it is not of the documented shape. */
+function readFramePolicy(answer: unknown): { valid: boolean; frameId: string | null; allowedOrigins: string[] } | null {
+  if (typeof answer !== "object" || answer === null) return null;
+  const { valid, frame_id: frameId, allowed_origins: origins } = answer as Record<string, unknown>;
+  if (typeof valid !== "boolean") return null;
+  if (!valid) return { valid, frameId: null, allowedOrigins: [] };
+  if (typeof frameId !== "string" || !FRAME_ID_PATTERN.test(frameId)) return null;
+  if (!Array.isArray(origins) || !origins.every((o) => typeof o === "string")) return null;
+  return { valid, frameId, allowedOrigins: origins as string[] };
+}
+
 function readRequestId(data: unknown): string | null {
   const id = typeof data === "object" && data !== null ? (data as Record<string, unknown>).request_id : undefined;
   return typeof id === "string" && id.length > 0 && id.length <= 128 ? id : null;
@@ -328,6 +357,8 @@ function readResumeRecord(): ResumeRecord | null {
  */
 export function buildBankLinkFrameUrl(input: {
   origin: string;
+  /** The path segment: the `frame_id` of the policy answer, or the instance id on a resume. */
+  framePath: string;
   instanceId: string;
   secret: { token: string } | { resumeCode: string };
   parentOrigin: string;
@@ -348,7 +379,7 @@ export function buildBankLinkFrameUrl(input: {
   params.set("presentation", input.presentation);
   if (input.locale) params.set("locale", input.locale);
   if (input.theme && input.theme !== "auto") params.set("theme", input.theme);
-  return `${input.origin}/bank/frame/${encodeURIComponent(input.instanceId)}#${params.toString()}`;
+  return `${input.origin}/bank/frame/${encodeURIComponent(input.framePath)}#${params.toString()}`;
 }
 
 /** Whether the person is on a phone or a tablet: the bank hop is a full-page redirect there, never a popup. */
@@ -368,6 +399,8 @@ function isTouchFirstDevice(): boolean {
 interface SessionInit {
   options: BankLinkOptions | BankLinkResumeOptions;
   origin: string;
+  /** The API origin of the frame-policy call; null on a resume, which has no token to ask with. */
+  apiOrigin: string | null;
   instanceId: string;
   secret: { token: string } | { resumeCode: string };
   token: string | null;
@@ -415,9 +448,62 @@ class BankLinkSession implements BankLinkHandle {
     return this._state;
   }
 
-  start(): void {
+  private policyAbort: AbortController | null = null;
+
+  /**
+   * Asks the API whether this token may be embedded on this page, then loads the frame at the path of the
+   * answer's `frame_id`. Any refusal or failure ends the flow with events and no frame, never a hung
+   * "opening" state. A resume has no token to ask with: it loads the frame with its resume code, and the
+   * frame's own server route enforces the origins.
+   */
+  async start(): Promise<void> {
+    if (!this.init.apiOrigin || !("token" in this.init.secret)) {
+      this.loadFrame(this.init.instanceId);
+      return;
+    }
+    const controller = new AbortController();
+    this.policyAbort = controller;
+    const timer = window.setTimeout(() => controller.abort(), BANK_LINK_FRAME_POLICY_TIMEOUT_MS);
+    let answer: unknown;
+    try {
+      answer = await bankLinkRuntime.fetchPolicy(
+        `${this.init.apiOrigin}${BANK_LINK_FRAME_POLICY_PATH}`,
+        this.init.secret.token,
+        controller.signal
+      );
+    } catch {
+      window.clearTimeout(timer);
+      if (!this.tornDown) this.refuse("network", "failed");
+      return;
+    }
+    window.clearTimeout(timer);
+    if (this.tornDown) return;
+    const policy = readFramePolicy(answer);
+    if (!policy) return this.refuse("network", "failed");
+    if (!policy.valid) return this.refuse("invalid_token", "not_allowed");
+    if (!policy.allowedOrigins.includes(window.location.origin)) {
+      console.warn(
+        `[Didit] Bank Link was not opened: this page's origin (${window.location.origin}) is not in the link's allowed_origins. ` +
+          "Add it to the link's allowed_origins or to the application's Bank Link setting."
+      );
+      return this.refuse("origin_not_allowed", "not_allowed");
+    }
+    this.loadFrame(policy.frameId as string);
+  }
+
+  /** No frame was created: report why, end the flow and release everything. */
+  private refuse(code: string, reason: BankLinkExit["reason"]): void {
+    if (this.tornDown) return;
+    this.emit({ name: "error", code });
+    this.ended = true;
+    this.emit({ name: "exit", reason, step: null });
+    this.teardown();
+  }
+
+  private loadFrame(framePath: string): void {
     const url = buildBankLinkFrameUrl({
       origin: this.init.origin,
+      framePath,
       instanceId: this.init.instanceId,
       secret: this.init.secret,
       parentOrigin: window.location.origin,
@@ -443,6 +529,7 @@ class BankLinkSession implements BankLinkHandle {
     if (this.tornDown) return;
     this.tornDown = true;
     this._state = "closed";
+    this.policyAbort?.abort();
     this.closePopup();
     this.modal.destroy();
     if (activeSession === this) activeSession = null;
@@ -653,12 +740,14 @@ export function openBankLink(options: BankLinkOptions): BankLinkHandle {
   }
   assertCallbacks(options);
   const origin = resolveBankLinkOrigin(options.baseUrl);
+  const apiOrigin = resolveBankLinkOrigin(options.apiBaseUrl, "apiBaseUrl", BANK_LINK_DEFAULT_API_ORIGIN);
   const token = parseBankLinkToken(options.token, origin);
   const element = resolveContainer(options.container);
   replaceActiveSession();
   const session = new BankLinkSession({
     options,
     origin,
+    apiOrigin,
     instanceId: pageInstanceId(),
     secret: { token },
     token,
@@ -667,7 +756,7 @@ export function openBankLink(options: BankLinkOptions): BankLinkHandle {
     resumed: false
   });
   activeSession = session;
-  session.start();
+  void session.start();
   return session;
 }
 
@@ -705,6 +794,7 @@ export function resumeBankLink(options: BankLinkResumeOptions = {}): Promise<Ban
     const session = new BankLinkSession({
       options,
       origin,
+      apiOrigin: null,
       instanceId: record.instance_id,
       secret: { resumeCode: code },
       token: null,
@@ -713,7 +803,7 @@ export function resumeBankLink(options: BankLinkResumeOptions = {}): Promise<Ban
       resumed: true
     });
     activeSession = session;
-    session.start();
+    void session.start();
     return Promise.resolve({ resumed: true });
   } catch (error) {
     return Promise.reject(error);

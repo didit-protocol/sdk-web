@@ -151,3 +151,8 @@ export const BANK_LINK_RESUME_QUERY_PARAM = "didit_resume";
 
 /** The window name of the bank popup, so a second request reuses the same window. */
 export const BANK_LINK_POPUP_NAME = "didit_bank";
+
+/** The API that answers the frame-policy call before a frame is created (see `BankLinkOptions.apiBaseUrl`). */
+export const BANK_LINK_DEFAULT_API_ORIGIN = "https://verification.didit.me";
+export const BANK_LINK_FRAME_POLICY_PATH = "/v3/bank/link-session/frame-policy/";
+export const BANK_LINK_FRAME_POLICY_TIMEOUT_MS = 8000;

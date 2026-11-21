@@ -473,8 +473,13 @@ DiditSdk.shared.openBankLink({ token: "blt_...", container: "#bank", onSuccess, 
 | `onExit` | `(result) => void` | Once, when the flow ends without a connection. Sugar over the `exit` event. |
 | `onEvent` | `(event) => void` | Every event below. |
 | `baseUrl` | `string` | The origin that serves the link. Default `https://verify.didit.me`. Only for staging or a test page. |
+| `apiBaseUrl` | `string` | The API origin that is asked, before any frame exists, whether the token may be embedded on this page. Default `https://verification.didit.me`. |
 
 A token that is not a Bank Link token throws a `DiditBankLinkError` (`code: "invalid_token"`) synchronously, before anything is shown.
+Before it creates the frame the SDK asks the API whether the token may be embedded on this page (`POST /v3/bank/link-session/frame-policy/`, no credentials).
+An unknown or closed link, or a page origin that is not in the link's `allowed_origins`, opens no frame: you get `error` with `invalid_token` or `origin_not_allowed`, then `exit` with `reason: "not_allowed"`, and the console shows which origin to add (to the link's `allowed_origins` or to the application's Bank Link setting).
+A network failure or a timeout gives `error` with `network`, then `exit` with `reason: "failed"`.
+`handle.state` is `opening` until the frame reports `opened`.
 Only one Bank Link is open at a time: opening a second closes the first with `exit` and `reason: "closed"`.
 
 ### Events
@@ -493,8 +498,8 @@ Payloads carry ids only: never a token, a name, an account number or an email.
 | `bank_returned` | `result` (`ok`, `cancelled`, `failed`, `timeout`, `unsupported`) | The person came back from the bank |
 | `accounts_selected` | `count` | The person chose accounts |
 | `success` | `link_id`, `connection_id` (optional), `check_id` (optional), `resumed` (optional) | The link was completed |
-| `exit` | `reason` (`closed`, `cancelled`, `bank_unavailable`, `expired`, `failed`), `step`, `link_id` (optional), `resumed` (optional) | The flow ended without a connection |
-| `error` | `code` | A problem that does not end the flow, such as `popup_blocked` |
+| `exit` | `reason` (`closed`, `cancelled`, `bank_unavailable`, `expired`, `failed`, `not_allowed`), `step`, `link_id` (optional), `resumed` (optional) | The flow ended without a connection |
+| `error` | `code` | `invalid_token`, `origin_not_allowed` and `network` come before any frame exists and are followed by `exit`; `popup_blocked` and other codes do not end the flow |
 
 ### Full-page redirect and `resumeBankLink`
 

@@ -20,15 +20,18 @@
       window.records = { events: [], success: [], exit: [], resume: null };
       // The hosted page is a stub served from another origin (localhost, not 127.0.0.1).
       const baseUrl = new URLSearchParams(location.search).get("base") ?? "http://localhost:4173";
-      const token = "blt_0123456789abcdefghij";
+      // The token picks the stub's frame-policy answer (see e2e/server.mjs); `api` points the SDK at another API origin.
+      const query = new URLSearchParams(location.search);
+      const token = query.get("token") ?? "blt_0123456789abcdefghij";
+      const apiBaseUrl = query.get("api") ?? "http://localhost:4173";
       const callbacks = {
         onEvent: (event) => window.records.events.push(event),
         onSuccess: (result) => window.records.success.push(result),
         onExit: (result) => window.records.exit.push(result)
       };
 
-      window.openModal = () => DiditSdk.shared.openBankLink({ token, baseUrl, ...callbacks });
-      window.openInline = () => DiditSdk.shared.openBankLink({ token, baseUrl, container: "#bank", ...callbacks });
+      window.openModal = () => DiditSdk.shared.openBankLink({ token, baseUrl, apiBaseUrl, ...callbacks });
+      window.openInline = () => DiditSdk.shared.openBankLink({ token, baseUrl, apiBaseUrl, container: "#bank", ...callbacks });
       document.getElementById("open-modal").onclick = window.openModal;
       document.getElementById("open-inline").onclick = window.openInline;
 
