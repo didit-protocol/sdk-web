@@ -304,3 +304,91 @@ export interface SubmitTransactionOptions {
 
 /** Typed error categories thrown by submitTransaction. */
 export type TransactionErrorType = "invalid_token" | "expired_token" | "validation" | "network";
+
+/** What a Bank Link is for: a new connection, or the renewal of a connection's consent. */
+export type BankLinkMode = "connect" | "renew";
+
+/** How much access the link asks for. */
+export type BankLinkAccess = "one_time" | "ongoing";
+
+/** Why a Bank Link ended without a connection. */
+export type BankLinkExitReason = "closed" | "cancelled" | "bank_unavailable" | "expired" | "failed";
+
+/** How the person came back from the bank. */
+export type BankLinkBankResult = "ok" | "cancelled" | "failed" | "timeout" | "unsupported";
+
+/**
+ * The link finished: `link_id` is the id to confirm on your server with `GET /v3/bank/links/{id}/`.
+ * `connection_id` is a convenience: never trust it from a browser, read it from the link on your server.
+ * `resumed` is true when the result was replayed after a full-page redirect by `resumeBankLink`.
+ */
+export interface BankLinkSuccess {
+  link_id: string;
+  connection_id?: string | null;
+  check_id?: string | null;
+  resumed?: boolean;
+}
+
+/** The link ended without a connection. `step` is where the person was (null before the first step). */
+export interface BankLinkExit {
+  reason: BankLinkExitReason;
+  step: string | null;
+  link_id?: string;
+  resumed?: boolean;
+}
+
+/**
+ * Every Bank Link event, with the keys of its payload next to `name`.
+ * Payloads carry ids only: no tokens, no names, no account numbers.
+ */
+export type BankLinkEvent =
+  | { name: "opened"; link_id: string; mode: BankLinkMode; access: BankLinkAccess; presentation?: string }
+  | { name: "consent_shown"; link_id: string; consent_version: string }
+  | { name: "consent_accepted"; link_id: string; consent_version: string }
+  | { name: "institution_selected"; institution_id: string; country: string }
+  | { name: "bank_redirect"; via: "popup" | "redirect" }
+  | { name: "bank_returned"; result: BankLinkBankResult }
+  | { name: "accounts_selected"; count: number }
+  | ({ name: "success" } & BankLinkSuccess)
+  | ({ name: "exit" } & BankLinkExit)
+  | { name: "error"; code: string };
+
+export type BankLinkEventName = BankLinkEvent["name"];
+
+export type BankLinkState = "opening" | "open" | "closed";
+
+export interface BankLinkOptions {
+  /** The link's `client_token` (`blt_...`), or the hosted link URL. Never log it. */
+  token: string;
+  /** A selector or an element: the flow renders inside it. Without one the flow opens as a modal. */
+  container?: string | HTMLElement;
+  /** The flow's language (a code such as `es`); by default the link's own language. */
+  locale?: string;
+  /** The flow's colour scheme. @default "auto" */
+  theme?: "light" | "dark" | "auto";
+  /** Called once when the link is completed. Sugar over the `success` event. */
+  onSuccess?: (result: BankLinkSuccess) => void;
+  /** Called once when the flow ends without a connection. Sugar over the `exit` event. */
+  onExit?: (result: BankLinkExit) => void;
+  /** Called for every event. Events are notifications: your server learns the outcome from the webhook and the API. */
+  onEvent?: (event: BankLinkEvent) => void;
+  /**
+   * The origin that serves the link, for staging or a test page. The SDK reads messages only from it.
+   * @default "https://verify.didit.me"
+   */
+  baseUrl?: string;
+}
+
+/** The options of `resumeBankLink`: the same callbacks and placement as `openBankLink`, without a token. */
+export type BankLinkResumeOptions = Omit<BankLinkOptions, "token">;
+
+export interface BankLinkResumeResult {
+  /** True when a flow was reopened to deliver its result. */
+  resumed: boolean;
+}
+
+export interface BankLinkHandle {
+  /** Closes the flow. Fires `exit` with `reason: "closed"` unless it already ended. */
+  close(): void;
+  readonly state: BankLinkState;
+}

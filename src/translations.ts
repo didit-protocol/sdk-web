@@ -447,3 +447,86 @@ const translationsMap: Record<string, ModalTranslations> = {
 export function getTranslations(language: string): ModalTranslations {
   return translationsMap[language] ?? EN;
 }
+
+/**
+ * The text a Bank Link modal draws itself: its dialog label and the close button label. The
+ * link screens are in the hosted page and carry their own translations.
+ */
+export interface BankLinkTranslations {
+  ariaLabelBankLink: string;
+  ariaLabelCloseBankLink: string;
+}
+
+const BANK_LINK_EN: BankLinkTranslations = {
+  ariaLabelBankLink: "Didit bank connection",
+  ariaLabelCloseBankLink: "Close bank connection"
+};
+
+const bankLinkTranslationsMap: Record<string, BankLinkTranslations> = {
+  ar: { ariaLabelBankLink: "ربط الحساب المصرفي من Didit", ariaLabelCloseBankLink: "إغلاق ربط الحساب المصرفي" },
+  bg: { ariaLabelBankLink: "Банкова връзка Didit", ariaLabelCloseBankLink: "Затваряне на банковата връзка" },
+  bn: { ariaLabelBankLink: "Didit ব্যাংক সংযোগ", ariaLabelCloseBankLink: "ব্যাংক সংযোগ বন্ধ করুন" },
+  bs: { ariaLabelBankLink: "Didit povezivanje banke", ariaLabelCloseBankLink: "Zatvori povezivanje banke" },
+  ca: { ariaLabelBankLink: "Connexió bancària Didit", ariaLabelCloseBankLink: "Tancar la connexió bancària" },
+  cnr: { ariaLabelBankLink: "Didit povezivanje banke", ariaLabelCloseBankLink: "Zatvori povezivanje banke" },
+  cs: { ariaLabelBankLink: "Propojení banky Didit", ariaLabelCloseBankLink: "Zavřít propojení banky" },
+  da: { ariaLabelBankLink: "Didit bankforbindelse", ariaLabelCloseBankLink: "Luk bankforbindelse" },
+  de: { ariaLabelBankLink: "Didit Bankverbindung", ariaLabelCloseBankLink: "Bankverbindung schließen" },
+  el: { ariaLabelBankLink: "Σύνδεση τράπεζας Didit", ariaLabelCloseBankLink: "Κλείσιμο σύνδεσης τράπεζας" },
+  es: { ariaLabelBankLink: "Conexión bancaria Didit", ariaLabelCloseBankLink: "Cerrar la conexión bancaria" },
+  et: { ariaLabelBankLink: "Didit pangaühendus", ariaLabelCloseBankLink: "Sulge pangaühendus" },
+  fa: { ariaLabelBankLink: "اتصال بانکی Didit", ariaLabelCloseBankLink: "بستن اتصال بانکی" },
+  fi: { ariaLabelBankLink: "Didit-pankkiyhteys", ariaLabelCloseBankLink: "Sulje pankkiyhteys" },
+  fr: { ariaLabelBankLink: "Connexion bancaire Didit", ariaLabelCloseBankLink: "Fermer la connexion bancaire" },
+  he: { ariaLabelBankLink: "חיבור בנק Didit", ariaLabelCloseBankLink: "סגירת חיבור הבנק" },
+  hi: { ariaLabelBankLink: "Didit बैंक कनेक्शन", ariaLabelCloseBankLink: "बैंक कनेक्शन बंद करें" },
+  hr: { ariaLabelBankLink: "Didit povezivanje banke", ariaLabelCloseBankLink: "Zatvori povezivanje banke" },
+  hu: { ariaLabelBankLink: "Didit banki kapcsolat", ariaLabelCloseBankLink: "Banki kapcsolat bezárása" },
+  hy: { ariaLabelBankLink: "Didit բանկային կապ", ariaLabelCloseBankLink: "Փակել բանկային կապը" },
+  id: { ariaLabelBankLink: "Koneksi bank Didit", ariaLabelCloseBankLink: "Tutup koneksi bank" },
+  it: { ariaLabelBankLink: "Collegamento bancario Didit", ariaLabelCloseBankLink: "Chiudi il collegamento bancario" },
+  ja: { ariaLabelBankLink: "Didit 銀行連携", ariaLabelCloseBankLink: "銀行連携を閉じる" },
+  ka: { ariaLabelBankLink: "Didit საბანკო კავშირი", ariaLabelCloseBankLink: "საბანკო კავშირის დახურვა" },
+  kk: { ariaLabelBankLink: "Didit банк байланысы", ariaLabelCloseBankLink: "Банк байланысын жабу" },
+  ko: { ariaLabelBankLink: "Didit 은행 연결", ariaLabelCloseBankLink: "은행 연결 닫기" },
+  ky: { ariaLabelBankLink: "Didit банк байланышы", ariaLabelCloseBankLink: "Банк байланышын жабуу" },
+  lt: { ariaLabelBankLink: "Didit banko ryšys", ariaLabelCloseBankLink: "Uždaryti banko ryšį" },
+  lv: { ariaLabelBankLink: "Didit bankas savienojums", ariaLabelCloseBankLink: "Aizvērt bankas savienojumu" },
+  mk: { ariaLabelBankLink: "Didit поврзување на банка", ariaLabelCloseBankLink: "Затвори го поврзувањето со банка" },
+  mn: { ariaLabelBankLink: "Didit банкны холболт", ariaLabelCloseBankLink: "Банкны холболтыг хаах" },
+  ms: { ariaLabelBankLink: "Sambungan bank Didit", ariaLabelCloseBankLink: "Tutup sambungan bank" },
+  nl: { ariaLabelBankLink: "Didit bankkoppeling", ariaLabelCloseBankLink: "Bankkoppeling sluiten" },
+  no: { ariaLabelBankLink: "Didit bankforbindelse", ariaLabelCloseBankLink: "Lukk bankforbindelsen" },
+  pl: { ariaLabelBankLink: "Połączenie z bankiem Didit", ariaLabelCloseBankLink: "Zamknij połączenie z bankiem" },
+  "pt-BR": { ariaLabelBankLink: "Conexão bancária Didit", ariaLabelCloseBankLink: "Fechar conexão bancária" },
+  pt: { ariaLabelBankLink: "Ligação bancária Didit", ariaLabelCloseBankLink: "Fechar ligação bancária" },
+  ro: { ariaLabelBankLink: "Conexiune bancară Didit", ariaLabelCloseBankLink: "Închide conexiunea bancară" },
+  ru: { ariaLabelBankLink: "Подключение банка Didit", ariaLabelCloseBankLink: "Закрыть подключение банка" },
+  sk: { ariaLabelBankLink: "Prepojenie banky Didit", ariaLabelCloseBankLink: "Zavrieť prepojenie banky" },
+  sl: { ariaLabelBankLink: "Povezava z banko Didit", ariaLabelCloseBankLink: "Zapri povezavo z banko" },
+  so: { ariaLabelBankLink: "Isku xirka bangiga Didit", ariaLabelCloseBankLink: "Xir isku xirka bangiga" },
+  sq: { ariaLabelBankLink: "Lidhja bankare Didit", ariaLabelCloseBankLink: "Mbyll lidhjen bankare" },
+  sr: { ariaLabelBankLink: "Didit повезивање банке", ariaLabelCloseBankLink: "Затвори повезивање банке" },
+  sv: { ariaLabelBankLink: "Didit bankanslutning", ariaLabelCloseBankLink: "Stäng bankanslutningen" },
+  th: { ariaLabelBankLink: "การเชื่อมต่อธนาคาร Didit", ariaLabelCloseBankLink: "ปิดการเชื่อมต่อธนาคาร" },
+  tr: { ariaLabelBankLink: "Didit banka bağlantısı", ariaLabelCloseBankLink: "Banka bağlantısını kapat" },
+  uk: { ariaLabelBankLink: "Підключення банку Didit", ariaLabelCloseBankLink: "Закрити підключення банку" },
+  uz: { ariaLabelBankLink: "Didit bank ulanishi", ariaLabelCloseBankLink: "Bank ulanishini yopish" },
+  vi: { ariaLabelBankLink: "Kết nối ngân hàng Didit", ariaLabelCloseBankLink: "Đóng kết nối ngân hàng" },
+  "zh-CN": { ariaLabelBankLink: "Didit 银行连接", ariaLabelCloseBankLink: "关闭银行连接" },
+  "zh-TW": { ariaLabelBankLink: "Didit 銀行連結", ariaLabelCloseBankLink: "關閉銀行連結" },
+  zh: { ariaLabelBankLink: "Didit 银行连接", ariaLabelCloseBankLink: "关闭银行连接" }
+};
+
+export function getBankLinkTranslations(language: string): BankLinkTranslations {
+  return bankLinkTranslationsMap[language] ?? BANK_LINK_EN;
+}
+
+/** The modal text of a Bank Link: the shared exit texts (never shown, the flow closes without asking) with the bank labels. */
+export function getBankLinkModalTranslations(language: string): ModalTranslations {
+  const t = getBankLinkTranslations(language);
+  return { ...getTranslations(language), ariaLabelModal: t.ariaLabelBankLink, ariaLabelClose: t.ariaLabelCloseBankLink };
+}
+
+export const BANK_LINK_TRANSLATION_LANGUAGES = Object.keys(bankLinkTranslationsMap);
+export const MODAL_TRANSLATION_LANGUAGES = Object.keys(translationsMap);

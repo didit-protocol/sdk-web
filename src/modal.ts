@@ -1,7 +1,7 @@
 import type { DiditSdkConfiguration, VerificationEvent } from "./types";
 import { DEFAULT_CONFIG, CSS_CLASSES, IFRAME_ALLOW, LAYOUT_MESSAGE_TYPE } from "./constants";
 import { SDKLogger, generateModalId, isAllowedOrigin, detectLanguageFromUrl, isRtlLanguage } from "./utils";
-import { getTranslations } from "./translations";
+import { getTranslations, type ModalTranslations } from "./translations";
 
 export interface ModalState {
   isOpen: boolean;
@@ -23,6 +23,10 @@ export interface ModalCallbacks {
 export interface FrameHostOptions {
   /** The iframe `allow` list; defaults to the verification flow's {@link IFRAME_ALLOW}. */
   iframeAllow?: string;
+  /** The language of the modal's own text, when it is not read from the frame URL's path. */
+  language?: string;
+  /** The modal's own text (labels and exit confirmation) for a language; defaults to the verification texts. */
+  translations?: (language: string) => ModalTranslations;
   /** The iframe `referrerpolicy`; none is set by default. */
   referrerPolicy?: ReferrerPolicy;
   /** The element an embedded frame renders in, for a caller that holds the element rather than an id. */
@@ -601,7 +605,7 @@ export class VerificationModal {
       this.createEmbeddedDOM();
       return;
     }
-    const t = getTranslations(this.language);
+    const t = this.translations();
 
     this.overlay = document.createElement("div");
     this.overlay.id = this.modalId;
@@ -700,12 +704,16 @@ export class VerificationModal {
     this.iframe = document.createElement("iframe");
     this.iframe.className = CSS_CLASSES.iframe;
     this.applyIframeAttributes(this.iframe);
-    this.iframe.setAttribute("title", getTranslations(this.language).ariaLabelModal);
+    this.iframe.setAttribute("title", this.translations().ariaLabelModal);
     this.iframe.addEventListener("load", () => this.handleIframeLoad());
 
     this.container.appendChild(this.loadingEl);
     this.container.appendChild(this.iframe);
     this.embeddedContainer.appendChild(this.container);
+  }
+
+  private translations(): ModalTranslations {
+    return (this.frameOptions.translations ?? getTranslations)(this.language);
   }
 
   private applyIframeAttributes(iframe: HTMLIFrameElement): void {
@@ -1180,7 +1188,7 @@ export class VerificationModal {
   }
 
   open(verificationUrl: string): void {
-    this.language = detectLanguageFromUrl(verificationUrl);
+    this.language = this.frameOptions.language ?? detectLanguageFromUrl(verificationUrl);
 
     if (!this.overlay && !this.container) {
       this.createDOM();
@@ -1257,6 +1265,11 @@ export class VerificationModal {
     this.iframe = null;
     this.loadingEl = null;
     this.confirmOverlay = null;
+  }
+
+  /** The frame's window, for a caller that posts to it (always with an exact target origin). */
+  frameWindow(): Window | null {
+    return this.iframe?.contentWindow ?? null;
   }
 
   isOpen(): boolean {

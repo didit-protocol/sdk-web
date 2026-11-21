@@ -12,8 +12,13 @@ import type {
   SubmitTransactionOptions,
   SubmitTransactionResult,
   TransactionActionCompletedCallback,
-  TransactionActionCompletedError
+  TransactionActionCompletedError,
+  BankLinkOptions,
+  BankLinkHandle,
+  BankLinkResumeOptions,
+  BankLinkResumeResult
 } from "./types";
+import { disposeBankLink, openBankLink, resumeBankLink } from "./bankLink";
 import type { SubmitEventOptions } from "@didit-protocol/signals";
 
 import { getStoredDeviceId, submitEvent } from "@didit-protocol/signals";
@@ -125,6 +130,25 @@ export class DiditSdk {
 
   private constructor() {
     SDKLogger.log("DiditSdk initialized");
+  }
+
+  /**
+   * Opens Bank Link: a modal, or inline when `container` is given. Throws `DiditBankLinkError` before
+   * anything is shown when the token or an option is invalid. Results come through `onSuccess`, `onExit`
+   * and `onEvent`; confirm the link on your server before trusting it. Only one Bank Link is open at a
+   * time: a newer one closes the older with `exit { reason: "closed" }`.
+   */
+  public openBankLink(options: BankLinkOptions): BankLinkHandle {
+    return openBankLink(options);
+  }
+
+  /**
+   * Call on the page a full-page bank redirect returns to (safe on every page load): reopens the flow at
+   * its server state and delivers its result once, with `resumed: true`. Pass the same callbacks you gave
+   * `openBankLink`; a callback cannot outlive the page that held it.
+   */
+  public resumeBankLink(options?: BankLinkResumeOptions): Promise<BankLinkResumeResult> {
+    return resumeBankLink(options);
   }
 
   public async startVerification(options: StartVerificationOptions): Promise<void> {
@@ -281,6 +305,7 @@ export class DiditSdk {
     this._actionModalSettle?.("aborted");
     this._modal?.destroy();
     this._modal = null;
+    disposeBankLink();
     this.reset();
     this.setState("idle");
   }
