@@ -36,7 +36,7 @@
       document.getElementById("open-inline").onclick = window.openInline;
 
       // Safe on every page load: it only acts on the page a redirect returned to.
-      DiditSdk.shared.resumeBankLink({ baseUrl, ...callbacks }).then((result) => (window.records.resume = result));
+      DiditSdk.shared.resumeBankLink({ baseUrl, apiBaseUrl, ...callbacks }).then((result) => (window.records.resume = result));
     </script>
   </body>
 </html>
