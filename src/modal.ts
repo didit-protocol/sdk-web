@@ -16,6 +16,30 @@ export interface ModalCallbacks {
   onIframeLoad: () => void;
 }
 
+/**
+ * What a caller other than `startVerification` changes in the frame host. Every field is optional and
+ * the defaults are the verification flow's own behaviour, so a modal built without options is unchanged.
+ */
+export interface FrameHostOptions {
+  /** The iframe `allow` list; defaults to the verification flow's {@link IFRAME_ALLOW}. */
+  iframeAllow?: string;
+  /** The iframe `referrerpolicy`; none is set by default. */
+  referrerPolicy?: ReferrerPolicy;
+  /** The element an embedded frame renders in, for a caller that holds the element rather than an id. */
+  embeddedElement?: HTMLElement;
+  /**
+   * Whether a message from `origin` may be read, given the frame's current `src`. Defaults to
+   * {@link isAllowedOrigin}. It runs before anything else, and the message's source window must still be
+   * this frame's window.
+   */
+  isTrustedOrigin?: (origin: string, iframeSrc: string) => boolean;
+  /**
+   * Sees every message (origin and source already checked, JSON already parsed) before the host's own
+   * handling; returning true means it consumed the message.
+   */
+  interceptMessage?: (message: unknown, event: MessageEvent) => boolean;
+}
+
 export type FlowKind = "handoff" | "step";
 
 /** Until the flow reports its first layout the modal waits (hidden) at the size the handoff card needs. */
@@ -69,6 +93,7 @@ export class VerificationModal {
   private modalId: string;
   private config: Required<Pick<DiditSdkConfiguration, "zIndex" | "showCloseButton" | "showExitConfirmation">>;
   private callbacks: ModalCallbacks;
+  private frameOptions: FrameHostOptions;
   private state: ModalState = {
     isOpen: false,
     isLoading: true,
@@ -108,7 +133,11 @@ export class VerificationModal {
   private curtain: HTMLDivElement | null = null;
   private boundPlaceCurtain: (() => void) | null = null;
 
-  constructor(configuration: DiditSdkConfiguration | undefined, callbacks: ModalCallbacks) {
+  constructor(
+    configuration: DiditSdkConfiguration | undefined,
+    callbacks: ModalCallbacks,
+    frameOptions: FrameHostOptions = {}
+  ) {
     this.modalId = generateModalId();
     this.config = {
       zIndex: configuration?.zIndex ?? DEFAULT_CONFIG.zIndex,
@@ -116,9 +145,12 @@ export class VerificationModal {
       showExitConfirmation: configuration?.showExitConfirmation ?? DEFAULT_CONFIG.showExitConfirmation
     };
     this.callbacks = callbacks;
+    this.frameOptions = frameOptions;
     this.containerElement = configuration?.containerElement ?? document.body;
     this.embedded = configuration?.embedded ?? false;
-    if (this.embedded && configuration?.embeddedContainerId) {
+    if (this.embedded && frameOptions.embeddedElement) {
+      this.embeddedContainer = frameOptions.embeddedElement;
+    } else if (this.embedded && configuration?.embeddedContainerId) {
       this.embeddedContainer = document.getElementById(configuration.embeddedContainerId);
     }
   }
@@ -610,7 +642,7 @@ export class VerificationModal {
 
     this.iframe = document.createElement("iframe");
     this.iframe.className = CSS_CLASSES.iframe;
-    this.iframe.setAttribute("allow", IFRAME_ALLOW);
+    this.applyIframeAttributes(this.iframe);
     this.iframe.setAttribute("title", t.ariaLabelModal);
     this.iframe.addEventListener("load", () => this.handleIframeLoad());
 
@@ -667,13 +699,18 @@ export class VerificationModal {
 
     this.iframe = document.createElement("iframe");
     this.iframe.className = CSS_CLASSES.iframe;
-    this.iframe.setAttribute("allow", IFRAME_ALLOW);
+    this.applyIframeAttributes(this.iframe);
     this.iframe.setAttribute("title", getTranslations(this.language).ariaLabelModal);
     this.iframe.addEventListener("load", () => this.handleIframeLoad());
 
     this.container.appendChild(this.loadingEl);
     this.container.appendChild(this.iframe);
     this.embeddedContainer.appendChild(this.container);
+  }
+
+  private applyIframeAttributes(iframe: HTMLIFrameElement): void {
+    iframe.setAttribute("allow", this.frameOptions.iframeAllow ?? IFRAME_ALLOW);
+    if (this.frameOptions.referrerPolicy) iframe.referrerPolicy = this.frameOptions.referrerPolicy;
   }
 
   private setupEventListeners(): void {
@@ -748,7 +785,8 @@ export class VerificationModal {
 
   private handleMessage(event: MessageEvent): void {
     if (!this.iframe?.src) return;
-    if (!isAllowedOrigin(event.origin, this.iframe.src )) {
+    const isTrustedOrigin = this.frameOptions.isTrustedOrigin ?? isAllowedOrigin;
+    if (!isTrustedOrigin(event.origin, this.iframe.src )) {
       return SDKLogger.warn("Received postMessage from unallowed origin:", event.origin);
     }
 
@@ -773,6 +811,8 @@ export class VerificationModal {
       SDKLogger.warn("Failed to parse postMessage:", event.data);
       return;
     }
+
+    if (this.frameOptions.interceptMessage?.(messageData, event)) return;
 
     if (messageData.type === "didit:close_request") {
       this.handleCloseRequest();
