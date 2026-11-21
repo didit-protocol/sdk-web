@@ -77,9 +77,9 @@ test.describe("Bank Link in the web SDK, against a stub frame that speaks the co
 
   test("redirect fallback: leaves the page for the hosted page and comes back through resumeBankLink", async ({ page }) => {
     const frame = await open(page, "modal");
-    const navigation = page.waitForRequest((request) => request.isNavigationRequest() && request.url().startsWith("http://localhost:4173/bank/link/"));
     await frame.getByRole("button", { name: "Continue on this page" }).click();
-    await navigation;
+    // Wait for the navigation to settle before the next one, or the two interrupt each other.
+    await page.waitForURL(/^http:\/\/localhost:4173\/bank\/link\//);
     // The hosted page does not exist in this fixture: assert what the SDK stored, then return as the hosted page would.
     await page.goto(HOST_PAGE);
     const stored = await page.evaluate(() => window.sessionStorage.getItem("didit_bank_link_resume"));
