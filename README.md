@@ -500,6 +500,7 @@ Payloads carry ids only: never a token, a name, an account number or an email.
 
 On a phone, or when the browser blocks the bank window, the whole page goes to the bank and comes back to the `redirect_url` registered for your application.
 On that page call `resumeBankLink` with the same callbacks you gave `openBankLink`; it is safe on every page load and does nothing when there is nothing to resume.
+A hash route in your page's address is kept in the return URL; the hosted page adds its resume parameter to the query, before the hash.
 
 ```ts
 const { resumed } = await DiditSdk.shared.resumeBankLink({ onSuccess, onExit });

@@ -625,7 +625,7 @@ class BankLinkSession implements BankLinkHandle {
     else params.set("t", this.init.token as string);
     params.set("resume", "1");
     params.set("instance_id", this.init.instanceId);
-    params.set("return", `${window.location.origin}${window.location.pathname}${window.location.search}`);
+    params.set("return", `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`);
     params.set("v", String(BANK_LINK_PROTOCOL_VERSION));
     params.set("sdk_version", SDK_VERSION);
     if (this.init.options.locale) params.set("locale", this.init.options.locale);

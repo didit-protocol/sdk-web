@@ -38,6 +38,17 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+describe("return URL", () => {
+  it("keeps a hash route in the return URL", () => {
+    const navigate = jest.spyOn(bankLinkRuntime, "navigate").mockImplementation(() => undefined);
+    window.history.replaceState(null, "", "/app?x=1#/checkout");
+    DiditSdk.shared.openBankLink({ token: TOKEN });
+    send(msg("redirect_request", { request_id: "r1", resume_code: "rc_abcdefgh12" }));
+    const params = new URLSearchParams(new URL(navigate.mock.calls[0][0]).hash.slice(1));
+    expect(params.get("return")).toBe(`${window.location.origin}/app?x=1#/checkout`);
+  });
+});
+
 describe("option validation", () => {
   it("accepts a client token and refuses everything else before any frame exists", () => {
     for (const bad of ["blt_x", "", "bearer abc", "https://evil.example/bank/link/blu_0123456789abcdefghij", undefined, 5]) {
