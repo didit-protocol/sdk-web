@@ -1,0 +1,50 @@
+{
+  "scenario": "phone",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "result": {
+    "error": {
+      "code": "delivery_unavailable",
+      "status": 503
+    }
+  },
+  "events": [],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "5HfCLLW1SuSP-s1KM9U3SA",
+          "code_challenge": "8455aloVoCVk_RAuGZAfLQUdcaZAz7g-PeC-MjxfHpA",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "lwrE8CoIC942g2QSb3fK6FAg29LPl3xr0DNTpXYIIFw",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "phone/start/",
+        "body": {
+          "transaction": "lwrE8CoIC942g2QSb3fK6FAg29LPl3xr0DNTpXYIIFw",
+          "phone": "+14155550123",
+          "language": "en"
+        }
+      },
+      "response": {
+        "status": 503,
+        "body": {
+          "error": "delivery_unavailable"
+        }
+      }
+    }
+  ]
+}
