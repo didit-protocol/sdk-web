@@ -431,6 +431,91 @@ Key points:
 
 Full guide: [SDK Transaction Submission](https://docs.didit.me/transaction-monitoring/sdk-transaction-submission).
 
+## Bank Link
+
+`openBankLink` lets a person connect their bank from your page, as a modal or inline.
+Your server creates the link and gives the page its `client_token` (`blt_...`); the SDK shows the flow and tells your page how it ended.
+The bank's own sign-in cannot run inside a frame, so the flow opens it in a separate window where the browser allows it, and falls back to a full-page redirect on a phone or when the window is blocked.
+
+```ts
+import { DiditSdk } from "@didit-protocol/sdk-web";
+
+const handle = DiditSdk.shared.openBankLink({
+  token: "blt_...", // the link's client_token, created by your server
+  onSuccess: ({ link_id }) => fetch("/api/bank/linked", { method: "POST", body: link_id }),
+  onExit: ({ reason }) => console.log("ended without a connection:", reason),
+  onEvent: (event) => console.log(event.name)
+});
+
+handle.close(); // optional: closes the flow and fires exit with reason "closed"
+```
+
+Confirm the link on your server before you trust it: read it with `GET /v3/bank/links/{id}/` and your API key, or wait for the webhook.
+The ids in `onSuccess` are a convenience and are never proof.
+
+### Inline
+
+Pass `container` (a selector or an element) and the flow renders inside it instead of opening a modal.
+
+```ts
+DiditSdk.shared.openBankLink({ token: "blt_...", container: "#bank", onSuccess, onExit });
+```
+
+### Options
+
+| Option | Type | Notes |
+|---|---|---|
+| `token` | `string` | The `client_token` (`blt_...`) or the hosted link URL. Required. |
+| `container` | `string \| HTMLElement` | Inline mode. Without it the flow opens as a modal. |
+| `locale` | `string` | A language code such as `es` or `pt-BR`; by default the link's own language. |
+| `theme` | `"light" \| "dark" \| "auto"` | Default `"auto"`. |
+| `onSuccess` | `(result) => void` | Once, when the link is completed. Sugar over the `success` event. |
+| `onExit` | `(result) => void` | Once, when the flow ends without a connection. Sugar over the `exit` event. |
+| `onEvent` | `(event) => void` | Every event below. |
+| `baseUrl` | `string` | The origin that serves the link. Default `https://verify.didit.me`. Only for staging or a test page. |
+
+A token that is not a Bank Link token throws a `DiditBankLinkError` (`code: "invalid_token"`) synchronously, before anything is shown.
+Only one Bank Link is open at a time: opening a second closes the first with `exit` and `reason: "closed"`.
+
+### Events
+
+Events are notifications derived from the link's state; the outcome is always read from your server.
+Payloads carry ids only: never a token, a name, an account number or an email.
+`success` and `exit` never both fire for one link, and each fires at most once.
+
+| `name` | Payload | When |
+|---|---|---|
+| `opened` | `link_id`, `mode` (`connect` or `renew`), `access` (`one_time` or `ongoing`), `presentation` | The link was opened |
+| `consent_shown` | `link_id`, `consent_version` | The consent screen was shown |
+| `consent_accepted` | `link_id`, `consent_version` | The person accepted |
+| `institution_selected` | `institution_id`, `country` | The person picked a bank |
+| `bank_redirect` | `via` (`popup` or `redirect`) | The bank hop started |
+| `bank_returned` | `result` (`ok`, `cancelled`, `failed`, `timeout`, `unsupported`) | The person came back from the bank |
+| `accounts_selected` | `count` | The person chose accounts |
+| `success` | `link_id`, `connection_id` (optional), `check_id` (optional), `resumed` (optional) | The link was completed |
+| `exit` | `reason` (`closed`, `cancelled`, `bank_unavailable`, `expired`, `failed`), `step`, `link_id` (optional), `resumed` (optional) | The flow ended without a connection |
+| `error` | `code` | A problem that does not end the flow, such as `popup_blocked` |
+
+### Full-page redirect and `resumeBankLink`
+
+On a phone, or when the browser blocks the bank window, the whole page goes to the bank and comes back to the `redirect_url` registered for your application.
+On that page call `resumeBankLink` with the same callbacks you gave `openBankLink`; it is safe on every page load and does nothing when there is nothing to resume.
+A hash route in your page's address is kept in the return URL; the hosted page adds its resume parameter to the query, before the hash.
+
+```ts
+const { resumed } = await DiditSdk.shared.resumeBankLink({ onSuccess, onExit });
+```
+
+It reopens the flow at its state on Didit's servers and fires `onSuccess` or `onExit` once, with `resumed: true`.
+The result never travels between windows: it always comes from Didit's servers.
+
+### Security
+
+- The token is passed to the frame in the URL fragment, so it never reaches a server log or a `Referer` header, and the SDK never stores it.
+- The SDK accepts messages only from the exact origin that serves the link and only from its own frame, and posts only to that origin.
+- Embedding works only on the origins registered for the link.
+- The sample above pins nothing; in a script tag use an exact version, for example `https://unpkg.com/@didit-protocol/sdk-web@0.7.0`.
+
 ## Event Monitoring
 
 Send what your end users do (sign-up, login, failed login, logout, password reset, MFA, device change) to Didit's [event monitoring](https://docs.didit.me/transaction-monitoring/events), where accepted events are associated with the same person as their verifications and transactions.

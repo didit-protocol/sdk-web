@@ -126,3 +126,28 @@ export const languages  = [
     "zh-TW",
     "zh",
 ]
+
+/** The origin that serves Bank Link, by default. An integrator can point the SDK at another one (see `BankLinkOptions.baseUrl`). */
+export const BANK_LINK_DEFAULT_ORIGIN = "https://verify.didit.me";
+
+/** Every Bank Link wire message has a `type` that starts with this prefix and `v: BANK_LINK_PROTOCOL_VERSION`. */
+export const BANK_LINK_MESSAGE_PREFIX = "didit:bank_link:";
+export const BANK_LINK_PROTOCOL_VERSION = 1;
+
+/** What the Bank Link frame may use: the link's copy buttons. It never gets the camera, microphone or location. */
+export const BANK_LINK_IFRAME_ALLOW = "clipboard-write";
+
+/**
+ * Where the SDK keeps, in the page's own sessionStorage (first party to the integrator, so a
+ * frame's partitioned storage does not matter), the instance id and the record that lets
+ * `resumeBankLink` pick the flow up after a full-page redirect. Neither holds a token.
+ */
+export const BANK_LINK_INSTANCE_STORAGE_KEY = "didit_bank_link_instance";
+export const BANK_LINK_RESUME_STORAGE_KEY = "didit_bank_link_resume";
+export const BANK_LINK_RESUME_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** The query parameter the hosted page adds to the integrator's return URL: a single-use resume code. */
+export const BANK_LINK_RESUME_QUERY_PARAM = "didit_resume";
+
+/** The window name of the bank popup, so a second request reuses the same window. */
+export const BANK_LINK_POPUP_NAME = "didit_bank";

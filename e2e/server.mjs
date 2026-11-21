@@ -20,7 +20,9 @@ const CONTENT_TYPES = {
 };
 
 function resolveRequestPath(requestUrl) {
-  const pathname = decodeURIComponent(new URL(requestUrl, `http://${HOST}:${PORT}`).pathname);
+  let pathname = decodeURIComponent(new URL(requestUrl, `http://${HOST}:${PORT}`).pathname);
+  // The Bank Link frame path the SDK builds (/bank/frame/<instance id>) serves the contract stub page.
+  if (/^\/bank\/frame\/[\w-]+$/.test(pathname)) pathname = "/e2e/fixtures/bank-link-frame.html";
   const filePath = resolve(ROOT, `.${pathname}`);
 
   return filePath.startsWith(`${ROOT}${sep}`) ? filePath : null;

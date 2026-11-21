@@ -2,6 +2,18 @@
 
 All notable changes to `@didit-protocol/sdk-web` will be documented in this file.
 
+## [0.7.0] - 2026-11-21
+
+### Added
+- `DiditSdk.shared.openBankLink({ token, container?, locale?, theme?, onSuccess?, onExit?, onEvent? })` opens Bank Link as a modal or inline, and returns a handle with `close()` and `state`. `onSuccess` and `onExit` are sugar over the `success` and `exit` events; every event carries ids only.
+- `DiditSdk.shared.resumeBankLink(options?)` reopens a link after a full-page bank redirect and delivers its result once, with `resumed: true`.
+- `DiditBankLinkError` (`invalid_token`, `invalid_container`, `invalid_options`) thrown synchronously for an invalid option, before any frame exists.
+- The Bank Link types: `BankLinkOptions`, `BankLinkEvent`, `BankLinkSuccess`, `BankLinkExit`, `BankLinkHandle` and the rest.
+- The modal's dialog and close labels for Bank Link in every language the modal supports.
+
+### Security
+- The Bank Link frame receives its token in the URL fragment and gets no referrer. The SDK accepts messages only from the exact origin that serves the link and from its own frame, posts only to that origin, and never stores the token.
+
 ## [0.6.0] - 2026-11-12
 
 ### Added
