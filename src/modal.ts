@@ -222,27 +222,22 @@ export class VerificationModal {
       }
 
       /*
-       * The frame fills its container's content box exactly: the box is pinned on every side, so a
+       * The frame fills its container's content box exactly: its box is pinned on every side, so a
        * host page's own iframe rules (a border, a margin, an inline baseline gap, a max-width) cannot
        * leave a strip of the overlay or the page showing next to it.
        */
-      .${CSS_CLASSES.container} > .${CSS_CLASSES.iframe} {
+      .${CSS_CLASSES.iframe} {
         position: absolute;
         top: 0;
         right: 0;
         bottom: 0;
         left: 0;
-      }
-
-      .${CSS_CLASSES.iframe} {
         box-sizing: border-box;
         display: block;
         width: 100%;
         height: 100%;
         min-width: 0;
         max-width: none;
-        min-height: 0;
-        max-height: none;
         margin: 0;
         padding: 0;
         border: 0;
@@ -627,7 +622,9 @@ export class VerificationModal {
         height: 100%;
       }
 
+      /* The host's element owns the size: the frame stays in the flow and fills it. */
       .${CSS_CLASSES.embedded} .${CSS_CLASSES.iframe} {
+        position: static;
         width: 100%;
         height: 100%;
         max-height: none;
@@ -1086,7 +1083,8 @@ export class VerificationModal {
       if (typeof CSS !== "undefined" && CSS.supports?.("scrollbar-gutter", "stable")) {
         root.style.setProperty("scrollbar-gutter", "stable");
       } else {
-        root.style.paddingRight = `calc(${paddingRight || "0px"} + ${scrollbarWidth}px)`;
+        root.style.paddingRight =
+          paddingRight && paddingRight !== "0px" ? `calc(${paddingRight} + ${scrollbarWidth}px)` : `${scrollbarWidth}px`;
       }
     }
   }

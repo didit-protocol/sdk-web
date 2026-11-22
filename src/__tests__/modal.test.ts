@@ -1055,7 +1055,8 @@ describe("VerificationModal dialog behaviour", () => {
   it("the frame fills the dialog's content box: pinned on every side, no border, margin or baseline gap", () => {
     openFrom(null);
     const css = (document.getElementById("didit-sdk-styles") as HTMLStyleElement).textContent as string;
-    expect(css).toMatch(/\.didit-modal-container > \.didit-verification-iframe \{\s*position: absolute;\s*top: 0;\s*right: 0;\s*bottom: 0;\s*left: 0;/);
-    expect(css).toMatch(/\.didit-verification-iframe \{[^}]*border: 0;[^}]*margin: 0;[^}]*display: block;/);
+    expect(css).toMatch(/\.didit-verification-iframe \{\s*position: absolute;\s*top: 0;\s*right: 0;\s*bottom: 0;\s*left: 0;/);
+    expect(css).toMatch(/\.didit-verification-iframe \{[^}]*display: block;[^}]*margin: 0;[^}]*border: 0;/);
+    expect(css).toMatch(/\.didit-embedded \.didit-verification-iframe \{\s*position: static;/);
   });
 });
