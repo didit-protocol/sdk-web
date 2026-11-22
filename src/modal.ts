@@ -42,6 +42,12 @@ export interface FrameHostOptions {
    * handling; returning true means it consumed the message.
    */
   interceptMessage?: (message: unknown, event: MessageEvent) => boolean;
+  /**
+   * Embedded only. Makes the frame's height follow the flow's reported `contentHeight` when the host element has no
+   * height of its own (the host grows like a block), capped by `maxHeight`; with `height` the frame keeps that
+   * height. Without this option an embedded frame always fills the host element.
+   */
+  embeddedHeight?: { height?: number | string; maxHeight?: number };
 }
 
 export type FlowKind = "handoff" | "step";
@@ -136,6 +142,8 @@ export class VerificationModal {
   /** The ground below the layout viewport (see showCurtain), while this modal is open. */
   private curtain: HTMLDivElement | null = null;
   private boundPlaceCurtain: (() => void) | null = null;
+  /** Embedded height: null until measured, then whether the host grows with the frame (see applyEmbeddedHeight). */
+  private embeddedFollowsContent: boolean | null = null;
   /** The element that had focus when the modal opened; the person gets back to it when it closes. */
   private opener: HTMLElement | null = null;
 
@@ -941,7 +949,11 @@ export class VerificationModal {
 
   /** Embedded mode keeps filling the integrator's host element, whatever the flow reports. */
   private applyFlowLayout(layout: FlowLayout): void {
-    if (this.embedded || !this.container) return;
+    if (this.embedded) {
+      this.applyEmbeddedHeight(layout.contentHeight);
+      return;
+    }
+    if (!this.container) return;
     SDKLogger.log("Flow layout:", layout);
     this.container.classList.add(CSS_CLASSES.flowSized);
     this.container.dataset.diditTheme = layout.colorScheme;
@@ -952,6 +964,31 @@ export class VerificationModal {
     this.matchPageBackground(layout.colorScheme);
     if (this.curtain) this.curtain.dataset.diditTheme = layout.colorScheme;
     this.setModalKind(layout.kind, layout.kind === "handoff" && this.handoffHeight(layout) === shownHeight);
+  }
+
+  /**
+   * Embedded height (see FrameHostOptions.embeddedHeight). Whether the host fixed its own height is measured once:
+   * with the frame at 0 the host's height is its own; if the frame at the content height makes it taller, the host
+   * follows its content and so does the frame. A host with an explicit height (or one the frame cannot grow) keeps it.
+   */
+  private applyEmbeddedHeight(contentHeight: number): void {
+    const options = this.frameOptions.embeddedHeight;
+    const frame = this.container;
+    const host = this.embeddedContainer;
+    if (!options || !frame || !host) return;
+    if (options.height !== undefined) {
+      frame.style.height = typeof options.height === "number" ? `${options.height}px` : options.height;
+      return;
+    }
+    const wanted = options.maxHeight ? Math.min(contentHeight, options.maxHeight) : contentHeight;
+    if (this.embeddedFollowsContent === null) {
+      frame.style.height = "0px";
+      const without = host.offsetHeight;
+      frame.style.height = `${wanted}px`;
+      this.embeddedFollowsContent = host.offsetHeight > without;
+    }
+    if (this.embeddedFollowsContent) frame.style.height = `${wanted}px`;
+    else frame.style.removeProperty("height");
   }
 
   /** Whether the window is a computer-sized one: a phone is full screen and never waits for a layout. */
@@ -1165,6 +1202,10 @@ export class VerificationModal {
 
   /** Back to the neutral look until the newly loaded flow reports its theme and direction. */
   private resetFlowLayout(): void {
+    if (this.embedded && this.container && this.frameOptions.embeddedHeight) {
+      this.embeddedFollowsContent = null;
+      this.container.style.removeProperty("height");
+    }
     if (this.embedded || !this.container) return;
     this.restorePageBackground();
     this.container.classList.remove(CSS_CLASSES.flowSized, CSS_CLASSES.sizeAnimated);

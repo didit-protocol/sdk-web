@@ -461,6 +461,14 @@ Pass `container` (a selector or an element) and the flow renders inside it inste
 DiditSdk.shared.openBankLink({ token: "blt_...", container: "#bank", onSuccess, onExit });
 ```
 
+The frame's height depends on who owns the container's height:
+
+- **The container has no height of its own** (an auto-height block): the frame follows the height of the screen it shows, so the container grows and shrinks with the flow like any block, and nothing is out of reach. Set `maxHeight` (pixels) to cap it; beyond the cap the page inside the frame scrolls.
+- **The container has a height of its own** (a `height` or `min-height` rule that sets it, or the `height` option): the frame keeps that height and the page inside scrolls.
+
+The SDK measures this once, when the flow reports its first height, and adds no scroll or resize listeners.
+The modal's size is unchanged.
+
 ### Options
 
 | Option | Type | Notes |
@@ -468,7 +476,9 @@ DiditSdk.shared.openBankLink({ token: "blt_...", container: "#bank", onSuccess, 
 | `token` | `string` | The `client_token` (`blt_...`) or the hosted link URL. Required. |
 | `container` | `string \| HTMLElement` | Inline mode. Without it the flow opens as a modal. |
 | `locale` | `string` | A language code such as `es` or `pt-BR`; by default the link's own language. |
-| `theme` | `"light" \| "dark" \| "auto"` | Default `"auto"`. |
+| `theme` | `"light" \| "dark" \| "auto"` | Default `"auto"`. `"light"` and `"dark"` are passed to the frame in the URL fragment (`theme`), which then shows that scheme; `"auto"` passes nothing and the frame follows the person's device. The modal's own close button follows the scheme the frame reports. |
+| `height` | `number \| string` | Inline only. A fixed height (pixels or a CSS length); the page inside the frame scrolls. |
+| `maxHeight` | `number` | Inline only. The tallest the frame grows to while it follows its content, in pixels. |
 | `onSuccess` | `(result) => void` | Once, when the link is completed. Sugar over the `success` event. |
 | `onExit` | `(result) => void` | Once, when the flow ends without a connection. Sugar over the `exit` event. |
 | `onEvent` | `(event) => void` | Every event below. |
@@ -488,6 +498,8 @@ Only one Bank Link is open at a time: opening a second closes the first with `ex
 Events are notifications derived from the link's state; the outcome is always read from your server.
 Payloads carry ids only: never a token, a name, an account number or an email.
 `success` and `exit` never both fire for one link, and each fires at most once.
+Every `exit` after `opened` carries `link_id` and `step`, the last poll step the frame reported (`null` before one).
+A close from the frame's own button or Escape (`close_request`) ends the flow exactly like `handle.close()`: the same `exit`, and focus goes back to the element that opened the modal.
 
 | `name` | Payload | When |
 |---|---|---|

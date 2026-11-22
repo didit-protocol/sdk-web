@@ -13,6 +13,7 @@
     <button id="open-modal">Open modal</button>
     <button id="open-inline">Open inline</button>
     <div id="bank"></div>
+    <div id="auto" style="width: 420px"></div>
     <div id="spacer" style="height: 3000px"></div>
     <script type="module">
       import { DiditSdk } from "../../dist/didit-sdk.esm.js";
@@ -33,6 +34,8 @@
 
       window.openModal = () => DiditSdk.shared.openBankLink({ token, baseUrl, apiBaseUrl, ...callbacks });
       window.openInline = () => DiditSdk.shared.openBankLink({ token, baseUrl, apiBaseUrl, container: "#bank", ...callbacks });
+      // A container with no height of its own: the frame follows the height of the screen it shows.
+      window.openInlineAuto = (extra = {}) => DiditSdk.shared.openBankLink({ token, baseUrl, apiBaseUrl, container: "#auto", ...extra, ...callbacks });
       document.getElementById("open-modal").onclick = window.openModal;
       document.getElementById("open-inline").onclick = window.openInline;
 

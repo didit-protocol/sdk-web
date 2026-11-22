@@ -702,3 +702,57 @@ describe("the backend's identifier formats", () => {
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ name: "opened", link_id: format("link_id").example }));
   });
 });
+
+describe("exit carries the link id and the last known step", () => {
+  const LINK = "11111111-1111-4111-8111-111111111111";
+
+  it("a close from the frame reports the step and link id the frame said, and focus returns to the opener", async () => {
+    const opener = document.body.appendChild(document.createElement("button"));
+    opener.focus();
+    const onExit = jest.fn();
+    await open({ token: TOKEN, onExit });
+    send(msg("opened", { link_id: LINK, mode: "connect", access: "ongoing" }));
+    send(msg("close_request", { step: "segment" }));
+    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(onExit).toHaveBeenCalledWith({ reason: "closed", step: "segment", link_id: LINK });
+    expect(document.querySelector("iframe")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("close_request ends the flow exactly as the host's handle.close() does", async () => {
+    const fromFrame = jest.fn();
+    await open({ token: TOKEN, onExit: fromFrame });
+    send(msg("opened", { link_id: LINK, mode: "connect", access: "ongoing" }));
+    send(msg("consent_shown", { link_id: LINK, consent_version: "v1" }));
+    send(msg("close_request"));
+    DiditSdk.reset();
+    const fromHost = jest.fn();
+    const handle = await open({ token: TOKEN, onExit: fromHost });
+    send(msg("opened", { link_id: LINK, mode: "connect", access: "ongoing" }));
+    send(msg("consent_shown", { link_id: LINK, consent_version: "v1" }));
+    handle.close();
+    expect(fromFrame.mock.calls).toEqual(fromHost.mock.calls);
+    expect(fromFrame).toHaveBeenCalledWith({ reason: "closed", step: "consent", link_id: LINK });
+  });
+
+  it("the link id is learned from any message, and a frame exit without a step gets the last known one", async () => {
+    const onExit = jest.fn();
+    await open({ token: TOKEN, onExit });
+    send(msg("step", { step: "institution", link_id: LINK }));
+    send(msg("exit", { reason: "cancelled" }));
+    expect(onExit).toHaveBeenCalledWith({ reason: "cancelled", step: "institution", link_id: LINK });
+  });
+
+  it("before any step is known the step stays null", async () => {
+    const onExit = jest.fn();
+    const handle = await open({ token: TOKEN, onExit });
+    handle.close();
+    expect(onExit).toHaveBeenCalledWith({ reason: "closed", step: null });
+  });
+
+  it("refuses an invalid height or maxHeight before anything is shown", () => {
+    for (const bad of [{ height: 0 }, { height: "" }, { maxHeight: -1 }, { maxHeight: "9" as never }]) {
+      expect(() => DiditSdk.shared.openBankLink({ token: TOKEN, ...bad })).toThrow(DiditBankLinkError);
+    }
+  });
+});

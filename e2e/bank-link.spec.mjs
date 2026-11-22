@@ -304,4 +304,38 @@ test.describe("Bank Link modal: focus, scroll and layout", () => {
     expect((await records(page)).events[0].code).toBe("unknown");
     await expect(page.locator(FRAME)).toHaveCount(0);
   });
+
+  test("inline: the frame follows the screen's height when the host fixed none, honours maxHeight and height, and keeps a host's own height", async ({ page }) => {
+    const frameHeight = (selector) => page.locator(`${selector} iframe`).evaluate((el) => el.getBoundingClientRect().height);
+    await page.goto(HOST_PAGE);
+    await page.evaluate(() => window.openInlineAuto());
+    await expect(page.locator("#auto iframe")).toBeVisible();
+    await expect.poll(() => frameHeight("#auto")).toBe(900);
+    expect(await page.evaluate(() => document.getElementById("auto").getBoundingClientRect().height)).toBe(900);
+    await page.frameLocator("#auto iframe").getByRole("button", { name: "Close" }).click();
+    await expect(page.locator("#auto iframe")).toHaveCount(0);
+
+    await page.evaluate(() => window.openInlineAuto({ maxHeight: 500 }));
+    await expect.poll(() => frameHeight("#auto")).toBe(500);
+    await page.frameLocator("#auto iframe").getByRole("button", { name: "Close" }).click();
+
+    await page.evaluate(() => window.openInlineAuto({ height: 300 }));
+    await expect.poll(() => frameHeight("#auto")).toBe(300);
+    await page.frameLocator("#auto iframe").getByRole("button", { name: "Close" }).click();
+
+    // A host that fixed its own height (420px) keeps it; the framed page scrolls inside.
+    await page.evaluate(() => window.openInline());
+    await expect(page.locator("#bank iframe")).toBeVisible();
+    await page.waitForTimeout(300);
+    expect(await frameHeight("#bank")).toBeCloseTo(420, 0);
+  });
+
+  test("a close at an early screen reports the link id and the last known step", async ({ page }) => {
+    const frame = await open(page, "modal");
+    await frame.getByRole("button", { name: "Close" }).click();
+    await expect.poll(async () => (await records(page)).exit).toEqual([
+      { reason: "closed", step: "consent", link_id: "11111111-1111-4111-8111-111111111111" }
+    ]);
+    expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe("IFRAME");
+  });
 });

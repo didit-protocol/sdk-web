@@ -369,6 +369,14 @@ export interface BankLinkOptions {
   locale?: string;
   /** The flow's colour scheme. @default "auto" */
   theme?: "light" | "dark" | "auto";
+  /**
+   * Inline mode only. A fixed height for the flow (pixels, or a CSS length such as `"640px"`). With it the frame keeps
+   * that height and the page inside scrolls. Without it, and without a height of your own on the container, the
+   * frame follows the height of the screen it shows.
+   */
+  height?: number | string;
+  /** Inline mode only. The tallest the frame grows to while it follows its content, in pixels; the page inside scrolls beyond it. */
+  maxHeight?: number;
   /** Called once when the link is completed. Sugar over the `success` event. */
   onSuccess?: (result: BankLinkSuccess) => void;
   /** Called once when the flow ends without a connection. Sugar over the `exit` event. */

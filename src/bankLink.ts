@@ -137,6 +137,12 @@ function assertCallbacks(options: Partial<BankLinkOptions>): void {
   if (options.theme !== undefined && !["light", "dark", "auto"].includes(options.theme)) {
     throw new DiditBankLinkError("invalid_options", 'theme must be "light", "dark" or "auto".');
   }
+  if (options.height !== undefined && !((typeof options.height === "number" && Number.isFinite(options.height) && options.height > 0) || (typeof options.height === "string" && options.height.trim() !== ""))) {
+    throw new DiditBankLinkError("invalid_options", "height must be a positive number of pixels or a CSS length.");
+  }
+  if (options.maxHeight !== undefined && !(typeof options.maxHeight === "number" && Number.isFinite(options.maxHeight) && options.maxHeight > 0)) {
+    throw new DiditBankLinkError("invalid_options", "maxHeight must be a positive number of pixels.");
+  }
   if (options.locale !== undefined && (typeof options.locale !== "string" || !/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(options.locale))) {
     throw new DiditBankLinkError("invalid_options", "locale must be a language code such as es or pt-BR.");
   }
@@ -236,7 +242,7 @@ export function readBankLinkEvent(name: string, data: unknown): BankLinkEvent | 
   return payload as unknown as BankLinkEvent;
 }
 
-type TransportName = "close_request" | "open_bank" | "bank_url" | "redirect_request";
+type TransportName = "close_request" | "open_bank" | "bank_url" | "redirect_request" | "step";
 
 interface ParsedMessage {
   name: string;
@@ -416,6 +422,8 @@ class BankLinkSession implements BankLinkHandle {
   private modal: VerificationModal;
   private linkRef: string | null = null;
   private linkId: string | undefined;
+  /** The last poll step the frame told us about (see `noteContext`), for the `exit` that ends the flow. */
+  private lastStep: string | null = null;
   private ended = false;
   private tornDown = false;
   private redirecting = false;
@@ -438,6 +446,7 @@ class BankLinkSession implements BankLinkHandle {
         iframeAllow: BANK_LINK_IFRAME_ALLOW,
         referrerPolicy: "no-referrer",
         embeddedElement: init.element ?? undefined,
+        embeddedHeight: init.element ? { height: init.options.height, maxHeight: init.options.maxHeight } : undefined,
         language: init.options.locale,
         translations: getBankLinkModalTranslations,
         isTrustedOrigin: (origin) => isExactOrigin(origin, init.origin),
@@ -521,7 +530,7 @@ class BankLinkSession implements BankLinkHandle {
     if (this.tornDown) return;
     if (!this.ended) {
       this.ended = true;
-      this.emit({ name: "exit", reason: "closed", step: null, ...(this.linkId ? { link_id: this.linkId } : {}) });
+      this.emit({ name: "exit", reason: "closed", step: this.lastStep, ...(this.linkId ? { link_id: this.linkId } : {}) });
     }
     this.teardown();
   }
@@ -550,7 +559,10 @@ class BankLinkSession implements BankLinkHandle {
     } else if (this.linkRef !== null) {
       return true;
     }
+    this.noteContext(message.name, message.data);
     switch (message.name as TransportName) {
+      case "step":
+        return true;
       case "close_request":
         this.close();
         return true;
@@ -571,6 +583,21 @@ class BankLinkSession implements BankLinkHandle {
     return true;
   }
 
+  /**
+   * Remembers the poll step and the link id the frame reports (any message may carry `step` and `link_id` in its
+   * data; `close_request` and the `step` message do so to say where the person was). Two events mark a step by
+   * their definition (events.md, section 2): `consent_shown` is the `consent` step, `bank_redirect` the `bank_hop` one.
+   */
+  private noteContext(name: string, data: unknown): void {
+    const source = typeof data === "object" && data !== null ? (data as Record<string, unknown>) : {};
+    if (name === "consent_shown") this.lastStep = "consent";
+    else if (name === "bank_redirect") this.lastStep = "bank_hop";
+    if (typeof source.step === "string" && ERROR_CODE_PATTERN.test(source.step)) this.lastStep = source.step;
+    if (this.linkId === undefined && typeof source.link_id === "string" && source.link_id.length > 0 && source.link_id.length <= MAX_STRING_LENGTH) {
+      this.linkId = source.link_id;
+    }
+  }
+
   private deliver(event: BankLinkEvent): void {
     if (event.name === "opened") {
       this.linkId = event.link_id;
@@ -581,6 +608,11 @@ class BankLinkSession implements BankLinkHandle {
       this.ended = true;
       if (this.init.resumed) event.resumed = true;
       if ("link_id" in event && typeof event.link_id === "string") this.linkId = event.link_id;
+      if (event.name === "exit") {
+        // Every exit after `opened` carries the link id and the last known step, even when the frame left them out.
+        if (event.link_id === undefined && this.linkId) event.link_id = this.linkId;
+        if (event.step === null) event.step = this.lastStep;
+      }
     }
     this.emit(event);
     if (this.init.resumed && this.ended) {

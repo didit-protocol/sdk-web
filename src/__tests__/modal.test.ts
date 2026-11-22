@@ -1073,3 +1073,64 @@ describe("VerificationModal dialog behaviour", () => {
     expect(css).toMatch(/\.didit-embedded \.didit-verification-iframe \{\s*position: static;/);
   });
 });
+
+describe("VerificationModal embedded height", () => {
+  const modals: VerificationModal[] = [];
+  afterEach(() => {
+    modals.forEach((modal) => modal.destroy());
+    modals.length = 0;
+    document.body.innerHTML = "";
+  });
+
+  /** jsdom has no layout: a host that "grows" reports its frame's height, a fixed one reports its own. */
+  function embed(embeddedHeight: { height?: number | string; maxHeight?: number }, fixedHost: number | null) {
+    const host = document.body.appendChild(document.createElement("div"));
+    const modal = new VerificationModal(
+      { embedded: true },
+      { onClose: () => {}, onCloseConfirmed: () => {}, onMessage: () => {}, onIframeLoad: () => {} },
+      { embeddedElement: host, embeddedHeight }
+    );
+    modals.push(modal);
+    modal.open("https://verify.didit.me/bank/frame/frame_0123456789");
+    const frame = getContainer(modal);
+    Object.defineProperty(host, "offsetHeight", {
+      configurable: true,
+      get: () => (fixedHost ?? (parseFloat(frame.style.height) || 0))
+    });
+    const layout = (contentHeight: number) =>
+      dispatchMessage(getIframe(modal).contentWindow, { type: "didit:layout", data: { contentHeight, kind: "step" }, timestamp: 1 });
+    return { host, modal, frame, layout };
+  }
+
+  it("follows contentHeight when the host has no height of its own, step after step", () => {
+    const { frame, layout } = embed({}, null);
+    layout(679);
+    expect(frame.style.height).toBe("679px");
+    layout(784);
+    expect(frame.style.height).toBe("784px");
+  });
+
+  it("caps the height at maxHeight", () => {
+    const { frame, layout } = embed({ maxHeight: 500 }, null);
+    layout(784);
+    expect(frame.style.height).toBe("500px");
+  });
+
+  it("keeps a host's own height, and takes an explicit height option", () => {
+    const fixed = embed({}, 640);
+    fixed.layout(784);
+    expect(fixed.frame.style.height).toBe("");
+    const explicit = embed({ height: 300 }, 640);
+    explicit.layout(784);
+    expect(explicit.frame.style.height).toBe("300px");
+  });
+
+  it("does nothing for an embedded flow that did not ask (the verification flow)", () => {
+    const host = document.body.appendChild(document.createElement("div"));
+    const modal = new VerificationModal({ embedded: true }, { onClose: () => {}, onCloseConfirmed: () => {}, onMessage: () => {}, onIframeLoad: () => {} }, { embeddedElement: host });
+    modals.push(modal);
+    modal.open("https://verify.didit.me/session");
+    dispatchMessage(getIframe(modal).contentWindow, { type: "didit:layout", data: { contentHeight: 900 }, timestamp: 1 });
+    expect(getContainer(modal).style.height).toBe("");
+  });
+});

@@ -56,7 +56,7 @@
       });
 
       // The hosted flow reports its layout as it does for verification, so the modal sizes to it.
-      window.parent.postMessage({ type: "didit:layout", data: { contentHeight: 640, colorScheme: window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light", kind: "step" }, timestamp: Date.now() }, parentOrigin);
+      window.parent.postMessage({ type: "didit:layout", data: { contentHeight: params.get("presentation") === "inline" ? 900 : 640, colorScheme: window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light", kind: "step" }, timestamp: Date.now() }, parentOrigin);
 
       const resuming = params.get("resume") === "1";
       post("opened", { link_id: "11111111-1111-4111-8111-111111111111", mode: "connect", access: "ongoing", presentation: params.get("presentation") });
@@ -68,7 +68,7 @@
       document.getElementById("complete").onclick = () =>
         post("success", { link_id: "11111111-1111-4111-8111-111111111111", connection_id: "22222222-2222-4222-8222-222222222222", check_id: null });
       document.getElementById("fail").onclick = () => post("exit", { reason: "failed", step: "bank_hop" });
-      document.getElementById("close").onclick = () => post("close_request", {});
+      document.getElementById("close").onclick = () => post("close_request", { step: "consent", link_id: "11111111-1111-4111-8111-111111111111" });
     </script>
   </body>
 </html>
