@@ -788,8 +788,8 @@ describe("the full-page hand-off matches the contract's addresses", () => {
     expect(spec.where).toBe("fragment");
     expect([...sent.keys()].every((key) => spec.params.some((p) => p.name === key))).toBe(true);
     for (const param of spec.params) {
-      if (param.required) expect(sent.has(param.name), param.name).toBe(true);
-      if (sent.has(param.name)) expect(patternOf(param).test(sent.get(param.name) as string), param.name).toBe(true);
+      if (param.required) expect([param.name, sent.has(param.name)]).toEqual([param.name, true]);
+      if (sent.has(param.name)) expect([param.name, patternOf(param).test(sent.get(param.name) as string)]).toEqual([param.name, true]);
     }
     expect(sent.get("resume_code")).toBe(afterBank.resume_code);
   });
