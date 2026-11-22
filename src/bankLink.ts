@@ -562,9 +562,12 @@ class BankLinkSession implements BankLinkHandle {
   private handleMessage(raw: unknown): boolean {
     // Every message from our own frame (the host already checked its origin and window) may carry the link id and
     // the poll step: `didit:layout` and `didit:ready` as well as the Bank Link ones. One place, before anything else.
-    if (!this.tornDown) this.noteContext(raw);
     const message = parseBankLinkEnvelope(raw);
-    if (!message) return false; // not a Bank Link message: the frame host handles layout and the rest
+    if (!message) {
+      // Not a Bank Link message (layout, ready): its context counts unless it names another link than the bound one.
+      if (!this.tornDown && !this.namesOtherLink(raw)) this.noteContext(raw);
+      return false; // the frame host handles layout and the rest
+    }
     if (this.tornDown) return true;
     if (message.linkRef !== null) {
       if (this.linkRef === null) this.linkRef = message.linkRef;
@@ -572,6 +575,7 @@ class BankLinkSession implements BankLinkHandle {
     } else if (this.linkRef !== null) {
       return true;
     }
+    this.noteContext(raw); // only after the link reference was validated: a stale link's message records nothing
     switch (message.name as TransportName) {
       case "step":
         return true;
@@ -593,6 +597,23 @@ class BankLinkSession implements BankLinkHandle {
     const event = readBankLinkEvent(message.name, message.data);
     if (event) this.deliver(event);
     return true;
+  }
+
+  /** Whether a message carries a `link_ref` other than the one this session is bound to. */
+  private namesOtherLink(raw: unknown): boolean {
+    let message: unknown = raw;
+    if (typeof raw === "string") {
+      try {
+        message = JSON.parse(raw);
+      } catch {
+        return false;
+      }
+    }
+    if (typeof message !== "object" || message === null || this.linkRef === null) return false;
+    const top = message as Record<string, unknown>;
+    const inner = typeof top.data === "object" && top.data !== null ? (top.data as Record<string, unknown>) : {};
+    const ref = typeof top.link_ref === "string" ? top.link_ref : typeof inner.link_ref === "string" ? inner.link_ref : null;
+    return ref !== null && ref !== this.linkRef;
   }
 
   /**

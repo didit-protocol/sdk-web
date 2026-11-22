@@ -850,4 +850,15 @@ describe("the last known step comes from every message the frame posts", () => {
     handle.close();
     expect(onExit).toHaveBeenCalledWith({ reason: "closed", step: "segment", link_id: LINK });
   });
+
+  it("a message of another link (a different link_ref) records no step and no link id", async () => {
+    const onExit = jest.fn();
+    const handle = await open({ token: TOKEN, onExit });
+    send(msg("opened", { link_id: LINK, mode: "connect", access: "ongoing" }, "ref-mine"));
+    send(msg("step", { step: "consent" }, "ref-mine"));
+    send(msg("step", { step: "institution", link_id: "99999999-9999-4999-8999-999999999999" }, "ref-other"));
+    send({ type: "didit:layout", data: { contentHeight: 640, step: "accounts" }, link_ref: "ref-other", timestamp: 1 });
+    handle.close();
+    expect(onExit).toHaveBeenCalledWith({ reason: "closed", step: "consent", link_id: LINK });
+  });
 });
