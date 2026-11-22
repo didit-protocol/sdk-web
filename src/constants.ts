@@ -20,7 +20,8 @@ export const CSS_CLASSES = {
   confirmOverlay: "didit-confirm-overlay",
   confirmBox: "didit-confirm-box",
   embedded: "didit-embedded",
-  curtain: "didit-modal-curtain"
+  curtain: "didit-modal-curtain",
+  focusSentinel: "didit-focus-sentinel"
 } as const;
 
 export const SDK_VERSION = "__SDK_PACKAGE_VERSION__";

@@ -71,7 +71,7 @@ export interface FlowLayout {
 /** The inline scroll styles a modal overrides to lock the page, as they were before. */
 interface PageScrollLock {
   holders: Set<VerificationModal>;
-  root: { overflow: string; overscrollBehavior: string };
+  root: { overflow: string; overscrollBehavior: string; scrollbarGutter: string; paddingRight: string };
   /** Only set when the page scrolls its body rather than the window, so the body was locked too. */
   body: { overflow: string } | null;
 }
@@ -136,6 +136,8 @@ export class VerificationModal {
   /** The ground below the layout viewport (see showCurtain), while this modal is open. */
   private curtain: HTMLDivElement | null = null;
   private boundPlaceCurtain: (() => void) | null = null;
+  /** The element that had focus when the modal opened; the person gets back to it when it closes. */
+  private opener: HTMLElement | null = null;
 
   constructor(
     configuration: DiditSdkConfiguration | undefined,
@@ -186,8 +188,26 @@ export class VerificationModal {
         opacity: 1;
       }
 
+      /* The dialog itself takes focus when it opens; its ring is the frame's, not the backdrop's. */
+      .${CSS_CLASSES.overlay}:focus {
+        outline: none;
+      }
+
+      /* Focus sentinels keep Tab inside the dialog; they are focusable but take no room. */
+      .${CSS_CLASSES.focusSentinel} {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        opacity: 0;
+        pointer-events: none;
+      }
+
       .${CSS_CLASSES.container} {
         position: relative;
+        box-sizing: border-box;
         width: 100%;
         max-width: 440px;
         height: min(860px, calc(100vh - 2rem));
@@ -201,11 +221,32 @@ export class VerificationModal {
         transform: scale(1);
       }
 
+      /*
+       * The frame fills its container's content box exactly: the box is pinned on every side, so a
+       * host page's own iframe rules (a border, a margin, an inline baseline gap, a max-width) cannot
+       * leave a strip of the overlay or the page showing next to it.
+       */
+      .${CSS_CLASSES.container} > .${CSS_CLASSES.iframe} {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+      }
+
       .${CSS_CLASSES.iframe} {
+        box-sizing: border-box;
+        display: block;
         width: 100%;
         height: 100%;
-        border: none;
-        display: block;
+        min-width: 0;
+        max-width: none;
+        min-height: 0;
+        max-height: none;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        vertical-align: top;
       }
 
       .${CSS_CLASSES.closeButton} {
@@ -580,6 +621,8 @@ export class VerificationModal {
 
       .${CSS_CLASSES.embedded} {
         position: relative;
+        box-sizing: border-box;
+        display: block;
         width: 100%;
         height: 100%;
       }
@@ -613,6 +656,7 @@ export class VerificationModal {
     this.overlay.setAttribute("role", "dialog");
     this.overlay.setAttribute("aria-modal", "true");
     this.overlay.setAttribute("aria-label", t.ariaLabelModal);
+    this.overlay.tabIndex = -1;
 
     this.container = document.createElement("div");
     this.container.className = CSS_CLASSES.container;
@@ -675,6 +719,7 @@ export class VerificationModal {
     this.container.appendChild(this.iframe);
     this.container.appendChild(this.confirmOverlay);
     this.overlay.appendChild(this.container);
+    this.overlay.appendChild(this.createFocusSentinel());
 
     this.overlay.addEventListener("click", (e) => {
       if (e.target === this.overlay) {
@@ -683,6 +728,33 @@ export class VerificationModal {
     });
 
     this.containerElement.appendChild(this.overlay);
+  }
+
+  /**
+   * A frame is one tab stop from this page's side, so Tab out of its last element would walk past
+   * the dialog into the page behind. The sentinel sits right after the dialog's content: landing on
+   * it sends focus back to the first stop. The way back (Shift+Tab on the first stop) is the
+   * keydown handler's, because the first stop is in this document.
+   */
+  private createFocusSentinel(): HTMLSpanElement {
+    const sentinel = document.createElement("span");
+    sentinel.className = CSS_CLASSES.focusSentinel;
+    sentinel.tabIndex = 0;
+    sentinel.setAttribute("aria-hidden", "true");
+    sentinel.addEventListener("focus", () => {
+      const [first] = this.tabStops();
+      (first ?? this.overlay)?.focus({ preventScroll: true });
+    });
+    return sentinel;
+  }
+
+  /** The elements Tab visits inside the dialog, in order: the exit confirmation's buttons while it shows, else the close button and the frame. */
+  private tabStops(): HTMLElement[] {
+    if (this.state.showConfirmation) {
+      return Array.from(this.confirmOverlay?.querySelectorAll<HTMLElement>("button") ?? []);
+    }
+    const close = this.container?.querySelector<HTMLElement>(`.${CSS_CLASSES.closeButton}`);
+    return [close, this.iframe].filter((el): el is HTMLElement => el instanceof HTMLElement);
   }
 
   private createEmbeddedDOM(): void {
@@ -993,14 +1065,30 @@ export class VerificationModal {
     const clips = (overflow: string) => overflow !== "" && overflow !== "visible";
     const bodyScrollsItself =
       clips(window.getComputedStyle(root).overflowY) && clips(window.getComputedStyle(body).overflowY);
+    // A classic scrollbar leaves with the overflow and the page would jump wider: its width is kept
+    // (jsdom and overlay scrollbars have none, and then nothing is added).
+    const scrollbarWidth = root.clientWidth > 0 ? Math.max(0, window.innerWidth - root.clientWidth) : 0;
     VerificationModal.pageScrollLock = {
       holders: new Set([this]),
-      root: { overflow: root.style.overflow, overscrollBehavior: root.style.overscrollBehavior },
+      root: {
+        overflow: root.style.overflow,
+        overscrollBehavior: root.style.overscrollBehavior,
+        scrollbarGutter: root.style.getPropertyValue("scrollbar-gutter"),
+        paddingRight: root.style.paddingRight
+      },
       body: bodyScrollsItself ? { overflow: body.style.overflow } : null
     };
+    const paddingRight = scrollbarWidth > 0 ? window.getComputedStyle(root).paddingRight : "";
     root.style.overflow = "hidden";
     root.style.overscrollBehavior = "none";
     if (bodyScrollsItself) body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      if (typeof CSS !== "undefined" && CSS.supports?.("scrollbar-gutter", "stable")) {
+        root.style.setProperty("scrollbar-gutter", "stable");
+      } else {
+        root.style.paddingRight = `calc(${paddingRight || "0px"} + ${scrollbarWidth}px)`;
+      }
+    }
   }
 
   private unlockPageScroll(): void {
@@ -1010,6 +1098,9 @@ export class VerificationModal {
     const root = document.documentElement;
     root.style.overflow = lock.root.overflow;
     root.style.overscrollBehavior = lock.root.overscrollBehavior;
+    if (lock.root.scrollbarGutter) root.style.setProperty("scrollbar-gutter", lock.root.scrollbarGutter);
+    else root.style.removeProperty("scrollbar-gutter");
+    root.style.paddingRight = lock.root.paddingRight;
     if (lock.body) document.body.style.overflow = lock.body.overflow;
   }
 
@@ -1104,6 +1195,17 @@ export class VerificationModal {
       return;
     }
 
+    if (event.key === "Tab" && event.shiftKey && !this.embedded) {
+      // Shift+Tab on the dialog itself or on its first stop wraps to the last stop, never out to the page behind.
+      const stops = this.tabStops();
+      const active = document.activeElement;
+      if (stops.length && (active === this.overlay || active === stops[0])) {
+        event.preventDefault();
+        stops[stops.length - 1].focus({ preventScroll: true });
+      }
+      return;
+    }
+
     if (event.key === "Escape") {
       event.preventDefault();
       if (this.state.showConfirmation) {
@@ -1134,7 +1236,7 @@ export class VerificationModal {
   private showConfirmation(trigger?: HTMLElement): void {
     if (!this.confirmOverlay || this.state.showConfirmation) return;
     const activeElement = document.activeElement;
-    this.confirmationTrigger = trigger ?? (activeElement instanceof HTMLElement && activeElement !== document.body
+    this.confirmationTrigger = trigger ?? (activeElement instanceof HTMLElement && activeElement !== document.body && activeElement !== this.overlay
       ? activeElement
       : this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`) ?? this.iframe);
     this.state.showConfirmation = true;
@@ -1188,6 +1290,8 @@ export class VerificationModal {
   }
 
   open(verificationUrl: string): void {
+    const wasOpen = this.state.isOpen;
+    const previouslyFocused = document.activeElement;
     this.language = this.frameOptions.language ?? detectLanguageFromUrl(verificationUrl);
 
     if (!this.overlay && !this.container) {
@@ -1222,6 +1326,11 @@ export class VerificationModal {
     // close() still gives the page back the values it had before any modal opened.
     this.lockPageScroll();
     this.showCurtain();
+    if (!wasOpen) {
+      this.opener = previouslyFocused instanceof HTMLElement && previouslyFocused !== document.body ? previouslyFocused : null;
+      // Focus moves into the dialog: Tab and Shift+Tab stay inside it (see createFocusSentinel).
+      this.overlay?.focus({ preventScroll: true });
+    }
   }
 
   close(): void {
@@ -1246,6 +1355,14 @@ export class VerificationModal {
     this.overlay?.classList.remove("active");
     this.removeCurtain();
     this.unlockPageScroll();
+    this.restoreOpenerFocus();
+  }
+
+  /** Back to the element that had focus when the modal opened, if it is still in the page. */
+  private restoreOpenerFocus(): void {
+    const opener = this.opener;
+    this.opener = null;
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
   }
 
   destroy(): void {

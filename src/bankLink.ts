@@ -54,14 +54,16 @@ export const bankLinkRuntime = {
       signal
     });
     if (!response.ok) throw new Error(`frame-policy answered ${response.status}`);
-    return response.json();
+    // An answer that is not JSON reached us fine: it is an unusable answer, not a network failure.
+    return response.json().catch(() => undefined);
   },
   openPopup: (): Window | null => window.open("about:blank", BANK_LINK_POPUP_NAME, "popup,width=520,height=760")
 };
 
 const CLIENT_TOKEN_PATTERN = /^blt_[A-Za-z0-9_-]{16,}$/;
 const URL_TOKEN_PATTERN = /^bl[tu]_[A-Za-z0-9_-]{16,}$/;
-const RESUME_CODE_PATTERN = /^[A-Za-z0-9_-]{8,256}$/;
+/** A resume code travels in a query or a fragment: RFC 3986 unreserved characters only (the backend's codes are `rsc_<id>.<secret>`). */
+const RESUME_CODE_PATTERN = /^[A-Za-z0-9._~-]{8,256}$/;
 const ERROR_CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
 const POPUP_POLL_MS = 500;
 
@@ -474,7 +476,12 @@ class BankLinkSession implements BankLinkHandle {
     window.clearTimeout(timer);
     if (this.tornDown) return;
     const policy = readFramePolicy(answer);
-    if (!policy) return this.refuse("network", "failed");
+    if (!policy) {
+      // The service answered, but not in the documented shape (for example a frame id the SDK refuses): nothing is wrong
+      // with the network, so the host is not told "network". "unknown" is the code the SDK already uses for a value it cannot use.
+      console.warn("[Didit] Bank Link was not opened: the frame-policy answer could not be used.");
+      return this.refuse("unknown", "failed");
+    }
     if (!policy.valid) return this.refuse("invalid_token", "not_allowed");
     if (!policy.allowedOrigins.includes(window.location.origin)) {
       console.warn(
@@ -763,28 +770,30 @@ export function openBankLink(options: BankLinkOptions): BankLinkHandle {
 export function resumeBankLink(options: BankLinkResumeOptions = {}): Promise<BankLinkResumeResult> {
   const none: BankLinkResumeResult = { resumed: false };
   try {
+    // Everything that can throw is checked before the address or the stored record is touched, so a
+    // corrected retry of the call still finds its single-use code.
     assertCallbacks(options);
+    const origin = resolveBankLinkOrigin(options.baseUrl);
+    const apiOrigin = resolveBankLinkOrigin(options.apiBaseUrl, "apiBaseUrl", BANK_LINK_DEFAULT_API_ORIGIN);
     const record = readResumeRecord();
     if (!record) return Promise.resolve(none);
     const params = new URLSearchParams(window.location.search);
     const code = params.get(BANK_LINK_RESUME_QUERY_PARAM);
     if (!code || !RESUME_CODE_PATTERN.test(code)) return Promise.resolve(none);
-    // The single-use code leaves the address bar and the history at once.
-    params.delete(BANK_LINK_RESUME_QUERY_PARAM);
-    const query = params.toString();
-    try {
-      window.history.replaceState(window.history.state, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
-    } catch {
-      // a browser that refuses to rewrite the address still resumes
-    }
-    const origin = resolveBankLinkOrigin(options.baseUrl);
-    const apiOrigin = resolveBankLinkOrigin(options.apiBaseUrl, "apiBaseUrl", BANK_LINK_DEFAULT_API_ORIGIN);
     const containerOption = options.container ?? record.container ?? undefined;
     let element: HTMLElement | null = null;
     try {
       element = resolveContainer(containerOption);
     } catch {
       element = null; // the page that came back has no such element: the modal is the way to show it
+    }
+    // The call is going ahead: the single-use code leaves the address bar and the history at once.
+    params.delete(BANK_LINK_RESUME_QUERY_PARAM);
+    const query = params.toString();
+    try {
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+    } catch {
+      // a browser that refuses to rewrite the address still resumes
     }
     replaceActiveSession();
     const session = new BankLinkSession({

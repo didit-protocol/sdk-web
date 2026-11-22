@@ -98,6 +98,7 @@ async function serveFramePolicy(request, response) {
   const token = body.token ?? body.resume_code;
   let answer = { valid: true, frame_id: "frame_stub_0001", allowed_origins: [`http://${HOST}:${PORT}`] };
   if (token.includes("_invalid")) answer = { valid: false, frame_id: null, allowed_origins: [] };
+  if (token.includes("_dotframe")) answer.frame_id = "frm_0123456789abcdef.1763800000.abcdef";
   if (token.includes("_otherorigin")) answer.allowed_origins = ["https://other.example"];
   response.writeHead(200, { ...cors, "Content-Type": "application/json" });
   response.end(JSON.stringify(answer));

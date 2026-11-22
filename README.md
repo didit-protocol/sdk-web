@@ -479,6 +479,7 @@ A token that is not a Bank Link token throws a `DiditBankLinkError` (`code: "inv
 Before it creates the frame the SDK asks the API whether the token may be embedded on this page (`POST /v3/bank/link-session/frame-policy/`, no credentials).
 An unknown or closed link, or a page origin that is not in the link's `allowed_origins`, opens no frame: you get `error` with `invalid_token` or `origin_not_allowed`, then `exit` with `reason: "not_allowed"`, and the console shows which origin to add (to the link's `allowed_origins` or to the application's Bank Link setting).
 A network failure or a timeout gives `error` with `network`, then `exit` with `reason: "failed"`.
+An answer the SDK cannot use (not the documented shape, or an identifier it refuses) is not a network failure: you get `error` with `unknown`, then `exit` with `reason: "failed"`, and no frame is created.
 `handle.state` is `opening` until the frame reports `opened`.
 Only one Bank Link is open at a time: opening a second closes the first with `exit` and `reason: "closed"`.
 
@@ -499,7 +500,7 @@ Payloads carry ids only: never a token, a name, an account number or an email.
 | `accounts_selected` | `count` | The person chose accounts |
 | `success` | `link_id`, `connection_id` (optional), `check_id` (optional), `resumed` (optional) | The link was completed |
 | `exit` | `reason` (`closed`, `cancelled`, `bank_unavailable`, `expired`, `failed`, `not_allowed`), `step`, `link_id` (optional), `resumed` (optional) | The flow ended without a connection |
-| `error` | `code` | `invalid_token`, `origin_not_allowed` and `network` come before any frame exists and are followed by `exit`; `popup_blocked` and other codes do not end the flow |
+| `error` | `code` | `invalid_token`, `origin_not_allowed`, `network` and `unknown` come before any frame exists and are followed by `exit`; `popup_blocked` and other codes do not end the flow |
 
 ### Full-page redirect and `resumeBankLink`
 

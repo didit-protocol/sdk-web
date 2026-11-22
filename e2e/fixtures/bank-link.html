@@ -13,6 +13,7 @@
     <button id="open-modal">Open modal</button>
     <button id="open-inline">Open inline</button>
     <div id="bank"></div>
+    <div id="spacer" style="height: 3000px"></div>
     <script type="module">
       import { DiditSdk } from "../../dist/didit-sdk.esm.js";
 
@@ -35,8 +36,14 @@
       document.getElementById("open-modal").onclick = window.openModal;
       document.getElementById("open-inline").onclick = window.openInline;
 
+      // A test that drives the calls itself: resolves to the result, or to the error code it threw.
+      window.resumeWith = (extra) =>
+        DiditSdk.shared.resumeBankLink({ baseUrl, apiBaseUrl, ...callbacks, ...extra }).catch((error) => ({ error: error.code }));
+
       // Safe on every page load: it only acts on the page a redirect returned to.
-      DiditSdk.shared.resumeBankLink({ baseUrl, apiBaseUrl, ...callbacks }).then((result) => (window.records.resume = result));
+      if (!query.has("noresume")) {
+        DiditSdk.shared.resumeBankLink({ baseUrl, apiBaseUrl, ...callbacks }).then((result) => (window.records.resume = result));
+      }
     </script>
   </body>
 </html>

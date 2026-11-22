@@ -408,6 +408,48 @@ describe("resumeBankLink", () => {
   });
 });
 
+describe("resumeBankLink with the backend's resume codes and invalid options", () => {
+  const record = () =>
+    window.sessionStorage.setItem(
+      BANK_LINK_RESUME_STORAGE_KEY,
+      JSON.stringify({ v: 1, instance_id: "6e1b8c34-7d02-4f95-a3c6-0b9e5d2a7f18", link_ref: null, container: null, ts: Date.now() })
+    );
+  const DOTTED = "rsc_0123456789abcdef.Zm9vYmFyLWJhei1zZWNyZXQ_~x";
+
+  it("continues with a dotted code (rsc_<id>.<secret>) and sends it unchanged", async () => {
+    record();
+    window.history.replaceState(null, "", `/return?didit_resume=${encodeURIComponent(DOTTED)}`);
+    expect(await DiditSdk.shared.resumeBankLink()).toEqual({ resumed: true });
+    expect(window.location.search).toBe("");
+    expect(fragment().get("resume_code")).toBe(DOTTED);
+    expect(jest.spyOn(bankLinkRuntime, "fetchPolicy").mock.calls[0][1]).toEqual({ resume_code: DOTTED });
+  });
+
+  it("still refuses a code with characters outside RFC 3986 unreserved ones, and a code that is too short", async () => {
+    record();
+    for (const bad of ["rsc_abc def.ghijklmn", "rsc_abc/def.ghijklmn", "a.b", "x".repeat(257)]) {
+      window.history.replaceState(null, "", `/return?didit_resume=${encodeURIComponent(bad)}`);
+      expect(await DiditSdk.shared.resumeBankLink()).toEqual({ resumed: false });
+      expect(document.querySelector("iframe")).toBeNull();
+    }
+  });
+
+  it("an invalid option throws and leaves the code in the address; the corrected call still resumes", async () => {
+    record();
+    window.history.replaceState(null, "", `/return?keep=1&didit_resume=${encodeURIComponent(DOTTED)}#x`);
+    for (const bad of [{ apiBaseUrl: "not a url" }, { baseUrl: "http://insecure.example" }, { onSuccess: "nope" as never }, { theme: "blue" as never }]) {
+      await expect(DiditSdk.shared.resumeBankLink(bad)).rejects.toMatchObject({ code: "invalid_options" });
+      expect(window.location.search).toBe(`?keep=1&didit_resume=${encodeURIComponent(DOTTED)}`);
+      expect(window.location.hash).toBe("#x");
+      expect(window.sessionStorage.getItem(BANK_LINK_RESUME_STORAGE_KEY)).not.toBeNull();
+      expect(document.querySelector("iframe")).toBeNull();
+    }
+    expect(await DiditSdk.shared.resumeBankLink()).toEqual({ resumed: true });
+    expect(window.location.search).toBe("?keep=1");
+    expect(fragment().get("resume_code")).toBe(DOTTED);
+  });
+});
+
 describe("frame policy for a resume", () => {
   const record = () =>
     window.sessionStorage.setItem(
@@ -506,12 +548,10 @@ describe("frame policy", () => {
     expect(text).not.toContain(TOKEN);
   });
 
-  it("ends with error network and exit on a failed call, a timeout or an answer of the wrong shape", async () => {
+  it("ends with error network and exit on a failed call or a timeout", async () => {
     for (const failure of [
       () => policy().mockRejectedValue(new Error("offline")),
-      () => policy().mockRejectedValue(new DOMException("aborted", "AbortError")),
-      () => policy().mockResolvedValue({ valid: true, frame_id: "../x", allowed_origins: [window.location.origin] }),
-      () => policy().mockResolvedValue("nope")
+      () => policy().mockRejectedValue(new DOMException("aborted", "AbortError"))
     ]) {
       DiditSdk.reset();
       failure();
@@ -524,6 +564,34 @@ describe("frame policy", () => {
       ]);
       expect(handle.state).toBe("closed");
     }
+  });
+
+  it("an answer the SDK cannot use is not a network failure: error unknown, then exit failed, no frame", async () => {
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    for (const failure of [
+      () => policy().mockResolvedValue({ valid: true, frame_id: "../x", allowed_origins: [window.location.origin] }),
+      () => policy().mockResolvedValue({ valid: true, frame_id: "frm_0123456789abcdef.12.abcdef", allowed_origins: [window.location.origin] }),
+      () => policy().mockResolvedValue("nope"),
+      () => policy().mockResolvedValue(undefined)
+    ]) {
+      DiditSdk.reset();
+      failure();
+      const onEvent = jest.fn();
+      const handle = await open({ token: TOKEN, onEvent });
+      expect(document.querySelector("iframe")).toBeNull();
+      expect(onEvent.mock.calls.map((c) => c[0])).toEqual([
+        { name: "error", code: "unknown" },
+        { name: "exit", reason: "failed", step: null }
+      ]);
+      expect(handle.state).toBe("closed");
+    }
+  });
+
+  it("accepts the frame id shape the backend mints: frm_<32 hex>-<digits>-<hex>", async () => {
+    const minted = "frm_0123456789abcdef0123456789abcdef-1763800000-9f8e7d6c";
+    policy().mockResolvedValue({ valid: true, frame_id: minted, allowed_origins: [window.location.origin] });
+    await open({ token: TOKEN });
+    expect(new URL(frame().src).pathname).toBe(`/bank/frame/${minted}`);
   });
 
   it("aborts the call and shows nothing when the host closes before the answer", async () => {

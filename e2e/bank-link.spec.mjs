@@ -85,7 +85,7 @@ test.describe("Bank Link in the web SDK, against a stub frame that speaks the co
     const stored = await page.evaluate(() => window.sessionStorage.getItem("didit_bank_link_resume"));
     expect(stored).not.toBeNull();
     expect(stored).not.toContain("blt_");
-    await page.goto(`${HOST_PAGE}?didit_resume=stub_resume_code_1`);
+    await page.goto(`${HOST_PAGE}?didit_resume=rsc_stubresume0001.c2VjcmV0X3ZhbHVl`);
     await expect.poll(async () => (await records(page)).resume).toEqual({ resumed: true });
     await expect.poll(async () => (await records(page)).success.map((s) => s.resumed)).toEqual([true]);
     await expect(page.locator(FRAME)).toHaveCount(0);
@@ -126,6 +126,182 @@ test.describe("Bank Link in the web SDK, against a stub frame that speaks the co
     await page.evaluate(() => window.openModal());
     await expect.poll(async () => (await records(page)).exit).toEqual([{ reason: "failed", step: null }]);
     expect((await records(page)).events[0].code).toBe("network");
+    await expect(page.locator(FRAME)).toHaveCount(0);
+  });
+});
+
+const DIALOG = ".didit-modal-overlay";
+
+/** Whether focus is inside the dialog, as this page sees it (a focused frame is the frame element). */
+const focusInDialog = (page) =>
+  page.evaluate((selector) => document.querySelector(selector)?.contains(document.activeElement) ?? false, DIALOG);
+
+test.describe("Bank Link modal: focus, scroll and layout", () => {
+  test("focus moves into the dialog, Tab and Shift+Tab stay inside, Escape closes and focus returns to the opener", async ({ page }) => {
+    await page.goto(HOST_PAGE);
+    await page.focus("#open-modal");
+    await page.keyboard.press("Enter");
+    await expect(page.frameLocator(FRAME).getByRole("heading", { name: "Connect your bank" })).toBeVisible();
+    expect(await focusInDialog(page)).toBe(true);
+    const dialog = page.locator(DIALOG);
+    await expect(dialog).toHaveAttribute("role", "dialog");
+    await expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(await dialog.getAttribute("aria-label")).toBeTruthy();
+
+    for (let i = 0; i < 14; i++) {
+      await page.keyboard.press("Tab");
+      expect(await focusInDialog(page), `Tab ${i + 1}`).toBe(true);
+    }
+    for (let i = 0; i < 14; i++) {
+      await page.keyboard.press("Shift+Tab");
+      expect(await focusInDialog(page), `Shift+Tab ${i + 1}`).toBe(true);
+    }
+
+    // Escape is heard by the page while the dialog (not the frame) holds focus.
+    await page.evaluate(() => document.querySelector(".didit-modal-overlay").focus());
+    await page.keyboard.press("Escape");
+    await expect(page.locator(FRAME)).toHaveCount(0);
+    expect((await records(page)).exit.map((e) => e.reason)).toEqual(["closed"]);
+    expect(await page.evaluate(() => document.activeElement?.id)).toBe("open-modal");
+  });
+
+  test("the page behind does not scroll while the modal is open, and is exactly as before afterwards", async ({ page }) => {
+    await page.goto(HOST_PAGE);
+    await page.evaluate(() => window.scrollTo(0, 400));
+    const snapshot = () =>
+      page.evaluate(() => ({
+        scrollY: window.scrollY,
+        width: document.documentElement.clientWidth,
+        bodyLeft: document.body.getBoundingClientRect().left,
+        bodyWidth: document.body.getBoundingClientRect().width,
+        rootStyle: document.documentElement.getAttribute("style") ?? "",
+        bodyStyle: document.body.getAttribute("style") ?? ""
+      }));
+    const before = await snapshot();
+    expect(before.scrollY).toBe(400);
+    await page.evaluate(() => window.openModal());
+    await expect(page.frameLocator(FRAME).getByRole("heading", { name: "Connect your bank" })).toBeVisible();
+    await page.mouse.move(40, 400);
+    await page.mouse.wheel(0, 600);
+    await page.keyboard.press("PageDown");
+    await page.waitForTimeout(150);
+    const open = await snapshot();
+    expect(open.scrollY).toBe(400);
+    expect(open.width).toBe(before.width); // no jump from the scrollbar leaving
+    expect(open.bodyLeft).toBe(before.bodyLeft);
+    expect(open.bodyWidth).toBe(before.bodyWidth);
+    await page.locator(".didit-close-button").click();
+    await expect(page.locator(FRAME)).toHaveCount(0);
+    expect(await snapshot()).toEqual(before);
+  });
+
+  test("open and close twice leave no overlay, curtain or inline style behind", async ({ page }) => {
+    await page.goto(HOST_PAGE);
+    const before = await page.evaluate(() => document.documentElement.getAttribute("style") ?? "");
+    for (let round = 0; round < 2; round++) {
+      await page.evaluate(() => window.openModal());
+      await expect(page.locator(FRAME)).toHaveCount(1);
+      await page.locator(".didit-close-button").click();
+      await expect(page.locator(FRAME)).toHaveCount(0);
+    }
+    expect(await page.evaluate(() => document.querySelectorAll(".didit-modal-overlay, .didit-modal-curtain").length)).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.getAttribute("style") ?? "")).toBe(before);
+  });
+
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    for (const scheme of ["light", "dark"]) {
+      test(`the frame fills the dialog's content box at ${viewport.width}x${viewport.height}, ${scheme}`, async ({ page }) => {
+        await page.setViewportSize(viewport);
+        await page.emulateMedia({ colorScheme: scheme });
+        await page.goto(HOST_PAGE);
+        await page.evaluate(() => window.openModal());
+        await expect(page.frameLocator(FRAME).getByRole("heading", { name: "Connect your bank" })).toBeVisible();
+        await page.waitForTimeout(400); // the modal settles on the size the frame reported
+        const geometry = await page.evaluate(() => {
+          const container = document.querySelector(".didit-modal-container");
+          const frame = container.querySelector("iframe");
+          const c = container.getBoundingClientRect();
+          const f = frame.getBoundingClientRect();
+          const style = getComputedStyle(container);
+          const px = (name) => parseFloat(style[name]) || 0;
+          return {
+            content: {
+              left: c.left + px("borderLeftWidth") + px("paddingLeft"),
+              top: c.top + px("borderTopWidth") + px("paddingTop"),
+              right: c.right - px("borderRightWidth") - px("paddingRight"),
+              bottom: c.bottom - px("borderBottomWidth") - px("paddingBottom")
+            },
+            frame: { left: f.left, top: f.top, right: f.right, bottom: f.bottom },
+            overflowX: container.scrollWidth - container.clientWidth,
+            overflowY: container.scrollHeight - container.clientHeight,
+            frameBorder: getComputedStyle(frame).borderTopWidth
+          };
+        });
+        for (const edge of ["left", "top", "right", "bottom"]) {
+          expect(geometry.frame[edge], edge).toBeCloseTo(geometry.content[edge], 1);
+        }
+        expect(geometry.overflowX).toBe(0);
+        expect(geometry.overflowY).toBe(0);
+        expect(geometry.frameBorder).toBe("0px");
+      });
+    }
+  }
+
+  test("inline: the frame fills the container, and nothing is left behind after close", async ({ page }) => {
+    await page.goto(HOST_PAGE);
+    await page.evaluate(() => window.openInline());
+    await expect(page.locator("#bank iframe")).toBeVisible();
+    const sizes = await page.evaluate(() => {
+      const box = document.getElementById("bank");
+      const frame = box.querySelector("iframe").getBoundingClientRect();
+      const cs = getComputedStyle(box);
+      const inner = {
+        width: box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
+        height: box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
+      };
+      return { frame: { width: frame.width, height: frame.height }, inner };
+    });
+    expect(sizes.frame.width).toBeCloseTo(sizes.inner.width, 1);
+    expect(sizes.frame.height).toBeCloseTo(sizes.inner.height, 1);
+    const frame = page.frameLocator("#bank iframe");
+    await frame.getByRole("button", { name: "Close" }).click();
+    await expect(page.locator("#bank iframe")).toHaveCount(0);
+    expect(await page.evaluate(() => document.getElementById("bank").children.length)).toBe(0);
+  });
+
+  test("a resume with a dotted code continues, and an invalid option does not consume the code", async ({ page }) => {
+    const code = "rsc_stubresume0001.c2VjcmV0X3ZhbHVl";
+    const frame = await open(page, "modal");
+    await frame.getByRole("button", { name: "Continue on this page" }).click();
+    await page.waitForURL(/^http:\/\/localhost:4173\/bank\/link\//);
+    const fragment = new URLSearchParams(new URL(page.url()).hash.slice(1));
+    expect(fragment.get("resume_code")).toBe(code); // the dotted code was accepted from the frame and forwarded as is
+    await page.goto(`${HOST_PAGE}?didit_resume=${code}`);
+    await expect.poll(async () => (await records(page)).resume).toEqual({ resumed: true });
+    await expect.poll(async () => (await records(page)).success.map((s) => s.resumed)).toEqual([true]);
+  });
+
+  test("an invalid option rejects and leaves the code in the address; the corrected call resumes", async ({ page }) => {
+    const code = "rsc_stubresume0001.c2VjcmV0X3ZhbHVl";
+    const frame = await open(page, "modal");
+    await frame.getByRole("button", { name: "Continue on this page" }).click();
+    await page.waitForURL(/^http:\/\/localhost:4173\/bank\/link\//);
+    await page.goto(`${HOST_PAGE}?didit_resume=${code}&keep=1&noresume=1`);
+    // The page skipped its own automatic call (noresume): the test drives the two calls itself.
+    const failure = await page.evaluate(() => window.resumeWith({ apiBaseUrl: "not a url" }));
+    expect(failure).toEqual({ error: "invalid_options" });
+    expect(new URL(page.url()).searchParams.get("didit_resume")).toBe(code);
+    expect(await page.evaluate(() => window.sessionStorage.getItem("didit_bank_link_resume"))).not.toBeNull();
+    expect(await page.evaluate(() => window.resumeWith({}))).toEqual({ resumed: true });
+    expect(new URL(page.url()).search).toBe("?keep=1&noresume=1");
+    await expect.poll(async () => (await records(page)).success.map((s) => s.resumed)).toEqual([true]);
+  });
+
+  test("a frame id with a dot is refused with error unknown, never network", async ({ page }) => {
+    await page.goto(`${HOST_PAGE}?token=blt_dotframe_0123456789ab`);
+    await page.evaluate(() => window.openModal());
+    await expect.poll(async () => (await records(page)).exit).toEqual([{ reason: "failed", step: null }]);
+    expect((await records(page)).events[0].code).toBe("unknown");
     await expect(page.locator(FRAME)).toHaveCount(0);
   });
 });

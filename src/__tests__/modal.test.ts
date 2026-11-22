@@ -948,3 +948,114 @@ describe("VerificationModal flow layout", () => {
     expect(overlay.scrollTop).toBe(0);
   });
 });
+
+describe("VerificationModal dialog behaviour", () => {
+  const modals: VerificationModal[] = [];
+  afterEach(() => {
+    modals.forEach((modal) => modal.destroy());
+    modals.length = 0;
+    document.body.innerHTML = "";
+    document.documentElement.removeAttribute("style");
+  });
+
+  function openFrom(opener: HTMLElement | null) {
+    const created = createModal({ showExitConfirmation: false, showCloseButton: true });
+    modals.push(created.modal);
+    opener?.focus();
+    created.modal.open("https://verify.didit.me/bank/frame/frame_0123456789");
+    return created;
+  }
+
+  it("is a labelled modal dialog and moves focus into it when it opens", () => {
+    const opener = document.body.appendChild(document.createElement("button"));
+    openFrom(opener);
+    const dialog = document.querySelector<HTMLElement>(`.${CSS_CLASSES.overlay}`) as HTMLElement;
+    expect(dialog.getAttribute("role")).toBe("dialog");
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(dialog.getAttribute("aria-label")).toBeTruthy();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+  it("keeps Tab inside: the sentinel after the dialog sends focus to the first stop, Shift+Tab on the first stop or the dialog goes to the last", () => {
+    const { modal } = openFrom(document.body.appendChild(document.createElement("button")));
+    const dialog = document.querySelector<HTMLElement>(`.${CSS_CLASSES.overlay}`) as HTMLElement;
+    const close = dialog.querySelector<HTMLElement>(`.${CSS_CLASSES.closeButton}`) as HTMLElement;
+    const sentinel = dialog.querySelector<HTMLElement>(`.${CSS_CLASSES.focusSentinel}`) as HTMLElement;
+    expect(sentinel.previousElementSibling).toBe(getContainer(modal));
+    sentinel.focus();
+    expect(document.activeElement).toBe(close);
+    for (const from of [close, dialog]) {
+      from.focus();
+      const event = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true });
+      document.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(getIframe(modal));
+    }
+  });
+
+  it("returns focus to the opener on close, but not to an element that left the page", () => {
+    const opener = document.body.appendChild(document.createElement("button"));
+    const first = openFrom(opener);
+    first.modal.close();
+    expect(document.activeElement).toBe(opener);
+    const second = openFrom(opener);
+    opener.remove();
+    second.modal.close();
+    expect(document.activeElement).not.toBe(opener);
+  });
+
+  it("closes on Escape", () => {
+    const { onCloseConfirmed } = openFrom(null);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(onCloseConfirmed).toHaveBeenCalledTimes(1);
+  });
+
+  it("holds the page's scroll while open and leaves no style or listener behind after two open/close cycles", () => {
+    const root = document.documentElement;
+    root.style.overflow = "auto";
+    const before = root.getAttribute("style");
+    const added: string[] = [];
+    const removed: string[] = [];
+    const addDoc = jest.spyOn(document, "addEventListener").mockImplementation(((type: string) => void added.push(`d:${type}`)) as never);
+    const addWin = jest.spyOn(window, "addEventListener").mockImplementation(((type: string) => void added.push(`w:${type}`)) as never);
+    const rmDoc = jest.spyOn(document, "removeEventListener").mockImplementation(((type: string) => void removed.push(`d:${type}`)) as never);
+    const rmWin = jest.spyOn(window, "removeEventListener").mockImplementation(((type: string) => void removed.push(`w:${type}`)) as never);
+    const spies = [addDoc, addWin, rmDoc, rmWin];
+    const created = createModal({ showExitConfirmation: false, showCloseButton: true });
+    for (let round = 0; round < 2; round++) {
+      created.modal.open("https://verify.didit.me/bank/frame/frame_0123456789");
+      expect(root.style.overflow).toBe("hidden");
+      created.modal.close();
+      expect(root.getAttribute("style")).toBe(before);
+    }
+    created.modal.destroy();
+    spies.forEach((spy) => spy.mockRestore());
+    expect(root.getAttribute("style")).toBe(before);
+    expect([...added].sort()).toEqual([...removed].sort());
+    expect(document.querySelector(`.${CSS_CLASSES.overlay}`)).toBeNull();
+    expect(document.querySelector(`.${CSS_CLASSES.curtain}`)).toBeNull();
+  });
+
+  it("keeps a classic scrollbar's width while the page is locked, and gives it back", () => {
+    const root = document.documentElement;
+    Object.defineProperty(root, "clientWidth", { configurable: true, get: () => 1009 });
+    expect(window.innerWidth).toBe(1024);
+    try {
+      const { modal } = openFrom(null);
+      const reserved = root.style.getPropertyValue("scrollbar-gutter") === "stable" || root.style.paddingRight.includes("15px");
+      expect(reserved).toBe(true);
+      modal.close();
+      expect(root.style.paddingRight).toBe("");
+      expect(root.style.getPropertyValue("scrollbar-gutter")).toBe("");
+    } finally {
+      delete (root as unknown as { clientWidth?: number }).clientWidth;
+    }
+  });
+
+  it("the frame fills the dialog's content box: pinned on every side, no border, margin or baseline gap", () => {
+    openFrom(null);
+    const css = (document.getElementById("didit-sdk-styles") as HTMLStyleElement).textContent as string;
+    expect(css).toMatch(/\.didit-modal-container > \.didit-verification-iframe \{\s*position: absolute;\s*top: 0;\s*right: 0;\s*bottom: 0;\s*left: 0;/);
+    expect(css).toMatch(/\.didit-verification-iframe \{[^}]*border: 0;[^}]*margin: 0;[^}]*display: block;/);
+  });
+});
