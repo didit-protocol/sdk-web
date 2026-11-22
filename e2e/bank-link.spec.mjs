@@ -46,7 +46,9 @@ test.describe("Bank Link in the web SDK, against a stub frame that speaks the co
     await expect(page.locator("#bank iframe")).toBeVisible();
     await expect(page.locator(OVERLAY)).toHaveCount(0);
     await frame.getByRole("button", { name: "Fail" }).click();
-    await expect.poll(async () => (await records(page)).exit).toEqual([{ reason: "failed", step: "bank_hop" }]);
+    await expect.poll(async () => (await records(page)).exit).toEqual([
+      { reason: "failed", step: "bank_hop", link_id: "11111111-1111-4111-8111-111111111111" }
+    ]);
   });
 
   test("the modal's own close button ends the flow with exit closed", async ({ page }) => {
