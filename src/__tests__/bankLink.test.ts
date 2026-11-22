@@ -877,8 +877,12 @@ describe("a frame that never loads", () => {
   const retryButton = () => card()?.querySelector("button") as HTMLButtonElement;
   const policy = () => jest.spyOn(bankLinkRuntime, "fetchPolicy");
 
-  beforeEach(() => jest.useFakeTimers());
-  afterEach(() => jest.useRealTimers());
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
 
   async function openLink(options: Parameters<typeof DiditSdk.shared.openBankLink>[0]): Promise<BankLinkHandle> {
     const handle = DiditSdk.shared.openBankLink(options);
