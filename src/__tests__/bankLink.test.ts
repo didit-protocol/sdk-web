@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { readFileSync } from "node:fs";
 import type { BankLinkHandle } from "../types";
 import { DiditSdk } from "../DiditSdk";
 import { DiditBankLinkError, bankLinkRuntime, buildBankLinkFrameUrl, parseBankLinkToken, readBankLinkEvent } from "../bankLink";
@@ -631,5 +632,73 @@ describe("frame policy", () => {
     expect(calls[0].referrerPolicy).toBe("no-referrer");
     expect(calls[0].headers).toEqual({ "Content-Type": "application/json" });
     expect(calls[0].body).toBe(JSON.stringify({ token: TOKEN }));
+  });
+});
+
+/**
+ * The backend's identifier formats: `formats.json` is a copy of
+ * `src/tests/mocks/bank_link_contract/formats.json` of the backend repository, pull request branch
+ * `fix/bank-link-formats` at commit a805cb8df17b615e1dd0dd6f2ce496ca333ba3a0. The SDK may be looser than
+ * the file (it treats codes as opaque), never stricter.
+ */
+describe("the backend's identifier formats", () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const file = JSON.parse(readFileSync(`${process.cwd()}/src/__tests__/fixtures/bank-link-formats.json`, "utf8")) as {
+    formats: Array<{ name: string; pattern: string; example: string }>;
+  };
+  const format = (name: string) => {
+    const found = file.formats.find((f) => f.name === name);
+    if (!found) throw new Error(`no format ${name}`);
+    expect(new RegExp(found.pattern).test(found.example)).toBe(true);
+    return found;
+  };
+  const record = (instanceId = "6e1b8c34-7d02-4f95-a3c6-0b9e5d2a7f18") =>
+    window.sessionStorage.setItem(
+      BANK_LINK_RESUME_STORAGE_KEY,
+      JSON.stringify({ v: 1, instance_id: instanceId, link_ref: null, container: null, ts: Date.now() })
+    );
+
+  it("accepts every example the SDK validates, and refuses values outside the family", async () => {
+    // client_token and url_token
+    expect(parseBankLinkToken(format("client_token").example, ORIGIN)).toBe(format("client_token").example);
+    const urlToken = format("url_token").example;
+    expect(parseBankLinkToken(`${ORIGIN}/bank/link/${urlToken}`, ORIGIN)).toBe(urlToken);
+    expect(parseBankLinkToken(`${ORIGIN}/bank/link/#t=${urlToken}`, ORIGIN)).toBe(urlToken);
+    for (const bad of ["blx_Hs8Pa4Rb6Ye0Gf2Jc7Qm3", "blt_short", "blt_has space_0123456789abcd"]) {
+      expect(() => parseBankLinkToken(bad, ORIGIN)).toThrow(DiditBankLinkError);
+    }
+
+    // frame_id: loaded at the path of the answer
+    const frameId = format("frame_id").example;
+    jest.spyOn(bankLinkRuntime, "fetchPolicy").mockResolvedValue({ valid: true, frame_id: frameId, allowed_origins: [window.location.origin] });
+    await open({ token: format("client_token").example });
+    expect(new URL(frame().src).pathname).toBe(`/bank/frame/${frameId}`);
+    DiditSdk.reset();
+
+    // resume_code and instance_id: a resume with both examples
+    const code = format("resume_code").example;
+    const instanceId = format("instance_id").example;
+    record(instanceId);
+    window.history.replaceState(null, "", `/return?didit_resume=${encodeURIComponent(code)}`);
+    expect(await DiditSdk.shared.resumeBankLink()).toEqual({ resumed: true });
+    expect(fragment().get("resume_code")).toBe(code);
+    expect(fragment().get("instance_id")).toBe(instanceId);
+    DiditSdk.reset();
+    record();
+    window.history.replaceState(null, "", "/return?didit_resume=rsc_has%20space.0123456789abcdef");
+    expect(await DiditSdk.shared.resumeBankLink()).toEqual({ resumed: false });
+
+    // error_code and link_ref
+    const errorCode = format("error_code").example;
+    expect(readBankLinkEvent("error", { code: errorCode })).toEqual({ name: "error", code: errorCode });
+    expect(readBankLinkEvent("error", { code: "Not_A_Code" })).toEqual({ name: "error", code: "unknown" });
+    DiditSdk.reset();
+    await open({ token: format("client_token").example });
+    const linkRef = format("link_ref").example;
+    const onEvent = jest.fn();
+    DiditSdk.reset();
+    await open({ token: format("client_token").example, onEvent });
+    send(msg("opened", { link_id: format("link_id").example, mode: "connect", access: "ongoing", presentation: "modal" }, linkRef));
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ name: "opened", link_id: format("link_id").example }));
   });
 });
