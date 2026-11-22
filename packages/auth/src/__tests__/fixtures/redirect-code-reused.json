@@ -1,0 +1,80 @@
+{
+  "scenario": "redirect-code-reused",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "signInUrl": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db/sign-in/?redirect_uri=http%3A%2F%2Flocalhost%3A4174%2Fe2e%2Ffixtures%2Fapp.html&state=WHvvo9o3pD8IFyLpSTOh4g&code_challenge=LvIUdqdaa-3EUVssIc-qHTnl-2Q-WYEWurckoP_7yZI&code_challenge_method=S256&language=en",
+  "callbackUrl": "http://localhost:4174/e2e/fixtures/app.html?code=FxxqDF5iS-r07StUVDDxSCnBmCmpwIYc3rdA250jLgs&state=WHvvo9o3pD8IFyLpSTOh4g",
+  "email": "person@example.com",
+  "duplicateError": "invalid_grant",
+  "firstSessionActive": true,
+  "events": [
+    "SIGNED_IN"
+  ],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "FxxqDF5iS-r07StUVDDxSCnBmCmpwIYc3rdA250jLgs",
+          "code_verifier": "j8FWxz-SeA_CCEpkrY5aV4W9hfALD5mRaf-vpWCJHM0",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "4SCffoWxQJE7l_eYT7DkIgMvFo0hQbBEg6teQl1a-8M",
+          "refresh_token": "3RgM7ZeTImJaPv1t6FJ-OXDuu2zbUdSOyjcS6W33ma61oLiFz33CKEQIRJ1OJzVc",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "875ea975-4193-4cc8-9370-903e2a9021a6"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer 4SCffoWxQJE7l_eYT7DkIgMvFo0hQbBEg6teQl1a-8M"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "2be90252-f374-4c18-a12a-aa96f1c37b43",
+          "sid": "875ea975-4193-4cc8-9370-903e2a9021a6",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T11:59:34.516571Z",
+          "organizations": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "FxxqDF5iS-r07StUVDDxSCnBmCmpwIYc3rdA250jLgs",
+          "code_verifier": "j8FWxz-SeA_CCEpkrY5aV4W9hfALD5mRaf-vpWCJHM0",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "invalid_grant"
+        }
+      }
+    }
+  ]
+}

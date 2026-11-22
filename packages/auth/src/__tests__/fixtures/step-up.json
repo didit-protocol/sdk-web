@@ -1,0 +1,199 @@
+{
+  "scenario": "step-up",
+  "apiBase": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db",
+  "redirectUri": "http://localhost:4174/e2e/fixtures/app.html",
+  "signInUrl": "http://127.0.0.1:8765/auth/v2/authentication/b83c95f9-93bd-4bed-a94f-f4b354a446db/sign-in/?redirect_uri=http%3A%2F%2Flocalhost%3A4174%2Fe2e%2Ffixtures%2Fapp.html&state=-5NZGul9zPY73kc5W2GUFw&code_challenge=PlgxZTENR7qRvpMa_Ujbg-NJoeY_M461MRtAdfzNgKk&code_challenge_method=S256&language=en",
+  "callbackUrl": "http://localhost:4174/e2e/fixtures/app.html?code=VJAWxwP3hRjmiC46s3EfzVgWy-Mv6nI8zIqJWlKb1EA&state=-5NZGul9zPY73kc5W2GUFw",
+  "result": "6e911151-6862-4541-851d-23ad36e85ed6",
+  "events": [
+    "SIGNED_IN"
+  ],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "authorize/",
+        "body": {
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "jNVOkh2B151vdg41R7EQoA",
+          "code_challenge": "o2pxYGi24kAkEz-meK4AjUIY1cbGxtqx_hA6UCBedbU",
+          "code_challenge_method": "S256"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "transaction": "fPAafNackbw--J7Zn5i0Oz7pQNB3CutQ1EPs-O0M8bk",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "password/",
+        "body": {
+          "transaction": "fPAafNackbw--J7Zn5i0Oz7pQNB3CutQ1EPs-O0M8bk",
+          "email": "person@example.com",
+          "password": "Correct-horse-battery-91"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "code": "dWxiTz0p2kMQCghIErqvYbXqCYU9FjwxTSeZ4_8vvrY",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html",
+          "state": "jNVOkh2B151vdg41R7EQoA"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "dWxiTz0p2kMQCghIErqvYbXqCYU9FjwxTSeZ4_8vvrY",
+          "code_verifier": "OSQcphDmTpKi5aHvWBuPYGXjwBG446MthbC_JQygqeU",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "Th3VPbH0ANs-Nl83RhIGTj4jZITOBHiai0571FLQt8I",
+          "refresh_token": "IOcW3WTyz52U8IbOzndRhCCr_y-mlqVWY3ZyLli8zQXbzEf2gRZJC5JCJkuJ5BTF",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "c3355cdc-c8bc-47d3-a754-e99ed94e3b99"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer Th3VPbH0ANs-Nl83RhIGTj4jZITOBHiai0571FLQt8I"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "6e911151-6862-4541-851d-23ad36e85ed6",
+          "sid": "c3355cdc-c8bc-47d3-a754-e99ed94e3b99",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T08:14:28.438288Z",
+          "organizations": [
+            {
+              "organization_id": "3eae0a81-3bff-49c1-8398-8cdc02d88280",
+              "organization__name": "Example Team",
+              "role": "member"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer Th3VPbH0ANs-Nl83RhIGTj4jZITOBHiai0571FLQt8I"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "6e911151-6862-4541-851d-23ad36e85ed6",
+          "sid": "c3355cdc-c8bc-47d3-a754-e99ed94e3b99",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T08:14:28.438288Z",
+          "organizations": [
+            {
+              "organization_id": "3eae0a81-3bff-49c1-8398-8cdc02d88280",
+              "organization__name": "Example Team",
+              "role": "member"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "token/",
+        "body": {
+          "grant_type": "authorization_code",
+          "code": "VJAWxwP3hRjmiC46s3EfzVgWy-Mv6nI8zIqJWlKb1EA",
+          "code_verifier": "8gGwAzm4kD9aNJKupal9m51UymzKWUw5tRC79aoOlH8",
+          "redirect_uri": "http://localhost:4174/e2e/fixtures/app.html"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": "2ctOKVO533l30BWMvro9gI1uTWUH-vGhHku5-n3Huac",
+          "refresh_token": "f86FjWOcw1olQh0RgkPqT9BQB-yuI_Mm_S-D1WW6fkgjdhrf2j67_r0XxwRuJsOr",
+          "token_type": "Bearer",
+          "expires_in": 299,
+          "session_id": "c68ffbbe-96e7-47b8-b431-1e446a776af3"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "session/",
+        "authorization": "Bearer 2ctOKVO533l30BWMvro9gI1uTWUH-vGhHku5-n3Huac"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "sub": "6e911151-6862-4541-851d-23ad36e85ed6",
+          "sid": "c68ffbbe-96e7-47b8-b431-1e446a776af3",
+          "application_id": "b83c95f9-93bd-4bed-a94f-f4b354a446db",
+          "amr": [
+            "password"
+          ],
+          "mfa_verified": false,
+          "email": "person@example.com",
+          "email_verified": true,
+          "phone": null,
+          "verified_identity": null,
+          "expires_at": "2026-11-11T08:14:28.910278Z",
+          "organizations": [
+            {
+              "organization_id": "3eae0a81-3bff-49c1-8398-8cdc02d88280",
+              "organization__name": "Example Team",
+              "role": "member"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "path": "session/",
+        "authorization": "Bearer Th3VPbH0ANs-Nl83RhIGTj4jZITOBHiai0571FLQt8I"
+      },
+      "response": {
+        "status": 204,
+        "body": null
+      }
+    }
+  ]
+}
