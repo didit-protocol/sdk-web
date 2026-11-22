@@ -560,6 +560,9 @@ class BankLinkSession implements BankLinkHandle {
 
   /** Called by the frame host for a message from this frame's window and the exact Didit origin. */
   private handleMessage(raw: unknown): boolean {
+    // Every message from our own frame (the host already checked its origin and window) may carry the link id and
+    // the poll step: `didit:layout` and `didit:ready` as well as the Bank Link ones. One place, before anything else.
+    if (!this.tornDown) this.noteContext(raw);
     const message = parseBankLinkEnvelope(raw);
     if (!message) return false; // not a Bank Link message: the frame host handles layout and the rest
     if (this.tornDown) return true;
@@ -569,7 +572,6 @@ class BankLinkSession implements BankLinkHandle {
     } else if (this.linkRef !== null) {
       return true;
     }
-    this.noteContext(message.name, message.data);
     switch (message.name as TransportName) {
       case "step":
         return true;
@@ -594,17 +596,26 @@ class BankLinkSession implements BankLinkHandle {
   }
 
   /**
-   * Remembers the poll step and the link id the frame reports (any message may carry `step` and `link_id` in its
-   * data; `close_request` and the `step` message do so to say where the person was). Two events mark a step by
-   * their definition (events.md, section 2): `consent_shown` is the `consent` step, `bank_redirect` the `bank_hop` one.
+   * Remembers the last link id and poll step the frame reported, from the message itself or its `data`. A message
+   * without them (or with a null step) never erases what is known; `exit` reports what is known here.
    */
-  private noteContext(name: string, data: unknown): void {
-    const source = typeof data === "object" && data !== null ? (data as Record<string, unknown>) : {};
-    if (name === "consent_shown") this.lastStep = "consent";
-    else if (name === "bank_redirect") this.lastStep = "bank_hop";
-    if (typeof source.step === "string" && ERROR_CODE_PATTERN.test(source.step)) this.lastStep = source.step;
-    if (this.linkId === undefined && typeof source.link_id === "string" && source.link_id.length > 0 && source.link_id.length <= MAX_STRING_LENGTH) {
-      this.linkId = source.link_id;
+  private noteContext(raw: unknown): void {
+    let message: unknown = raw;
+    if (typeof raw === "string") {
+      try {
+        message = JSON.parse(raw);
+      } catch {
+        return;
+      }
+    }
+    if (typeof message !== "object" || message === null) return;
+    const top = message as Record<string, unknown>;
+    const inner = typeof top.data === "object" && top.data !== null ? (top.data as Record<string, unknown>) : {};
+    for (const source of [top, inner]) {
+      if (typeof source.step === "string" && ERROR_CODE_PATTERN.test(source.step)) this.lastStep = source.step;
+      if (typeof source.link_id === "string" && source.link_id.length > 0 && source.link_id.length <= MAX_STRING_LENGTH) {
+        this.linkId = source.link_id;
+      }
     }
   }
 

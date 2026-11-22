@@ -729,13 +729,13 @@ describe("exit carries the link id and the last known step", () => {
     const fromFrame = jest.fn();
     await open({ token: TOKEN, onExit: fromFrame });
     send(msg("opened", { link_id: LINK, mode: "connect", access: "ongoing" }));
-    send(msg("consent_shown", { link_id: LINK, consent_version: "v1" }));
+    send(msg("step", { step: "consent" }));
     send(msg("close_request"));
     DiditSdk.reset();
     const fromHost = jest.fn();
     const handle = await open({ token: TOKEN, onExit: fromHost });
     send(msg("opened", { link_id: LINK, mode: "connect", access: "ongoing" }));
-    send(msg("consent_shown", { link_id: LINK, consent_version: "v1" }));
+    send(msg("step", { step: "consent" }));
     handle.close();
     expect(fromFrame.mock.calls).toEqual(fromHost.mock.calls);
     expect(fromFrame).toHaveBeenCalledWith({ reason: "closed", step: "consent", link_id: LINK });
@@ -808,5 +808,46 @@ describe("the full-page hand-off matches the contract's addresses", () => {
     expect(window.location.search).toBe("");
     expect(fragment().get("resume_code")).toBe(afterBank.resume_code);
     expect(fragment().get("instance_id")).toBe("7b1d6a52-3c84-4e0f-9a21-5d8e3f6c0b19");
+  });
+});
+
+describe("the last known step comes from every message the frame posts", () => {
+  const LINK = "11111111-1111-4111-8111-111111111111";
+  const layout = (step: string | null, where: "data" | "top" = "data") =>
+    where === "data"
+      ? { type: "didit:layout", data: { contentHeight: 640, kind: "step", step, link_id: LINK }, timestamp: 1 }
+      : { type: "didit:layout", data: { contentHeight: 640, kind: "step" }, step, link_id: LINK, timestamp: 1 };
+  const opened = () => msg("opened", { link_id: LINK, mode: "connect", access: "ongoing" });
+
+  const sequences: Array<[string, () => void, string]> = [
+    ["entry", () => { send(opened()); send(layout(null)); send(layout("consent")); }, "consent"],
+    ["consent", () => { send(opened()); send(layout("consent")); send(msg("consent_shown", { link_id: LINK, consent_version: "v1" })); }, "consent"],
+    ["segment", () => { send(opened()); send(layout("consent")); send(layout("segment")); }, "segment"],
+    ["picker", () => { send(opened()); send(layout("consent")); send(layout("segment")); send(layout("institution", "top")); }, "institution"]
+  ];
+
+  it.each(sequences)("%s: the exit reports the frame's last step and the link id, whoever closes", async (_name, replay, expected) => {
+    for (const closer of ["handle", "close_request"] as const) {
+      DiditSdk.reset();
+      const onExit = jest.fn();
+      const handle = await open({ token: TOKEN, onExit });
+      replay();
+      if (closer === "handle") handle.close();
+      else send(msg("close_request"));
+      expect(onExit).toHaveBeenCalledTimes(1);
+      expect(onExit).toHaveBeenCalledWith({ reason: "closed", step: expected, link_id: LINK });
+    }
+  });
+
+  it("a message without a step (or with a null one) never erases a known step", async () => {
+    const onExit = jest.fn();
+    const handle = await open({ token: TOKEN, onExit });
+    send(opened());
+    send(layout("segment"));
+    send(layout(null));
+    send({ type: "didit:ready", timestamp: 1 });
+    send(msg("bank_returned", { result: "ok" }));
+    handle.close();
+    expect(onExit).toHaveBeenCalledWith({ reason: "closed", step: "segment", link_id: LINK });
   });
 });
