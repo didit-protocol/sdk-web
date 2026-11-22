@@ -367,6 +367,7 @@ test.describe("Bank Link modal: focus, scroll and layout", () => {
     await page.clock.install();
     await page.goto(`${HOST_PAGE}?token=blt_silentonce_${Date.now()}ghijkl`);
     await page.evaluate(() => window.openInline());
+    await expect(page.locator("#bank iframe")).toHaveCount(1); // the wait starts when the frame is created
     await page.clock.fastForward(26000);
     await expect(page.locator("#bank .didit-load-error")).toBeVisible();
     await page.evaluate(() => window.closeLink());
