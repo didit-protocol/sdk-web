@@ -1098,7 +1098,8 @@ export class VerificationModal {
     root.style.overscrollBehavior = lock.root.overscrollBehavior;
     if (lock.root.scrollbarGutter) root.style.setProperty("scrollbar-gutter", lock.root.scrollbarGutter);
     else root.style.removeProperty("scrollbar-gutter");
-    root.style.paddingRight = lock.root.paddingRight;
+    if (lock.root.paddingRight) root.style.paddingRight = lock.root.paddingRight;
+    else root.style.removeProperty("padding-right");
     if (lock.body) document.body.style.overflow = lock.body.overflow;
   }
 
