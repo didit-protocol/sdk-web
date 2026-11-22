@@ -32,8 +32,10 @@
         onExit: (result) => window.records.exit.push(result)
       };
 
-      window.openModal = () => DiditSdk.shared.openBankLink({ token, baseUrl, apiBaseUrl, ...callbacks });
-      window.openInline = () => DiditSdk.shared.openBankLink({ token, baseUrl, apiBaseUrl, container: "#bank", ...callbacks });
+      let current = null;
+      window.openModal = () => (current = DiditSdk.shared.openBankLink({ token, baseUrl, apiBaseUrl, ...callbacks }));
+      window.openInline = () => (current = DiditSdk.shared.openBankLink({ token, baseUrl, apiBaseUrl, container: "#bank", ...callbacks }));
+      window.closeLink = () => current?.close();
       // A container with no height of its own: the frame follows the height of the screen it shows.
       window.openInlineAuto = (extra = {}) => DiditSdk.shared.openBankLink({ token, baseUrl, apiBaseUrl, container: "#auto", ...extra, ...callbacks });
       document.getElementById("open-modal").onclick = window.openModal;

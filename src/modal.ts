@@ -48,6 +48,8 @@ export interface FrameHostOptions {
    * height. Without this option an embedded frame always fills the host element.
    */
   embeddedHeight?: { height?: number | string; maxHeight?: number };
+  /** Called when the browser fires an `error` event on the frame (some browsers do when a frame cannot be loaded). */
+  onIframeError?: () => void;
 }
 
 export type FlowKind = "handoff" | "step";
@@ -146,6 +148,8 @@ export class VerificationModal {
   private embeddedFollowsContent: boolean | null = null;
   /** The element that had focus when the modal opened; the person gets back to it when it closes. */
   private opener: HTMLElement | null = null;
+  /** The "could not load" card over the frame, while there is one (see showLoadError). */
+  private loadError: HTMLDivElement | null = null;
 
   constructor(
     configuration: DiditSdkConfiguration | undefined,
@@ -628,6 +632,74 @@ export class VerificationModal {
         }
       }
 
+      /*
+       * The frame never loaded (blocked, offline): its message and a retry, over the frame's place. The ground and
+       * the text follow the flow's theme when it is known and the device's otherwise.
+       */
+      .${CSS_CLASSES.loadError} {
+        position: absolute;
+        inset: 0;
+        z-index: 15;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        padding: 1.5rem;
+        text-align: center;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 0.9375rem;
+        line-height: 1.5;
+        background: #ffffff;
+        color: #1a1a1a;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .${CSS_CLASSES.loadError} {
+          background: ${FLOW_GROUND.dark};
+          color: #f5f5f7;
+        }
+      }
+
+      .${CSS_CLASSES.container}[data-didit-theme="light"] .${CSS_CLASSES.loadError} {
+        background: #ffffff;
+        color: #1a1a1a;
+      }
+
+      .${CSS_CLASSES.container}[data-didit-theme="dark"] .${CSS_CLASSES.loadError} {
+        background: ${FLOW_GROUND.dark};
+        color: #f5f5f7;
+      }
+
+      .${CSS_CLASSES.loadError} p {
+        margin: 0;
+        max-width: 22rem;
+      }
+
+      .${CSS_CLASSES.loadError} button {
+        border: none;
+        border-radius: 8px;
+        padding: 0.625rem 1.25rem;
+        font: inherit;
+        font-weight: 500;
+        cursor: pointer;
+        background: #2567ff;
+        color: #ffffff;
+      }
+
+      .${CSS_CLASSES.loadError} button:focus-visible {
+        outline: 2px solid #2567ff;
+        outline-offset: 2px;
+      }
+
+      .${CSS_CLASSES.embedded} .${CSS_CLASSES.loadError} {
+        position: relative;
+        inset: auto;
+        height: 100%;
+        min-height: 12rem;
+      }
+
       .${CSS_CLASSES.embedded} {
         position: relative;
         box-sizing: border-box;
@@ -704,6 +776,7 @@ export class VerificationModal {
     this.applyIframeAttributes(this.iframe);
     this.iframe.setAttribute("title", t.ariaLabelModal);
     this.iframe.addEventListener("load", () => this.handleIframeLoad());
+    this.iframe.addEventListener("error", () => this.frameOptions.onIframeError?.());
 
     this.confirmOverlay = document.createElement("div");
     this.confirmOverlay.className = CSS_CLASSES.confirmOverlay;
@@ -769,7 +842,9 @@ export class VerificationModal {
       return Array.from(this.confirmOverlay?.querySelectorAll<HTMLElement>("button") ?? []);
     }
     const close = this.container?.querySelector<HTMLElement>(`.${CSS_CLASSES.closeButton}`);
-    return [close, this.iframe].filter((el): el is HTMLElement => el instanceof HTMLElement);
+    // While the "could not load" card shows, its retry button stands where the frame was.
+    const content = this.loadError ? this.loadError.querySelector<HTMLElement>("button") : this.iframe;
+    return [close, content].filter((el): el is HTMLElement => el instanceof HTMLElement);
   }
 
   private createEmbeddedDOM(): void {
@@ -793,6 +868,7 @@ export class VerificationModal {
     this.applyIframeAttributes(this.iframe);
     this.iframe.setAttribute("title", this.translations().ariaLabelModal);
     this.iframe.addEventListener("load", () => this.handleIframeLoad());
+    this.iframe.addEventListener("error", () => this.frameOptions.onIframeError?.());
 
     this.container.appendChild(this.loadingEl);
     this.container.appendChild(this.iframe);
@@ -1356,6 +1432,7 @@ export class VerificationModal {
 
     this.state.isLoading = true;
     this.hideConfirmation();
+    this.hideLoadError();
     this.loadingEl?.classList.remove("hidden");
     this.resetFlowLayout();
     if (!this.embedded && !this.isPhoneWindow()) this.waitForFirstLayout();
@@ -1387,6 +1464,7 @@ export class VerificationModal {
     SDKLogger.log("Closing");
 
     this.hideConfirmation(false);
+    this.hideLoadError();
     this.state.isOpen = false;
     this.state.isLoading = true;
     this.state.showConfirmation = false;
@@ -1432,6 +1510,51 @@ export class VerificationModal {
     this.iframe = null;
     this.loadingEl = null;
     this.confirmOverlay = null;
+  }
+
+  /**
+   * The frame's document never loaded: the frame is blanked and hidden and a message with a retry button takes
+   * its place. `onRetry` runs when the person presses the button; the caller then opens a fresh frame.
+   */
+  showLoadError(onRetry: () => void): void {
+    const host = this.container;
+    if (!host || !this.iframe) return;
+    this.hideLoadError();
+    const t = this.translations();
+    const card = document.createElement("div");
+    card.className = CSS_CLASSES.loadError;
+    const message = document.createElement("p");
+    message.setAttribute("role", "alert");
+    message.textContent = t.loadErrorMessage ?? "We couldn't load this page. Check your connection and try again.";
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.textContent = t.retryButton ?? "Try again";
+    retry.addEventListener("click", () => onRetry());
+    card.append(message, retry);
+    this.iframe.src = "about:blank";
+    this.iframe.inert = true;
+    this.iframe.style.display = "none";
+    this.loadingEl?.classList.add("hidden");
+    host.appendChild(card);
+    this.loadError = card;
+    retry.focus({ preventScroll: true });
+  }
+
+  /** Removes the "could not load" card and gives the frame back; a no-op without one. */
+  private hideLoadError(): void {
+    if (!this.loadError) return;
+    this.loadError.remove();
+    this.loadError = null;
+    if (this.iframe) {
+      this.iframe.inert = this.state.showConfirmation;
+      this.iframe.style.removeProperty("display");
+    }
+  }
+
+  /** Leaves the "could not load" state before a retry opens a fresh frame. */
+  clearLoadError(): void {
+    this.hideLoadError();
+    this.loadingEl?.classList.remove("hidden");
   }
 
   /** The frame's window, for a caller that posts to it (always with an exact target origin). */

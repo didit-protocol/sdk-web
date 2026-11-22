@@ -340,4 +340,37 @@ test.describe("Bank Link modal: focus, scroll and layout", () => {
     ]);
     expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe("IFRAME");
   });
+
+  test("a frame that never posts a message ends with one error network and a retry that loads a fresh frame", async ({ page }) => {
+    await page.clock.install();
+    await page.goto(`${HOST_PAGE}?token=blt_silentonce_${Date.now()}abcdef`);
+    await page.evaluate(() => window.openModal());
+    await expect(page.locator(FRAME)).toHaveCount(1);
+    expect(new URL(await page.locator(FRAME).getAttribute("src")).pathname).toContain("frame_silent");
+    await page.clock.fastForward(26000);
+    const card = page.locator(".didit-load-error");
+    await expect(card).toBeVisible();
+    await expect(card.getByRole("button", { name: "Try again" })).toBeFocused();
+    await page.clock.fastForward(60000);
+    expect((await records(page)).events).toEqual([{ name: "error", code: "network" }]); // reported once
+    expect(await page.locator(FRAME).evaluate((el) => getComputedStyle(el).display)).toBe("none");
+
+    await card.getByRole("button", { name: "Try again" }).click();
+    await expect(card).toHaveCount(0);
+    await expect(page.frameLocator(FRAME).getByRole("heading", { name: "Connect your bank" })).toBeVisible();
+    await expect.poll(() => names(page)).toEqual(["error", "opened"]);
+    await page.clock.fastForward(60000);
+    expect(await names(page)).toEqual(["error", "opened"]); // the first message cancelled the wait
+  });
+
+  test("closing while the retry card shows ends the flow with exit closed and nothing else", async ({ page }) => {
+    await page.clock.install();
+    await page.goto(`${HOST_PAGE}?token=blt_silentonce_${Date.now()}ghijkl`);
+    await page.evaluate(() => window.openInline());
+    await page.clock.fastForward(26000);
+    await expect(page.locator("#bank .didit-load-error")).toBeVisible();
+    await page.evaluate(() => window.closeLink());
+    await expect(page.locator("#bank iframe, #bank .didit-load-error")).toHaveCount(0);
+    expect((await records(page)).exit).toEqual([{ reason: "closed", step: null }]);
+  });
 });

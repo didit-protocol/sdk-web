@@ -4,7 +4,8 @@ import type { BankLinkHandle } from "../types";
 import { DiditSdk } from "../DiditSdk";
 import { DiditBankLinkError, bankLinkRuntime, buildBankLinkFrameUrl, parseBankLinkToken, readBankLinkEvent } from "../bankLink";
 import { BANK_LINK_RESUME_STORAGE_KEY } from "../constants";
-import { BANK_LINK_TRANSLATION_LANGUAGES, MODAL_TRANSLATION_LANGUAGES } from "../translations";
+import { BANK_LINK_TRANSLATION_LANGUAGES, MODAL_TRANSLATION_LANGUAGES, getBankLinkModalTranslations } from "../translations";
+import { BANK_LINK_FRAME_LOAD_TIMEOUT_MS } from "../constants";
 
 const ORIGIN = "https://verify.didit.me";
 const TOKEN = "blt_0123456789abcdefghij";
@@ -128,6 +129,13 @@ describe("frame and token", () => {
 
   it("has modal text for every language the verification modal has", () => {
     expect([...BANK_LINK_TRANSLATION_LANGUAGES].sort()).toEqual([...MODAL_TRANSLATION_LANGUAGES].filter((l) => l !== "en").sort());
+  });
+
+  it("has the load-error text and the retry label in every language", () => {
+    for (const language of BANK_LINK_TRANSLATION_LANGUAGES) {
+      const t = getBankLinkModalTranslations(language);
+      expect([language, (t.loadErrorMessage ?? "").length > 10, (t.retryButton ?? "").length > 0]).toEqual([language, true, true]);
+    }
   });
 
   it("builds a resume URL with the code in the fragment", () => {
@@ -860,5 +868,131 @@ describe("the last known step comes from every message the frame posts", () => {
     send({ type: "didit:layout", data: { contentHeight: 640, step: "accounts" }, link_ref: "ref-other", timestamp: 1 });
     handle.close();
     expect(onExit).toHaveBeenCalledWith({ reason: "closed", step: "consent", link_id: LINK });
+  });
+});
+
+describe("a frame that never loads", () => {
+  const LINK = "11111111-1111-4111-8111-111111111111";
+  const card = () => document.querySelector<HTMLElement>(".didit-load-error");
+  const retryButton = () => card()?.querySelector("button") as HTMLButtonElement;
+  const policy = () => jest.spyOn(bankLinkRuntime, "fetchPolicy");
+
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  async function openLink(options: Parameters<typeof DiditSdk.shared.openBankLink>[0]): Promise<BankLinkHandle> {
+    const handle = DiditSdk.shared.openBankLink(options);
+    await jest.advanceTimersByTimeAsync(0);
+    return handle;
+  }
+
+  it("waits 25 s, then reports one network error, removes the frame and offers a retry", async () => {
+    const onEvent = jest.fn();
+    const handle = await openLink({ token: TOKEN, onEvent });
+    expect(BANK_LINK_FRAME_LOAD_TIMEOUT_MS).toBe(25000);
+    await jest.advanceTimersByTimeAsync(BANK_LINK_FRAME_LOAD_TIMEOUT_MS - 1);
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(card()).toBeNull();
+    await jest.advanceTimersByTimeAsync(1);
+    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([{ name: "error", code: "network" }]);
+    expect(frame().src).toBe("about:blank");
+    expect(frame().style.display).toBe("none");
+    expect(card()?.textContent).toContain("couldn't load");
+    expect(document.activeElement).toBe(retryButton());
+    expect(handle.state).toBe("opening");
+    await jest.advanceTimersByTimeAsync(10 * BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    expect(onEvent).toHaveBeenCalledTimes(1); // no double error
+  });
+
+  it("the frame's first message cancels the wait, whether a Bank Link event or a layout message", async () => {
+    for (const first of [msg("opened", { link_id: LINK, mode: "connect", access: "ongoing" }), { type: "didit:layout", data: { contentHeight: 600 }, timestamp: 1 }]) {
+      DiditSdk.reset();
+      const onEvent = jest.fn();
+      await openLink({ token: TOKEN, onEvent });
+      await jest.advanceTimersByTimeAsync(5000);
+      send(first);
+      await jest.advanceTimersByTimeAsync(10 * BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+      expect(onEvent.mock.calls.map((c) => (c[0] as { code?: string }).code)).not.toContain("network");
+      expect(card()).toBeNull();
+      expect(document.querySelector("iframe")).not.toBeNull();
+    }
+  });
+
+  it("a close before the timeout cancels it: only the exit is reported", async () => {
+    const onEvent = jest.fn();
+    const handle = await openLink({ token: TOKEN, onEvent });
+    handle.close();
+    await jest.advanceTimersByTimeAsync(10 * BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([{ name: "exit", reason: "closed", step: null }]);
+  });
+
+  it("a close while the retry card shows ends the flow with exit closed and removes the card", async () => {
+    const onEvent = jest.fn();
+    const handle = await openLink({ token: TOKEN, onEvent, container: "#bank" });
+    await jest.advanceTimersByTimeAsync(BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    expect(document.querySelector("#bank .didit-load-error")).not.toBeNull();
+    handle.close();
+    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([
+      { name: "error", code: "network" },
+      { name: "exit", reason: "closed", step: null }
+    ]);
+    expect(document.querySelector("#bank")?.children.length).toBe(0);
+    await jest.advanceTimersByTimeAsync(10 * BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    expect(onEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it("retry asks again, loads a fresh frame at the new frame id, and a working frame then cancels the wait", async () => {
+    const onEvent = jest.fn();
+    await openLink({ token: TOKEN, onEvent });
+    await jest.advanceTimersByTimeAsync(BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    policy().mockResolvedValue({ valid: true, frame_id: "frame_second_attempt", allowed_origins: [window.location.origin] });
+    retryButton().click();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(card()).toBeNull();
+    expect(new URL(frame().src).pathname).toBe("/bank/frame/frame_second_attempt");
+    expect(frame().style.display).toBe("");
+    expect(policy()).toHaveBeenCalledTimes(2);
+    send(msg("opened", { link_id: LINK, mode: "connect", access: "ongoing" }));
+    await jest.advanceTimersByTimeAsync(10 * BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    expect(onEvent.mock.calls.map((c) => (c[0] as { name: string }).name)).toEqual(["error", "opened"]);
+  });
+
+  it("a retried frame that stays silent reports its own error once more, never twice for one attempt", async () => {
+    const onEvent = jest.fn();
+    await openLink({ token: TOKEN, onEvent });
+    await jest.advanceTimersByTimeAsync(BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    retryButton().click();
+    await jest.advanceTimersByTimeAsync(BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    expect(onEvent).toHaveBeenCalledTimes(2);
+    await jest.advanceTimersByTimeAsync(10 * BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    expect(onEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it("the browser's error event on the frame reports the same single error and does not double with the timer", async () => {
+    const onEvent = jest.fn();
+    await openLink({ token: TOKEN, onEvent });
+    frame().dispatchEvent(new Event("error"));
+    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([{ name: "error", code: "network" }]);
+    expect(card()).not.toBeNull();
+    await jest.advanceTimersByTimeAsync(10 * BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    expect(onEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("a late message of the frame that was given up on is ignored", async () => {
+    const onEvent = jest.fn();
+    await openLink({ token: TOKEN, onEvent });
+    await jest.advanceTimersByTimeAsync(BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    send(msg("opened", { link_id: LINK, mode: "connect", access: "ongoing" }));
+    send(msg("error", { code: "network" }));
+    expect(onEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves no timer behind after the flow is disposed", async () => {
+    const onEvent = jest.fn();
+    await openLink({ token: TOKEN, onEvent });
+    DiditSdk.reset();
+    await jest.advanceTimersByTimeAsync(10 * BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(document.querySelector(".didit-load-error")).toBeNull();
   });
 });

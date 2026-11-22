@@ -5,6 +5,9 @@ export interface ModalTranslations {
   exitButton: string;
   ariaLabelModal: string;
   ariaLabelClose: string;
+  /** A flow that can fail to load (Bank Link) says so with these; the verification modal never shows them. */
+  loadErrorMessage?: string;
+  retryButton?: string;
 }
 
 const EN: ModalTranslations = {
@@ -455,67 +458,72 @@ export function getTranslations(language: string): ModalTranslations {
 export interface BankLinkTranslations {
   ariaLabelBankLink: string;
   ariaLabelCloseBankLink: string;
+  /** Shown with a retry button when the hosted page's document never loaded. */
+  loadErrorMessage: string;
+  retryButton: string;
 }
 
 const BANK_LINK_EN: BankLinkTranslations = {
   ariaLabelBankLink: "Didit bank connection",
-  ariaLabelCloseBankLink: "Close bank connection"
+  ariaLabelCloseBankLink: "Close bank connection",
+  loadErrorMessage: "We couldn't load the bank connection. Check your connection and try again.",
+  retryButton: "Try again"
 };
 
 const bankLinkTranslationsMap: Record<string, BankLinkTranslations> = {
-  ar: { ariaLabelBankLink: "ربط الحساب المصرفي من Didit", ariaLabelCloseBankLink: "إغلاق ربط الحساب المصرفي" },
-  bg: { ariaLabelBankLink: "Банкова връзка Didit", ariaLabelCloseBankLink: "Затваряне на банковата връзка" },
-  bn: { ariaLabelBankLink: "Didit ব্যাংক সংযোগ", ariaLabelCloseBankLink: "ব্যাংক সংযোগ বন্ধ করুন" },
-  bs: { ariaLabelBankLink: "Didit povezivanje banke", ariaLabelCloseBankLink: "Zatvori povezivanje banke" },
-  ca: { ariaLabelBankLink: "Connexió bancària Didit", ariaLabelCloseBankLink: "Tancar la connexió bancària" },
-  cnr: { ariaLabelBankLink: "Didit povezivanje banke", ariaLabelCloseBankLink: "Zatvori povezivanje banke" },
-  cs: { ariaLabelBankLink: "Propojení banky Didit", ariaLabelCloseBankLink: "Zavřít propojení banky" },
-  da: { ariaLabelBankLink: "Didit bankforbindelse", ariaLabelCloseBankLink: "Luk bankforbindelse" },
-  de: { ariaLabelBankLink: "Didit Bankverbindung", ariaLabelCloseBankLink: "Bankverbindung schließen" },
-  el: { ariaLabelBankLink: "Σύνδεση τράπεζας Didit", ariaLabelCloseBankLink: "Κλείσιμο σύνδεσης τράπεζας" },
-  es: { ariaLabelBankLink: "Conexión bancaria Didit", ariaLabelCloseBankLink: "Cerrar la conexión bancaria" },
-  et: { ariaLabelBankLink: "Didit pangaühendus", ariaLabelCloseBankLink: "Sulge pangaühendus" },
-  fa: { ariaLabelBankLink: "اتصال بانکی Didit", ariaLabelCloseBankLink: "بستن اتصال بانکی" },
-  fi: { ariaLabelBankLink: "Didit-pankkiyhteys", ariaLabelCloseBankLink: "Sulje pankkiyhteys" },
-  fr: { ariaLabelBankLink: "Connexion bancaire Didit", ariaLabelCloseBankLink: "Fermer la connexion bancaire" },
-  he: { ariaLabelBankLink: "חיבור בנק Didit", ariaLabelCloseBankLink: "סגירת חיבור הבנק" },
-  hi: { ariaLabelBankLink: "Didit बैंक कनेक्शन", ariaLabelCloseBankLink: "बैंक कनेक्शन बंद करें" },
-  hr: { ariaLabelBankLink: "Didit povezivanje banke", ariaLabelCloseBankLink: "Zatvori povezivanje banke" },
-  hu: { ariaLabelBankLink: "Didit banki kapcsolat", ariaLabelCloseBankLink: "Banki kapcsolat bezárása" },
-  hy: { ariaLabelBankLink: "Didit բանկային կապ", ariaLabelCloseBankLink: "Փակել բանկային կապը" },
-  id: { ariaLabelBankLink: "Koneksi bank Didit", ariaLabelCloseBankLink: "Tutup koneksi bank" },
-  it: { ariaLabelBankLink: "Collegamento bancario Didit", ariaLabelCloseBankLink: "Chiudi il collegamento bancario" },
-  ja: { ariaLabelBankLink: "Didit 銀行連携", ariaLabelCloseBankLink: "銀行連携を閉じる" },
-  ka: { ariaLabelBankLink: "Didit საბანკო კავშირი", ariaLabelCloseBankLink: "საბანკო კავშირის დახურვა" },
-  kk: { ariaLabelBankLink: "Didit банк байланысы", ariaLabelCloseBankLink: "Банк байланысын жабу" },
-  ko: { ariaLabelBankLink: "Didit 은행 연결", ariaLabelCloseBankLink: "은행 연결 닫기" },
-  ky: { ariaLabelBankLink: "Didit банк байланышы", ariaLabelCloseBankLink: "Банк байланышын жабуу" },
-  lt: { ariaLabelBankLink: "Didit banko ryšys", ariaLabelCloseBankLink: "Uždaryti banko ryšį" },
-  lv: { ariaLabelBankLink: "Didit bankas savienojums", ariaLabelCloseBankLink: "Aizvērt bankas savienojumu" },
-  mk: { ariaLabelBankLink: "Didit поврзување на банка", ariaLabelCloseBankLink: "Затвори го поврзувањето со банка" },
-  mn: { ariaLabelBankLink: "Didit банкны холболт", ariaLabelCloseBankLink: "Банкны холболтыг хаах" },
-  ms: { ariaLabelBankLink: "Sambungan bank Didit", ariaLabelCloseBankLink: "Tutup sambungan bank" },
-  nl: { ariaLabelBankLink: "Didit bankkoppeling", ariaLabelCloseBankLink: "Bankkoppeling sluiten" },
-  no: { ariaLabelBankLink: "Didit bankforbindelse", ariaLabelCloseBankLink: "Lukk bankforbindelsen" },
-  pl: { ariaLabelBankLink: "Połączenie z bankiem Didit", ariaLabelCloseBankLink: "Zamknij połączenie z bankiem" },
-  "pt-BR": { ariaLabelBankLink: "Conexão bancária Didit", ariaLabelCloseBankLink: "Fechar conexão bancária" },
-  pt: { ariaLabelBankLink: "Ligação bancária Didit", ariaLabelCloseBankLink: "Fechar ligação bancária" },
-  ro: { ariaLabelBankLink: "Conexiune bancară Didit", ariaLabelCloseBankLink: "Închide conexiunea bancară" },
-  ru: { ariaLabelBankLink: "Подключение банка Didit", ariaLabelCloseBankLink: "Закрыть подключение банка" },
-  sk: { ariaLabelBankLink: "Prepojenie banky Didit", ariaLabelCloseBankLink: "Zavrieť prepojenie banky" },
-  sl: { ariaLabelBankLink: "Povezava z banko Didit", ariaLabelCloseBankLink: "Zapri povezavo z banko" },
-  so: { ariaLabelBankLink: "Isku xirka bangiga Didit", ariaLabelCloseBankLink: "Xir isku xirka bangiga" },
-  sq: { ariaLabelBankLink: "Lidhja bankare Didit", ariaLabelCloseBankLink: "Mbyll lidhjen bankare" },
-  sr: { ariaLabelBankLink: "Didit повезивање банке", ariaLabelCloseBankLink: "Затвори повезивање банке" },
-  sv: { ariaLabelBankLink: "Didit bankanslutning", ariaLabelCloseBankLink: "Stäng bankanslutningen" },
-  th: { ariaLabelBankLink: "การเชื่อมต่อธนาคาร Didit", ariaLabelCloseBankLink: "ปิดการเชื่อมต่อธนาคาร" },
-  tr: { ariaLabelBankLink: "Didit banka bağlantısı", ariaLabelCloseBankLink: "Banka bağlantısını kapat" },
-  uk: { ariaLabelBankLink: "Підключення банку Didit", ariaLabelCloseBankLink: "Закрити підключення банку" },
-  uz: { ariaLabelBankLink: "Didit bank ulanishi", ariaLabelCloseBankLink: "Bank ulanishini yopish" },
-  vi: { ariaLabelBankLink: "Kết nối ngân hàng Didit", ariaLabelCloseBankLink: "Đóng kết nối ngân hàng" },
-  "zh-CN": { ariaLabelBankLink: "Didit 银行连接", ariaLabelCloseBankLink: "关闭银行连接" },
-  "zh-TW": { ariaLabelBankLink: "Didit 銀行連結", ariaLabelCloseBankLink: "關閉銀行連結" },
-  zh: { ariaLabelBankLink: "Didit 银行连接", ariaLabelCloseBankLink: "关闭银行连接" }
+  ar: { ariaLabelBankLink: "ربط الحساب المصرفي من Didit", ariaLabelCloseBankLink: "إغلاق ربط الحساب المصرفي", loadErrorMessage: "تعذّر تحميل ربط الحساب المصرفي. تحقق من اتصالك وحاول مرة أخرى.", retryButton: "حاول مرة أخرى" },
+  bg: { ariaLabelBankLink: "Банкова връзка Didit", ariaLabelCloseBankLink: "Затваряне на банковата връзка", loadErrorMessage: "Банковата връзка не можа да се зареди. Проверете интернет връзката си и опитайте отново.", retryButton: "Опитайте отново" },
+  bn: { ariaLabelBankLink: "Didit ব্যাংক সংযোগ", ariaLabelCloseBankLink: "ব্যাংক সংযোগ বন্ধ করুন", loadErrorMessage: "ব্যাংক সংযোগ লোড করা যায়নি। আপনার ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।", retryButton: "আবার চেষ্টা করুন" },
+  bs: { ariaLabelBankLink: "Didit povezivanje banke", ariaLabelCloseBankLink: "Zatvori povezivanje banke", loadErrorMessage: "Povezivanje banke nije moguće učitati. Provjerite internetsku vezu i pokušajte ponovo.", retryButton: "Pokušaj ponovo" },
+  ca: { ariaLabelBankLink: "Connexió bancària Didit", ariaLabelCloseBankLink: "Tancar la connexió bancària", loadErrorMessage: "No s'ha pogut carregar la connexió bancària. Comproveu la connexió i torneu-ho a provar.", retryButton: "Torna-ho a provar" },
+  cnr: { ariaLabelBankLink: "Didit povezivanje banke", ariaLabelCloseBankLink: "Zatvori povezivanje banke", loadErrorMessage: "Povezivanje banke nije moguće učitati. Provjerite internetsku vezu i pokušajte ponovo.", retryButton: "Pokušaj ponovo" },
+  cs: { ariaLabelBankLink: "Propojení banky Didit", ariaLabelCloseBankLink: "Zavřít propojení banky", loadErrorMessage: "Propojení s bankou se nepodařilo načíst. Zkontrolujte připojení a zkuste to znovu.", retryButton: "Zkusit znovu" },
+  da: { ariaLabelBankLink: "Didit bankforbindelse", ariaLabelCloseBankLink: "Luk bankforbindelse", loadErrorMessage: "Bankforbindelsen kunne ikke indlæses. Tjek din internetforbindelse, og prøv igen.", retryButton: "Prøv igen" },
+  de: { ariaLabelBankLink: "Didit Bankverbindung", ariaLabelCloseBankLink: "Bankverbindung schließen", loadErrorMessage: "Die Bankverbindung konnte nicht geladen werden. Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.", retryButton: "Erneut versuchen" },
+  el: { ariaLabelBankLink: "Σύνδεση τράπεζας Didit", ariaLabelCloseBankLink: "Κλείσιμο σύνδεσης τράπεζας", loadErrorMessage: "Δεν ήταν δυνατή η φόρτωση της σύνδεσης τράπεζας. Ελέγξτε τη σύνδεσή σας και δοκιμάστε ξανά.", retryButton: "Δοκιμάστε ξανά" },
+  es: { ariaLabelBankLink: "Conexión bancaria Didit", ariaLabelCloseBankLink: "Cerrar la conexión bancaria", loadErrorMessage: "No se pudo cargar la conexión bancaria. Comprueba tu conexión e inténtalo de nuevo.", retryButton: "Reintentar" },
+  et: { ariaLabelBankLink: "Didit pangaühendus", ariaLabelCloseBankLink: "Sulge pangaühendus", loadErrorMessage: "Pangaühendust ei õnnestunud laadida. Kontrollige oma internetiühendust ja proovige uuesti.", retryButton: "Proovi uuesti" },
+  fa: { ariaLabelBankLink: "اتصال بانکی Didit", ariaLabelCloseBankLink: "بستن اتصال بانکی", loadErrorMessage: "بارگذاری اتصال بانکی انجام نشد. اتصال اینترنت خود را بررسی کنید و دوباره تلاش کنید.", retryButton: "تلاش دوباره" },
+  fi: { ariaLabelBankLink: "Didit-pankkiyhteys", ariaLabelCloseBankLink: "Sulje pankkiyhteys", loadErrorMessage: "Pankkiyhteyden lataaminen epäonnistui. Tarkista verkkoyhteytesi ja yritä uudelleen.", retryButton: "Yritä uudelleen" },
+  fr: { ariaLabelBankLink: "Connexion bancaire Didit", ariaLabelCloseBankLink: "Fermer la connexion bancaire", loadErrorMessage: "La connexion bancaire n'a pas pu être chargée. Vérifiez votre connexion et réessayez.", retryButton: "Réessayer" },
+  he: { ariaLabelBankLink: "חיבור בנק Didit", ariaLabelCloseBankLink: "סגירת חיבור הבנק", loadErrorMessage: "לא ניתן היה לטעון את חיבור הבנק. בדקו את החיבור לאינטרנט ונסו שוב.", retryButton: "נסו שוב" },
+  hi: { ariaLabelBankLink: "Didit बैंक कनेक्शन", ariaLabelCloseBankLink: "बैंक कनेक्शन बंद करें", loadErrorMessage: "बैंक कनेक्शन लोड नहीं हो सका। अपना इंटरनेट कनेक्शन जाँचें और फिर से प्रयास करें।", retryButton: "फिर से प्रयास करें" },
+  hr: { ariaLabelBankLink: "Didit povezivanje banke", ariaLabelCloseBankLink: "Zatvori povezivanje banke", loadErrorMessage: "Povezivanje s bankom nije moguće učitati. Provjerite internetsku vezu i pokušajte ponovno.", retryButton: "Pokušaj ponovno" },
+  hu: { ariaLabelBankLink: "Didit banki kapcsolat", ariaLabelCloseBankLink: "Banki kapcsolat bezárása", loadErrorMessage: "A banki kapcsolat betöltése nem sikerült. Ellenőrizze az internetkapcsolatot, és próbálja újra.", retryButton: "Újrapróbálás" },
+  hy: { ariaLabelBankLink: "Didit բանկային կապ", ariaLabelCloseBankLink: "Փակել բանկային կապը", loadErrorMessage: "Բանկային կապը չհաջողվեց բեռնել։ Ստուգեք ինտերնետ կապը և կրկին փորձեք։", retryButton: "Կրկին փորձել" },
+  id: { ariaLabelBankLink: "Koneksi bank Didit", ariaLabelCloseBankLink: "Tutup koneksi bank", loadErrorMessage: "Koneksi bank tidak dapat dimuat. Periksa koneksi internet Anda lalu coba lagi.", retryButton: "Coba lagi" },
+  it: { ariaLabelBankLink: "Collegamento bancario Didit", ariaLabelCloseBankLink: "Chiudi il collegamento bancario", loadErrorMessage: "Non è stato possibile caricare il collegamento bancario. Controlla la connessione e riprova.", retryButton: "Riprova" },
+  ja: { ariaLabelBankLink: "Didit 銀行連携", ariaLabelCloseBankLink: "銀行連携を閉じる", loadErrorMessage: "銀行連携を読み込めませんでした。接続を確認して、もう一度お試しください。", retryButton: "再試行" },
+  ka: { ariaLabelBankLink: "Didit საბანკო კავშირი", ariaLabelCloseBankLink: "საბანკო კავშირის დახურვა", loadErrorMessage: "საბანკო კავშირის ჩატვირთვა ვერ მოხერხდა. შეამოწმეთ ინტერნეტკავშირი და სცადეთ ხელახლა.", retryButton: "ხელახლა ცდა" },
+  kk: { ariaLabelBankLink: "Didit банк байланысы", ariaLabelCloseBankLink: "Банк байланысын жабу", loadErrorMessage: "Банк байланысын жүктеу мүмкін болмады. Интернет байланысын тексеріп, қайталап көріңіз.", retryButton: "Қайталау" },
+  ko: { ariaLabelBankLink: "Didit 은행 연결", ariaLabelCloseBankLink: "은행 연결 닫기", loadErrorMessage: "은행 연결을 불러오지 못했습니다. 인터넷 연결을 확인한 후 다시 시도해 주세요.", retryButton: "다시 시도" },
+  ky: { ariaLabelBankLink: "Didit банк байланышы", ariaLabelCloseBankLink: "Банк байланышын жабуу", loadErrorMessage: "Банк байланышын жүктөө мүмкүн болгон жок. Интернет байланышын текшерип, кайра аракет кылыңыз.", retryButton: "Кайра аракет кылуу" },
+  lt: { ariaLabelBankLink: "Didit banko ryšys", ariaLabelCloseBankLink: "Uždaryti banko ryšį", loadErrorMessage: "Nepavyko įkelti banko ryšio. Patikrinkite interneto ryšį ir bandykite dar kartą.", retryButton: "Bandyti dar kartą" },
+  lv: { ariaLabelBankLink: "Didit bankas savienojums", ariaLabelCloseBankLink: "Aizvērt bankas savienojumu", loadErrorMessage: "Bankas savienojumu neizdevās ielādēt. Pārbaudiet interneta savienojumu un mēģiniet vēlreiz.", retryButton: "Mēģināt vēlreiz" },
+  mk: { ariaLabelBankLink: "Didit поврзување на банка", ariaLabelCloseBankLink: "Затвори го поврзувањето со банка", loadErrorMessage: "Поврзувањето со банката не можеше да се вчита. Проверете ја интернет-врската и обидете се повторно.", retryButton: "Обидете се повторно" },
+  mn: { ariaLabelBankLink: "Didit банкны холболт", ariaLabelCloseBankLink: "Банкны холболтыг хаах", loadErrorMessage: "Банкны холболтыг ачаалж чадсангүй. Интернет холболтоо шалгаад дахин оролдоно уу.", retryButton: "Дахин оролдох" },
+  ms: { ariaLabelBankLink: "Sambungan bank Didit", ariaLabelCloseBankLink: "Tutup sambungan bank", loadErrorMessage: "Sambungan bank tidak dapat dimuatkan. Semak sambungan internet anda dan cuba lagi.", retryButton: "Cuba lagi" },
+  nl: { ariaLabelBankLink: "Didit bankkoppeling", ariaLabelCloseBankLink: "Bankkoppeling sluiten", loadErrorMessage: "De bankkoppeling kon niet worden geladen. Controleer je internetverbinding en probeer het opnieuw.", retryButton: "Opnieuw proberen" },
+  no: { ariaLabelBankLink: "Didit bankforbindelse", ariaLabelCloseBankLink: "Lukk bankforbindelsen", loadErrorMessage: "Bankforbindelsen kunne ikke lastes. Sjekk internettforbindelsen og prøv igjen.", retryButton: "Prøv igjen" },
+  pl: { ariaLabelBankLink: "Połączenie z bankiem Didit", ariaLabelCloseBankLink: "Zamknij połączenie z bankiem", loadErrorMessage: "Nie udało się załadować połączenia z bankiem. Sprawdź połączenie z internetem i spróbuj ponownie.", retryButton: "Spróbuj ponownie" },
+  "pt-BR": { ariaLabelBankLink: "Conexão bancária Didit", ariaLabelCloseBankLink: "Fechar conexão bancária", loadErrorMessage: "Não foi possível carregar a conexão bancária. Verifique sua conexão e tente novamente.", retryButton: "Tentar novamente" },
+  pt: { ariaLabelBankLink: "Ligação bancária Didit", ariaLabelCloseBankLink: "Fechar ligação bancária", loadErrorMessage: "Não foi possível carregar a ligação bancária. Verifique a sua ligação e tente novamente.", retryButton: "Tentar novamente" },
+  ro: { ariaLabelBankLink: "Conexiune bancară Didit", ariaLabelCloseBankLink: "Închide conexiunea bancară", loadErrorMessage: "Conexiunea bancară nu a putut fi încărcată. Verifică conexiunea la internet și încearcă din nou.", retryButton: "Încearcă din nou" },
+  ru: { ariaLabelBankLink: "Подключение банка Didit", ariaLabelCloseBankLink: "Закрыть подключение банка", loadErrorMessage: "Не удалось загрузить подключение банка. Проверьте подключение к интернету и повторите попытку.", retryButton: "Повторить" },
+  sk: { ariaLabelBankLink: "Prepojenie banky Didit", ariaLabelCloseBankLink: "Zavrieť prepojenie banky", loadErrorMessage: "Prepojenie s bankou sa nepodarilo načítať. Skontrolujte pripojenie a skúste to znova.", retryButton: "Skúsiť znova" },
+  sl: { ariaLabelBankLink: "Povezava z banko Didit", ariaLabelCloseBankLink: "Zapri povezavo z banko", loadErrorMessage: "Povezave z banko ni bilo mogoče naložiti. Preverite internetno povezavo in poskusite znova.", retryButton: "Poskusi znova" },
+  so: { ariaLabelBankLink: "Isku xirka bangiga Didit", ariaLabelCloseBankLink: "Xir isku xirka bangiga", loadErrorMessage: "Isku xirka bangiga lama soo rari karin. Hubi xiriirkaaga internetka oo mar kale isku day.", retryButton: "Mar kale isku day" },
+  sq: { ariaLabelBankLink: "Lidhja bankare Didit", ariaLabelCloseBankLink: "Mbyll lidhjen bankare", loadErrorMessage: "Lidhja bankare nuk u ngarkua. Kontrolloni lidhjen me internetin dhe provoni përsëri.", retryButton: "Provo përsëri" },
+  sr: { ariaLabelBankLink: "Didit повезивање банке", ariaLabelCloseBankLink: "Затвори повезивање банке", loadErrorMessage: "Повезивање са банком није могуће учитати. Проверите интернет везу и покушајте поново.", retryButton: "Покушај поново" },
+  sv: { ariaLabelBankLink: "Didit bankanslutning", ariaLabelCloseBankLink: "Stäng bankanslutningen", loadErrorMessage: "Bankanslutningen kunde inte laddas. Kontrollera din internetanslutning och försök igen.", retryButton: "Försök igen" },
+  th: { ariaLabelBankLink: "การเชื่อมต่อธนาคาร Didit", ariaLabelCloseBankLink: "ปิดการเชื่อมต่อธนาคาร", loadErrorMessage: "ไม่สามารถโหลดการเชื่อมต่อธนาคารได้ โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง", retryButton: "ลองอีกครั้ง" },
+  tr: { ariaLabelBankLink: "Didit banka bağlantısı", ariaLabelCloseBankLink: "Banka bağlantısını kapat", loadErrorMessage: "Banka bağlantısı yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.", retryButton: "Tekrar dene" },
+  uk: { ariaLabelBankLink: "Підключення банку Didit", ariaLabelCloseBankLink: "Закрити підключення банку", loadErrorMessage: "Не вдалося завантажити підключення банку. Перевірте підключення до інтернету та спробуйте ще раз.", retryButton: "Спробувати ще раз" },
+  uz: { ariaLabelBankLink: "Didit bank ulanishi", ariaLabelCloseBankLink: "Bank ulanishini yopish", loadErrorMessage: "Bank ulanishini yuklab bo'lmadi. Internet aloqangizni tekshirib, qayta urinib ko'ring.", retryButton: "Qayta urinish" },
+  vi: { ariaLabelBankLink: "Kết nối ngân hàng Didit", ariaLabelCloseBankLink: "Đóng kết nối ngân hàng", loadErrorMessage: "Không thể tải kết nối ngân hàng. Hãy kiểm tra kết nối internet và thử lại.", retryButton: "Thử lại" },
+  "zh-CN": { ariaLabelBankLink: "Didit 银行连接", ariaLabelCloseBankLink: "关闭银行连接", loadErrorMessage: "无法加载银行连接。请检查网络连接后重试。", retryButton: "重试" },
+  "zh-TW": { ariaLabelBankLink: "Didit 銀行連結", ariaLabelCloseBankLink: "關閉銀行連結", loadErrorMessage: "無法載入銀行連結。請檢查網路連線後再試一次。", retryButton: "重試" },
+  zh: { ariaLabelBankLink: "Didit 银行连接", ariaLabelCloseBankLink: "关闭银行连接", loadErrorMessage: "无法加载银行连接。请检查网络连接后重试。", retryButton: "重试" }
 };
 
 export function getBankLinkTranslations(language: string): BankLinkTranslations {
@@ -525,7 +533,13 @@ export function getBankLinkTranslations(language: string): BankLinkTranslations 
 /** The modal text of a Bank Link: the shared exit texts (never shown, the flow closes without asking) with the bank labels. */
 export function getBankLinkModalTranslations(language: string): ModalTranslations {
   const t = getBankLinkTranslations(language);
-  return { ...getTranslations(language), ariaLabelModal: t.ariaLabelBankLink, ariaLabelClose: t.ariaLabelCloseBankLink };
+  return {
+    ...getTranslations(language),
+    ariaLabelModal: t.ariaLabelBankLink,
+    ariaLabelClose: t.ariaLabelCloseBankLink,
+    loadErrorMessage: t.loadErrorMessage,
+    retryButton: t.retryButton
+  };
 }
 
 export const BANK_LINK_TRANSLATION_LANGUAGES = Object.keys(bankLinkTranslationsMap);

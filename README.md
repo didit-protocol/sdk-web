@@ -488,7 +488,10 @@ The modal's size is unchanged.
 A token that is not a Bank Link token throws a `DiditBankLinkError` (`code: "invalid_token"`) synchronously, before anything is shown.
 Before it creates the frame the SDK asks the API whether the token may be embedded on this page (`POST /v3/bank/link-session/frame-policy/`, no credentials).
 An unknown or closed link, or a page origin that is not in the link's `allowed_origins`, opens no frame: you get `error` with `invalid_token` or `origin_not_allowed`, then `exit` with `reason: "not_allowed"`, and the console shows which origin to add (to the link's `allowed_origins` or to the application's Bank Link setting).
-A network failure or a timeout gives `error` with `network`, then `exit` with `reason: "failed"`.
+A network failure or a timeout on that call gives `error` with `network`, then `exit` with `reason: "failed"`.
+If the frame itself never loads (blocked by the network or a content blocker, a wrong `baseUrl`, an offline device), the SDK waits 25 seconds for the frame's first message and then gives `error` with `network` once, removes the frame and shows a message with a "Try again" button in the modal or the container (in the person's language).
+The flow is not over: "Try again" asks the API again and creates a fresh frame, and closing it ends the flow with `exit` and `reason: "closed"`.
+The 25 seconds sit above the hosted page's own worst case (about 21 seconds to its own error screen), so a slow page that does answer is never cut short.
 An answer the SDK cannot use (not the documented shape, or an identifier it refuses) is not a network failure: you get `error` with `unknown`, then `exit` with `reason: "failed"`, and no frame is created.
 `handle.state` is `opening` until the frame reports `opened`.
 Only one Bank Link is open at a time: opening a second closes the first with `exit` and `reason: "closed"`.

@@ -1,6 +1,7 @@
 import {
   BANK_LINK_DEFAULT_API_ORIGIN,
   BANK_LINK_DEFAULT_ORIGIN,
+  BANK_LINK_FRAME_LOAD_TIMEOUT_MS,
   BANK_LINK_FRAME_POLICY_PATH,
   BANK_LINK_FRAME_POLICY_TIMEOUT_MS,
   BANK_LINK_IFRAME_ALLOW,
@@ -434,6 +435,10 @@ class BankLinkSession implements BankLinkHandle {
   private linkId: string | undefined;
   /** The last poll step the frame told us about (see `noteContext`), for the `exit` that ends the flow. */
   private lastStep: string | null = null;
+  /** Waits for the frame's first message (see `BANK_LINK_FRAME_LOAD_TIMEOUT_MS`). */
+  private loadTimer: number | null = null;
+  /** The frame did not load and the "try again" card shows: the old frame's late messages mean nothing. */
+  private awaitingRetry = false;
   private ended = false;
   private tornDown = false;
   private redirecting = false;
@@ -459,6 +464,7 @@ class BankLinkSession implements BankLinkHandle {
         embeddedHeight: init.element ? { height: init.options.height, maxHeight: init.options.maxHeight } : undefined,
         language: init.options.locale,
         translations: getBankLinkModalTranslations,
+        onIframeError: () => this.frameDidNotLoad(),
         isTrustedOrigin: (origin) => isExactOrigin(origin, init.origin),
         interceptMessage: (message) => this.handleMessage(message)
       }
@@ -533,6 +539,45 @@ class BankLinkSession implements BankLinkHandle {
       theme: this.init.options.theme
     });
     this.modal.open(url);
+    this.armLoadTimer();
+  }
+
+  /** The frame's first message must come within the load timeout; any message of the frame cancels the wait. */
+  private armLoadTimer(): void {
+    this.clearLoadTimer();
+    this.loadTimer = window.setTimeout(() => {
+      this.loadTimer = null;
+      this.frameDidNotLoad();
+    }, BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+  }
+
+  private clearLoadTimer(): void {
+    if (this.loadTimer !== null) {
+      window.clearTimeout(this.loadTimer);
+      this.loadTimer = null;
+    }
+  }
+
+  /**
+   * The frame's document never loaded (the timeout, or the browser's own `error` event on the frame): one `error`
+   * with the `network` code, the frame removed and a retry offered in its place. It reports once per attempt.
+   */
+  private frameDidNotLoad(): void {
+    if (this.tornDown || this.ended || this.awaitingRetry) return;
+    this.clearLoadTimer();
+    this.awaitingRetry = true;
+    this.emit({ name: "error", code: "network" });
+    if (this.tornDown) return; // the host closed the flow from its callback
+    this.modal.showLoadError(() => this.retry());
+  }
+
+  /** The person pressed "try again": a fresh policy answer, so a fresh frame id, and a fresh frame. */
+  private retry(): void {
+    if (this.tornDown || !this.awaitingRetry) return;
+    this.awaitingRetry = false;
+    this.modal.clearLoadError();
+    this.linkRef = null;
+    void this.start();
   }
 
   /** The host's own close, the person's close button, or a newer link replacing this one. */
@@ -550,6 +595,7 @@ class BankLinkSession implements BankLinkHandle {
     if (this.tornDown) return;
     this.tornDown = true;
     this._state = "closed";
+    this.clearLoadTimer();
     this.policyAbort?.abort();
     this.closePopup();
     this.modal.destroy();
@@ -560,6 +606,9 @@ class BankLinkSession implements BankLinkHandle {
 
   /** Called by the frame host for a message from this frame's window and the exact Didit origin. */
   private handleMessage(raw: unknown): boolean {
+    // The frame's first message proves its document loaded: the wait is over. (The host already checked origin and window.)
+    this.clearLoadTimer();
+    if (this.awaitingRetry) return true; // a late message of the frame that was given up on
     // Every message from our own frame (the host already checked its origin and window) may carry the link id and
     // the poll step: `didit:layout` and `didit:ready` as well as the Bank Link ones. One place, before anything else.
     const message = parseBankLinkEnvelope(raw);

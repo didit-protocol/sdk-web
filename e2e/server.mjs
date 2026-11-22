@@ -11,6 +11,7 @@ const RECORDINGS = JSON.parse(
 ).scenarios;
 // Requests each test lane received, so parallel browsers never read each other's.
 const received = new Map();
+const silentServed = new Set();
 const CONTENT_TYPES = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -22,7 +23,9 @@ const CONTENT_TYPES = {
 function resolveRequestPath(requestUrl) {
   let pathname = decodeURIComponent(new URL(requestUrl, `http://${HOST}:${PORT}`).pathname);
   // The Bank Link frame path the SDK builds (/bank/frame/<instance id>) serves the contract stub page.
-  if (/^\/bank\/frame\/[\w-]+$/.test(pathname)) pathname = "/e2e/fixtures/bank-link-frame.html";
+  // A frame id that starts with `frame_silent` is a document that loads and then never posts a message.
+  if (/^\/bank\/frame\/frame_silent[\w-]*$/.test(pathname)) pathname = "/e2e/fixtures/bank-link-frame-silent.html";
+  else if (/^\/bank\/frame\/[\w-]+$/.test(pathname)) pathname = "/e2e/fixtures/bank-link-frame.html";
   const filePath = resolve(ROOT, `.${pathname}`);
 
   return filePath.startsWith(`${ROOT}${sep}`) ? filePath : null;
@@ -98,6 +101,11 @@ async function serveFramePolicy(request, response) {
   const token = body.token ?? body.resume_code;
   let answer = { valid: true, frame_id: "frame_stub_0001", allowed_origins: [`http://${HOST}:${PORT}`] };
   if (token.includes("_invalid")) answer = { valid: false, frame_id: null, allowed_origins: [] };
+  // `_silentonce` tokens: the first policy answer for the token points at a silent frame, later ones at a working one.
+  if (token.includes("_silentonce") && !silentServed.has(token)) {
+    silentServed.add(token);
+    answer.frame_id = "frame_silent_0001";
+  }
   if (token.includes("_dotframe")) answer.frame_id = "frm_0123456789abcdef.1763800000.abcdef";
   if (token.includes("_otherorigin")) answer.allowed_origins = ["https://other.example"];
   response.writeHead(200, { ...cors, "Content-Type": "application/json" });

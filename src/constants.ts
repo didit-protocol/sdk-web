@@ -21,7 +21,8 @@ export const CSS_CLASSES = {
   confirmBox: "didit-confirm-box",
   embedded: "didit-embedded",
   curtain: "didit-modal-curtain",
-  focusSentinel: "didit-focus-sentinel"
+  focusSentinel: "didit-focus-sentinel",
+  loadError: "didit-load-error"
 } as const;
 
 export const SDK_VERSION = "__SDK_PACKAGE_VERSION__";
@@ -157,3 +158,11 @@ export const BANK_LINK_POPUP_NAME = "didit_bank";
 export const BANK_LINK_DEFAULT_API_ORIGIN = "https://verification.didit.me";
 export const BANK_LINK_FRAME_POLICY_PATH = "/v3/bank/link-session/frame-policy/";
 export const BANK_LINK_FRAME_POLICY_TIMEOUT_MS = 8000;
+/**
+ * How long the SDK waits for the frame's first message before it calls the frame not loaded. The hosted page posts
+ * nothing until its first call to the API answers; it measured about 1.6 s at the median, and the page's own worst
+ * case to a visible error (every call has a timeout and the opening calls retry once) is about 21 s. 25 s sits above
+ * that, so a slow frame that reaches its own error screen is never preempted, and a frame that never loaded
+ * (blocked, offline) is reported instead of leaving the host with silence.
+ */
+export const BANK_LINK_FRAME_LOAD_TIMEOUT_MS = 25000;
