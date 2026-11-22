@@ -56,13 +56,13 @@ afterEach(() => {
 });
 
 describe("return URL", () => {
-  it("keeps a hash route in the return URL", async () => {
+  it("sends the page's own address without its fragment and without a leftover resume code", async () => {
     const navigate = jest.spyOn(bankLinkRuntime, "navigate").mockImplementation(() => undefined);
-    window.history.replaceState(null, "", "/app?x=1#/checkout");
+    window.history.replaceState(null, "", "/app?x=1&didit_resume=rsc_old0001.0123456789abcdef#/checkout");
     await open({ token: TOKEN });
-    send(msg("redirect_request", { request_id: "r1", resume_code: "rc_abcdefgh12" }));
+    send(msg("redirect_request", { request_id: "r1", resume_code: "rsc_abcdef0123456789.0123456789abcdef" }));
     const params = new URLSearchParams(new URL(navigate.mock.calls[0][0]).hash.slice(1));
-    expect(params.get("return")).toBe(`${window.location.origin}/app?x=1#/checkout`);
+    expect(params.get("return")).toBe(`${window.location.origin}/app?x=1`);
   });
 });
 
@@ -333,6 +333,7 @@ describe("the bank hop", () => {
     await open({ token: TOKEN, container: "#bank", onExit });
     send(msg("redirect_request", { request_id: "r1", resume_code: "rc_abcdefgh12" }, "ref-1"));
     expect(navigate).toHaveBeenCalledTimes(1);
+    expect(navigate.mock.calls[0][0]).not.toContain("resume=");
     const target = new URL(navigate.mock.calls[0][0]);
     expect(target.origin).toBe(ORIGIN);
     expect(target.pathname).toBe("/bank/link/");
@@ -340,19 +341,23 @@ describe("the bank hop", () => {
     const params = new URLSearchParams(target.hash.slice(1));
     expect(params.get("resume_code")).toBe("rc_abcdefgh12");
     expect(params.get("t")).toBeNull();
+    expect(params.has("resume")).toBe(false);
     expect(params.get("return")).toBe(`${window.location.origin}/return`);
     const stored = window.sessionStorage.getItem(BANK_LINK_RESUME_STORAGE_KEY) as string;
-    expect(JSON.parse(stored)).toMatchObject({ v: 1, link_ref: "ref-1", container: "#bank" });
+    expect(JSON.parse(stored)).toMatchObject({ v: 1, link_ref: "ref-1", container: "#bank", return_to: `${window.location.origin}/return` });
+    expect(JSON.parse(stored).instance_id).toBe(params.get("instance_id"));
     expect(stored).not.toContain(TOKEN);
     expect(onExit).not.toHaveBeenCalled();
     expect(document.querySelector("iframe")).toBeNull();
   });
 
-  it("continues with the token when the frame gave no resume code", async () => {
+  it("never uses the token: a redirect request without a usable resume code goes nowhere", async () => {
     const navigate = jest.spyOn(bankLinkRuntime, "navigate").mockImplementation(() => undefined);
     await open({ token: TOKEN });
     send(msg("redirect_request", { request_id: "r1" }));
-    expect(new URLSearchParams(new URL(navigate.mock.calls[0][0]).hash.slice(1)).get("t")).toBe(TOKEN);
+    send(msg("redirect_request", { request_id: "r2", resume_code: "has a space" }));
+    expect(navigate).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem(BANK_LINK_RESUME_STORAGE_KEY)).toBeNull();
   });
 });
 
@@ -637,8 +642,9 @@ describe("frame policy", () => {
 
 /**
  * The backend's identifier formats: `formats.json` is a copy of
- * `src/tests/mocks/bank_link_contract/formats.json` of the backend repository, pull request branch
- * `fix/bank-link-formats` at commit a805cb8df17b615e1dd0dd6f2ce496ca333ba3a0. The SDK may be looser than
+ * `docs/bank-data/link-contract/formats.json` of the backend repository, pull request branch
+ * `fix/bank-redirect-handoff` at commit cae8b37ce82d28ad59b6004992bda05bae7bc4a8 (with `addresses`);
+ * `bank-link-resume-code-after-bank.json` is its fixture `resume/code_after_bank.json`. The SDK may be looser than
  * the file (it treats codes as opaque), never stricter.
  */
 describe("the backend's identifier formats", () => {
@@ -754,5 +760,53 @@ describe("exit carries the link id and the last known step", () => {
     for (const bad of [{ height: 0 }, { height: "" }, { maxHeight: -1 }, { maxHeight: "9" as never }]) {
       expect(() => DiditSdk.shared.openBankLink({ token: TOKEN, ...bad })).toThrow(DiditBankLinkError);
     }
+  });
+});
+
+describe("the full-page hand-off matches the contract's addresses", () => {
+  const formats = JSON.parse(readFileSync(`${process.cwd()}/src/__tests__/fixtures/bank-link-formats.json`, "utf8")) as {
+    formats: Array<{ name: string; pattern: string }>;
+    addresses: Array<{ name: string; where: string; params: Array<{ name: string; required: boolean; format?: string; pattern?: string }> }>;
+  };
+  const afterBank = JSON.parse(readFileSync(`${process.cwd()}/src/__tests__/fixtures/bank-link-resume-code-after-bank.json`, "utf8")) as {
+    resume_code: string;
+  };
+  const address = (name: string) => formats.addresses.find((a) => a.name === name)!;
+  const patternOf = (param: { format?: string; pattern?: string }) =>
+    new RegExp(param.pattern ?? formats.formats.find((f) => f.name === param.format)!.pattern);
+
+  it("sends only the sdk_handoff parameters, in the fragment, with every required one valid", async () => {
+    const navigate = jest.spyOn(bankLinkRuntime, "navigate").mockImplementation(() => undefined);
+    window.history.replaceState(null, "", "/accounts/connect");
+    await open({ token: TOKEN, locale: "es", theme: "dark" });
+    send(msg("redirect_request", { request_id: "r1", resume_code: afterBank.resume_code }));
+    const target = new URL(navigate.mock.calls[0][0]);
+    expect(target.pathname).toBe("/bank/link/");
+    expect(target.search).toBe("");
+    const sent = new URLSearchParams(target.hash.slice(1));
+    const spec = address("sdk_handoff");
+    expect(spec.where).toBe("fragment");
+    expect([...sent.keys()].every((key) => spec.params.some((p) => p.name === key))).toBe(true);
+    for (const param of spec.params) {
+      if (param.required) expect(sent.has(param.name), param.name).toBe(true);
+      if (sent.has(param.name)) expect(patternOf(param).test(sent.get(param.name) as string), param.name).toBe(true);
+    }
+    expect(sent.get("resume_code")).toBe(afterBank.resume_code);
+  });
+
+  it("resumes with the code of the hosted_return address, exchanged through the frame with the stored instance", async () => {
+    const spec = address("hosted_return");
+    expect(spec.where).toBe("query");
+    const name = spec.params[0].name;
+    expect(patternOf(spec.params[0]).test(afterBank.resume_code)).toBe(true);
+    window.sessionStorage.setItem(
+      BANK_LINK_RESUME_STORAGE_KEY,
+      JSON.stringify({ v: 1, instance_id: "7b1d6a52-3c84-4e0f-9a21-5d8e3f6c0b19", link_ref: null, container: null, ts: Date.now() })
+    );
+    window.history.replaceState(null, "", `/accounts/connect?${name}=${encodeURIComponent(afterBank.resume_code)}`);
+    expect(await DiditSdk.shared.resumeBankLink()).toEqual({ resumed: true });
+    expect(window.location.search).toBe("");
+    expect(fragment().get("resume_code")).toBe(afterBank.resume_code);
+    expect(fragment().get("instance_id")).toBe("7b1d6a52-3c84-4e0f-9a21-5d8e3f6c0b19");
   });
 });

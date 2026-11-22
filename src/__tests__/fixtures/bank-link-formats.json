@@ -199,5 +199,64 @@
       ],
       "minted_by": "GET /v3/bank/link-session/institutions/"
     }
+  ],
+  "addresses": [
+    {
+      "name": "sdk_handoff",
+      "description": "Full-page redirect handoff, step 1: the SDK sends the TOP window of the host page to the hosted page when the popup was blocked (or on a phone browser). Everything travels in the fragment, so no server log sees it; the hosted page removes the fragment from its address at once (history.replaceState) after reading it. The older `#t=<token>&resume=1&return=` form is gone: the token is never used, and `resume` is not a parameter (a page ignores it).",
+      "address": "<hosted origin>/bank/link/",
+      "where": "fragment",
+      "encoding": "application/x-www-form-urlencoded (every value percent-encoded)",
+      "params": [
+        {
+          "name": "resume_code",
+          "required": true,
+          "format": "resume_code",
+          "description": "The single-use code the frame obtained from `POST /v3/bank/link-session/resume-code/`."
+        },
+        {
+          "name": "instance_id",
+          "required": true,
+          "format": "instance_id",
+          "description": "The id the SDK generated once for this page instance; the code is bound to it."
+        },
+        {
+          "name": "v",
+          "required": true,
+          "pattern": "^[0-9]{1,3}$",
+          "example": "1",
+          "description": "The protocol number of the SDK (the wire contract is additive only)."
+        },
+        {
+          "name": "return",
+          "required": false,
+          "pattern": "^.{1,2048}$",
+          "example": "https://app.example.com/accounts/connect",
+          "description": "The host page's own address, a CANDIDATE only. The hosted page sends it to the backend as `return_to` and navigates only to the `return_url` the backend answers."
+        },
+        {
+          "name": "sdk_version",
+          "required": false,
+          "pattern": "^[0-9A-Za-z.+-]{1,32}$",
+          "example": "0.7.0",
+          "description": "The SDK's version, for diagnostics."
+        }
+      ]
+    },
+    {
+      "name": "hosted_return",
+      "description": "Full-page redirect handoff, step 3: after the bank the hosted page asks `POST /v3/bank/link-session/resume-code/` for a new code and sends the browser to the `return_url` of that answer (never to an address of its own) with `didit_resume=<code>` appended to the QUERY, before any hash. The host page's `resumeBankLink()` removes the parameter from the address and exchanges the code.",
+      "address": "<return_url from the backend>",
+      "where": "query",
+      "encoding": "RFC 3986 query",
+      "params": [
+        {
+          "name": "didit_resume",
+          "required": true,
+          "format": "resume_code",
+          "description": "The single-use resume code for the step after the bank."
+        }
+      ]
+    }
   ]
 }

@@ -329,8 +329,18 @@ function pageInstanceId(): string {
   return created;
 }
 
+/** The page's own address as the hosted page may send the person back to it: no fragment and no leftover resume code. Null when too long. */
+function currentPageAddress(): string | null {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  if (url.searchParams.has(BANK_LINK_RESUME_QUERY_PARAM)) url.searchParams.delete(BANK_LINK_RESUME_QUERY_PARAM);
+  const address = url.toString();
+  return address.length <= 2048 ? address : null;
+}
+
 interface ResumeRecord {
   v: 1;
+  return_to?: string | null;
   instance_id: string;
   link_ref: string | null;
   container: string | null;
@@ -730,27 +740,27 @@ class BankLinkSession implements BankLinkHandle {
     if (this.redirecting) return;
     const code = typeof data === "object" && data !== null ? (data as Record<string, unknown>).resume_code : undefined;
     const resumeCode = typeof code === "string" && RESUME_CODE_PATTERN.test(code) ? code : null;
-    if (!resumeCode && !this.init.token) return; // nothing the hosted page could continue with
+    // The token is never used for the hand-off: without the frame's single-use code there is nothing to continue with.
+    if (!resumeCode) return;
     this.redirecting = true;
     this.closePopup();
+    const returnTo = currentPageAddress();
     const record: ResumeRecord = {
       v: 1,
       instance_id: this.init.instanceId,
       link_ref: this.linkRef,
       container: this.init.containerSelector,
+      return_to: returnTo,
       ts: bankLinkRuntime.now()
     };
     writeStorage(BANK_LINK_RESUME_STORAGE_KEY, JSON.stringify(record));
+    // The hand-off address of the contract (formats.json, "sdk_handoff"): everything in the fragment, in this order.
     const params = new URLSearchParams();
-    if (resumeCode) params.set("resume_code", resumeCode);
-    else params.set("t", this.init.token as string);
-    params.set("resume", "1");
+    params.set("resume_code", resumeCode);
     params.set("instance_id", this.init.instanceId);
-    params.set("return", `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`);
     params.set("v", String(BANK_LINK_PROTOCOL_VERSION));
-    params.set("sdk_version", SDK_VERSION);
-    if (this.init.options.locale) params.set("locale", this.init.options.locale);
-    if (this.init.options.theme && this.init.options.theme !== "auto") params.set("theme", this.init.options.theme);
+    if (returnTo) params.set("return", returnTo);
+    if (SDK_VERSION && /^[0-9A-Za-z.+-]{1,32}$/.test(SDK_VERSION)) params.set("sdk_version", SDK_VERSION);
     const target = `${this.init.origin}/bank/link/#${params.toString()}`;
     // The page is leaving: no exit is reported, the flow continues on the other side of the redirect.
     this.ended = true;
