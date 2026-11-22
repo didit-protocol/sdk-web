@@ -993,6 +993,18 @@ describe("VerificationModal dialog behaviour", () => {
     }
   });
 
+  it("without a close button a leading sentinel catches Shift+Tab out of the frame", () => {
+    const created = createModal({ showExitConfirmation: false, showCloseButton: false });
+    modals.push(created.modal);
+    created.modal.open("https://verify.didit.me/bank/frame/frame_0123456789");
+    const dialog = document.querySelector<HTMLElement>(`.${CSS_CLASSES.overlay}`) as HTMLElement;
+    const sentinels = dialog.querySelectorAll<HTMLElement>(`.${CSS_CLASSES.focusSentinel}`);
+    expect(sentinels).toHaveLength(2);
+    expect(sentinels[0].nextElementSibling).toBe(getContainer(created.modal));
+    sentinels[0].focus();
+    expect(document.activeElement).toBe(getIframe(created.modal));
+  });
+
   it("returns focus to the opener on close, but not to an element that left the page", () => {
     const opener = document.body.appendChild(document.createElement("button"));
     const first = openFrom(opener);
@@ -1057,6 +1069,7 @@ describe("VerificationModal dialog behaviour", () => {
     const css = (document.getElementById("didit-sdk-styles") as HTMLStyleElement).textContent as string;
     expect(css).toMatch(/\.didit-verification-iframe \{\s*position: absolute;\s*top: 0;\s*right: 0;\s*bottom: 0;\s*left: 0;/);
     expect(css).toMatch(/\.didit-verification-iframe \{[^}]*display: block;[^}]*margin: 0;[^}]*border: 0;/);
+    expect(css).toMatch(/\.didit-modal-container > \.didit-verification-iframe \{\s*min-height: 0;\s*max-height: none;/);
     expect(css).toMatch(/\.didit-embedded \.didit-verification-iframe \{\s*position: static;/);
   });
 });

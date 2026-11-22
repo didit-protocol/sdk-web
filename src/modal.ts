@@ -244,6 +244,12 @@ export class VerificationModal {
         vertical-align: top;
       }
 
+      /* A host's global iframe height rules (min-height, max-height) must not undo the pinned box. */
+      .${CSS_CLASSES.container} > .${CSS_CLASSES.iframe} {
+        min-height: 0;
+        max-height: none;
+      }
+
       .${CSS_CLASSES.closeButton} {
         position: absolute;
         top: 4px;
@@ -715,8 +721,11 @@ export class VerificationModal {
     this.container.appendChild(this.loadingEl);
     this.container.appendChild(this.iframe);
     this.container.appendChild(this.confirmOverlay);
+    // Without a close button the frame is the first stop, and Shift+Tab out of it cannot be heard from
+    // this document: a leading sentinel catches it. With the button, the keydown handler does.
+    if (!this.config.showCloseButton) this.overlay.appendChild(this.createFocusSentinel("start"));
     this.overlay.appendChild(this.container);
-    this.overlay.appendChild(this.createFocusSentinel());
+    this.overlay.appendChild(this.createFocusSentinel("end"));
 
     this.overlay.addEventListener("click", (e) => {
       if (e.target === this.overlay) {
@@ -733,14 +742,15 @@ export class VerificationModal {
    * it sends focus back to the first stop. The way back (Shift+Tab on the first stop) is the
    * keydown handler's, because the first stop is in this document.
    */
-  private createFocusSentinel(): HTMLSpanElement {
+  private createFocusSentinel(edge: "start" | "end"): HTMLSpanElement {
     const sentinel = document.createElement("span");
     sentinel.className = CSS_CLASSES.focusSentinel;
     sentinel.tabIndex = 0;
     sentinel.setAttribute("aria-hidden", "true");
     sentinel.addEventListener("focus", () => {
-      const [first] = this.tabStops();
-      (first ?? this.overlay)?.focus({ preventScroll: true });
+      const stops = this.tabStops();
+      const target = edge === "start" ? stops[stops.length - 1] : stops[0];
+      (target ?? this.overlay)?.focus({ preventScroll: true });
     });
     return sentinel;
   }
