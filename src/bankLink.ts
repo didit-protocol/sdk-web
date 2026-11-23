@@ -82,7 +82,7 @@ export function resolveBankLinkOrigin(baseUrl: string | undefined, name = "baseU
   }
   const isLocal = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "[::1]";
   if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && isLocal)) {
-    throw new DiditBankLinkError("invalid_options", `${name} must be an https URL.`);
+    throw new DiditBankLinkError("invalid_options", `${name} must be an https URL (http is accepted only for localhost and 127.0.0.1).`);
   }
   return parsed.origin;
 }
@@ -518,13 +518,23 @@ class BankLinkSession implements BankLinkHandle {
     this.loadFrame(policy.frameId as string);
   }
 
-  /** No frame was created: report why, end the flow and release everything. */
+  /**
+   * No frame was created: report why and end the flow. A link the service refused (`not_allowed`) leaves a card
+   * on screen with a Close control, so the person never faces an empty page; any other refusal releases everything.
+   */
   private refuse(code: string, reason: BankLinkExit["reason"]): void {
     if (this.tornDown) return;
     this.emit({ name: "error", code });
     this.ended = true;
     this.emit({ name: "exit", reason, step: null });
-    this.teardown();
+    if (this.tornDown) return; // the host closed the flow from a callback
+    if (reason !== "not_allowed") {
+      this.teardown();
+      return;
+    }
+    this._state = "closed";
+    this.policyAbort?.abort();
+    this.modal.showRefusal(() => this.close());
   }
 
   private loadFrame(framePath: string): void {
@@ -568,7 +578,7 @@ class BankLinkSession implements BankLinkHandle {
     this.awaitingRetry = true;
     this.emit({ name: "error", code: "network" });
     if (this.tornDown) return; // the host closed the flow from its callback
-    this.modal.showLoadError(() => this.retry());
+    this.modal.showLoadError(() => this.retry(), () => this.close());
   }
 
   /** The person pressed "try again": a fresh policy answer, so a fresh frame id, and a fresh frame. */
@@ -858,8 +868,33 @@ function replaceActiveSession(): void {
   activeSession = null;
 }
 
+/**
+ * An invalid option is loud: besides the synchronous `DiditBankLinkError`, the developer gets a console warning with
+ * the reason and, when `onEvent` is a function, an `error` event with the code `invalid_options`. Never silent.
+ */
+function announceInvalidOptions(options: unknown, error: unknown): void {
+  if (!(error instanceof DiditBankLinkError) || error.code !== "invalid_options") return;
+  console.warn(`[Didit] Bank Link was not opened: ${error.message}`);
+  const onEvent = typeof options === "object" && options !== null ? (options as { onEvent?: unknown }).onEvent : undefined;
+  if (typeof onEvent !== "function") return;
+  try {
+    onEvent({ name: "error", code: "invalid_options" });
+  } catch (callbackError) {
+    SDKLogger.error("Bank Link callback threw:", callbackError);
+  }
+}
+
 /** Opens Bank Link. See `DiditSdk.openBankLink`. */
 export function openBankLink(options: BankLinkOptions): BankLinkHandle {
+  try {
+    return openValidatedBankLink(options);
+  } catch (error) {
+    announceInvalidOptions(options, error);
+    throw error;
+  }
+}
+
+function openValidatedBankLink(options: BankLinkOptions): BankLinkHandle {
   if (typeof options !== "object" || options === null) {
     throw new DiditBankLinkError("invalid_options", "openBankLink needs an options object.");
   }
@@ -934,6 +969,7 @@ export function resumeBankLink(options: BankLinkResumeOptions = {}): Promise<Ban
     void session.start();
     return Promise.resolve({ resumed: true });
   } catch (error) {
+    announceInvalidOptions(options, error);
     return Promise.reject(error);
   }
 }

@@ -135,6 +135,7 @@ describe("frame and token", () => {
     for (const language of BANK_LINK_TRANSLATION_LANGUAGES) {
       const t = getBankLinkModalTranslations(language);
       expect([language, (t.loadErrorMessage ?? "").length > 10, (t.retryButton ?? "").length > 0]).toEqual([language, true, true]);
+      expect([language, (t.refusalMessage ?? "").length > 10, (t.closeButton ?? "").length > 0]).toEqual([language, true, true]);
     }
   });
 
@@ -998,5 +999,169 @@ describe("a frame that never loads", () => {
     await jest.advanceTimersByTimeAsync(10 * BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
     expect(onEvent).not.toHaveBeenCalled();
     expect(document.querySelector(".didit-load-error")).toBeNull();
+  });
+});
+
+describe("a link the service refuses leaves a card with a Close control", () => {
+  const policy = () => jest.spyOn(bankLinkRuntime, "fetchPolicy");
+  const card = () => document.querySelector<HTMLElement>(".didit-load-error");
+  const closeButton = () => card()?.querySelector("button") as HTMLButtonElement;
+  const refusals: Array<[string, () => void, string]> = [
+    ["origin not allowed", () => policy().mockResolvedValue({ valid: true, frame_id: FRAME_ID, allowed_origins: ["https://other.example"] }), "origin_not_allowed"],
+    ["unknown link", () => policy().mockResolvedValue({ valid: false }), "invalid_token"]
+  ];
+
+  it.each(refusals)("%s: events as before, and the person sees a card they can close", async (_name, arrange, code) => {
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    arrange();
+    const opener = document.body.appendChild(document.createElement("button"));
+    opener.focus();
+    const onEvent = jest.fn();
+    const handle = await open({ token: TOKEN, onEvent });
+    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([
+      { name: "error", code },
+      { name: "exit", reason: "not_allowed", step: null }
+    ]);
+    expect(handle.state).toBe("closed");
+    expect(document.querySelector("iframe")).toBeNull();
+    expect(document.querySelector(".didit-modal-overlay.active")).not.toBeNull();
+    expect(card()?.textContent).toContain("can't be opened here");
+    expect(card()?.textContent ?? "").not.toMatch(/origin|allowed|token|blt_|policy/i);
+    expect(document.activeElement).toBe(closeButton());
+    expect(document.documentElement.style.overflow).toBe("hidden");
+    closeButton().click();
+    expect(card()).toBeNull();
+    expect(document.querySelector(".didit-modal-overlay")).toBeNull();
+    expect(document.documentElement.style.overflow).toBe("");
+    expect(onEvent).toHaveBeenCalledTimes(2); // Close reports nothing more: the flow already ended
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("Escape and the host's own close also remove the card, with no second exit", async () => {
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    policy().mockResolvedValue({ valid: false });
+    const onExit = jest.fn();
+    await open({ token: TOKEN, onExit });
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(card()).toBeNull();
+    const second = await open({ token: TOKEN, onExit });
+    expect(card()).not.toBeNull();
+    second.close();
+    expect(card()).toBeNull();
+    expect(onExit).toHaveBeenCalledTimes(2); // one per opened link, none from the closes
+  });
+
+  it("inline: the card stands in the container, in the person's language, and Close empties it", async () => {
+    policy().mockResolvedValue({ valid: false });
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    await open({ token: TOKEN, container: "#bank", locale: "es" });
+    const inline = document.querySelector("#bank .didit-load-error") as HTMLElement;
+    expect(inline.textContent).toContain("Esta conexión bancaria no se puede abrir aquí");
+    expect(document.querySelector(".didit-modal-overlay")).toBeNull();
+    (inline.querySelector("button") as HTMLButtonElement).click();
+    expect(document.querySelector("#bank")?.children.length).toBe(0);
+  });
+
+  it("a regional locale falls back to the language's text", () => {
+    expect(getBankLinkModalTranslations("es-MX").refusalMessage).toBe(getBankLinkModalTranslations("es").refusalMessage);
+  });
+});
+
+describe("the timeout card has a Close control", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("Close fires exit closed once, like a close anywhere else, and removes the card", async () => {
+    const onEvent = jest.fn();
+    const onExit = jest.fn();
+    DiditSdk.shared.openBankLink({ token: TOKEN, onEvent, onExit });
+    await jest.advanceTimersByTimeAsync(BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>(".didit-load-error button"));
+    expect(buttons.map((b) => b.textContent)).toEqual(["Try again", "Close"]);
+    buttons[1].click();
+    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(onExit).toHaveBeenCalledWith({ reason: "closed", step: null });
+    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([
+      { name: "error", code: "network" },
+      { name: "exit", reason: "closed", step: null }
+    ]);
+    expect(document.querySelector(".didit-load-error")).toBeNull();
+    expect(document.querySelector(".didit-modal-overlay")).toBeNull();
+    await jest.advanceTimersByTimeAsync(10 * BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    expect(onEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it("Tab stays between the card's two buttons", async () => {
+    DiditSdk.shared.openBankLink({ token: TOKEN });
+    await jest.advanceTimersByTimeAsync(BANK_LINK_FRAME_LOAD_TIMEOUT_MS);
+    const [retry, close] = Array.from(document.querySelectorAll<HTMLButtonElement>(".didit-load-error button"));
+    expect(document.activeElement).toBe(retry);
+    const sentinel = document.querySelector<HTMLElement>(".didit-focus-sentinel") as HTMLElement;
+    sentinel.focus();
+    expect(document.activeElement).toBe(retry);
+    retry.focus();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(close);
+  });
+});
+
+describe("an invalid option is loud", () => {
+  it("a plain http baseUrl throws, warns, and reports error invalid_options through onEvent, synchronously", () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onEvent = jest.fn();
+    let thrown: unknown;
+    try {
+      DiditSdk.shared.openBankLink({ token: TOKEN, baseUrl: "http://verify.example.com", onEvent });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(DiditBankLinkError);
+    expect((thrown as DiditBankLinkError).code).toBe("invalid_options");
+    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([{ name: "error", code: "invalid_options" }]);
+    expect(String(warn.mock.calls[0][0])).toContain("baseUrl must be an https URL");
+    expect(document.querySelector("iframe")).toBeNull();
+  });
+
+  it("http stays allowed for localhost and 127.0.0.1 only", async () => {
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    for (const ok of ["http://localhost:4173", "http://127.0.0.1:4173"]) {
+      DiditSdk.reset();
+      await open({ token: TOKEN, baseUrl: ok });
+      expect(document.querySelector("iframe")).not.toBeNull();
+    }
+    for (const bad of ["http://localhost.evil.example", "http://192.168.1.10", "ftp://verify.example.com"]) {
+      expect(() => DiditSdk.shared.openBankLink({ token: TOKEN, baseUrl: bad })).toThrow(DiditBankLinkError);
+    }
+  });
+
+  it("the same for apiBaseUrl, and for resumeBankLink (its promise rejects after the event)", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onEvent = jest.fn();
+    expect(() => DiditSdk.shared.openBankLink({ token: TOKEN, apiBaseUrl: "http://api.example.com", onEvent })).toThrow(DiditBankLinkError);
+    await expect(DiditSdk.shared.resumeBankLink({ baseUrl: "http://verify.example.com", onEvent })).rejects.toMatchObject({ code: "invalid_options" });
+    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([
+      { name: "error", code: "invalid_options" },
+      { name: "error", code: "invalid_options" }
+    ]);
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("an invalid token is not an invalid option: it still only throws", () => {
+    const onEvent = jest.fn();
+    expect(() => DiditSdk.shared.openBankLink({ token: "nope", onEvent })).toThrow(DiditBankLinkError);
+    expect(onEvent).not.toHaveBeenCalled();
+  });
+
+  it("a callback that throws on the event does not hide the original error", () => {
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const onEvent = jest.fn(() => {
+      throw new Error("host bug");
+    });
+    expect(() => DiditSdk.shared.openBankLink({ token: TOKEN, baseUrl: "http://x.example.com", onEvent })).toThrow(DiditBankLinkError);
   });
 });

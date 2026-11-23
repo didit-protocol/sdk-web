@@ -121,6 +121,14 @@ test.describe("Bank Link in the web SDK, against a stub frame that speaks the co
     expect((await records(page)).events[0].code).toBe("origin_not_allowed");
     await expect(page.locator(FRAME)).toHaveCount(0);
     expect(warnings.some((text) => text.includes("http://127.0.0.1:4173") && text.includes("allowed_origins"))).toBe(true);
+    // The person sees a refusal card with a Close control, never an empty page.
+    const card = page.locator(".didit-load-error");
+    await expect(card).toBeVisible();
+    await expect(card).toContainText("can't be opened here");
+    await card.getByRole("button", { name: "Close" }).click();
+    await expect(card).toHaveCount(0);
+    await expect(page.locator(OVERLAY)).toHaveCount(0);
+    expect((await records(page)).exit).toEqual([{ reason: "not_allowed", step: null }]);
   });
 
   test("an unreachable API ends with error network and exit, never a hung opening state", async ({ page }) => {
@@ -373,5 +381,36 @@ test.describe("Bank Link modal: focus, scroll and layout", () => {
     await page.evaluate(() => window.closeLink());
     await expect(page.locator("#bank iframe, #bank .didit-load-error")).toHaveCount(0);
     expect((await records(page)).exit).toEqual([{ reason: "closed", step: null }]);
+  });
+
+  test("the timeout card's Close ends the flow with exit closed", async ({ page }) => {
+    await page.clock.install();
+    await page.goto(`${HOST_PAGE}?token=blt_silentonce_${Date.now()}mnopqr`);
+    await page.evaluate(() => window.openModal());
+    await expect(page.locator(FRAME)).toHaveCount(1);
+    await page.clock.fastForward(26000);
+    const card = page.locator(".didit-load-error");
+    await expect(card.getByRole("button", { name: "Try again" })).toBeVisible();
+    await card.getByRole("button", { name: "Close" }).click();
+    await expect(page.locator(OVERLAY)).toHaveCount(0);
+    expect((await records(page)).exit).toEqual([{ reason: "closed", step: null }]);
+  });
+
+  test("a plain http baseUrl is refused loudly: a thrown error, an error event and a console warning", async ({ page }) => {
+    const warnings = [];
+    page.on("console", (message) => message.type() === "warning" && warnings.push(message.text()));
+    await page.goto(`${HOST_PAGE}?base=http://insecure.example&noresume=1`);
+    const code = await page.evaluate(() => {
+      try {
+        window.openModal();
+        return null;
+      } catch (error) {
+        return error.code;
+      }
+    });
+    expect(code).toBe("invalid_options");
+    expect((await records(page)).events).toEqual([{ name: "error", code: "invalid_options" }]);
+    expect(warnings.some((text) => text.includes("baseUrl must be an https URL"))).toBe(true);
+    await expect(page.locator(FRAME)).toHaveCount(0);
   });
 });

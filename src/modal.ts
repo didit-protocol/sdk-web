@@ -688,6 +688,12 @@ export class VerificationModal {
         color: #ffffff;
       }
 
+      .${CSS_CLASSES.loadError} button + button {
+        background: transparent;
+        color: inherit;
+        opacity: 0.8;
+      }
+
       .${CSS_CLASSES.loadError} button:focus-visible {
         outline: 2px solid #2567ff;
         outline-offset: 2px;
@@ -842,9 +848,9 @@ export class VerificationModal {
       return Array.from(this.confirmOverlay?.querySelectorAll<HTMLElement>("button") ?? []);
     }
     const close = this.container?.querySelector<HTMLElement>(`.${CSS_CLASSES.closeButton}`);
-    // While the "could not load" card shows, its retry button stands where the frame was.
-    const content = this.loadError ? this.loadError.querySelector<HTMLElement>("button") : this.iframe;
-    return [close, content].filter((el): el is HTMLElement => el instanceof HTMLElement);
+    // While a card shows (could not load, refused), its buttons stand where the frame was and the frame is out of reach.
+    if (this.loadError) return Array.from(this.loadError.querySelectorAll<HTMLElement>("button"));
+    return [close, this.iframe].filter((el): el is HTMLElement => el instanceof HTMLElement);
   }
 
   private createEmbeddedDOM(): void {
@@ -1513,31 +1519,69 @@ export class VerificationModal {
   }
 
   /**
-   * The frame's document never loaded: the frame is blanked and hidden and a message with a retry button takes
-   * its place. `onRetry` runs when the person presses the button; the caller then opens a fresh frame.
+   * The frame's document never loaded: the frame is blanked and hidden and a message with a retry button and a
+   * close button takes its place. `onRetry` runs when the person presses Try again (the caller then opens a fresh
+   * frame); `onClose` when they press Close.
    */
-  showLoadError(onRetry: () => void): void {
-    const host = this.container;
-    if (!host || !this.iframe) return;
-    this.hideLoadError();
+  showLoadError(onRetry: () => void, onClose: () => void): void {
+    if (!this.container || !this.iframe) return;
     const t = this.translations();
+    this.iframe.src = "about:blank";
+    this.iframe.inert = true;
+    this.iframe.style.display = "none";
+    this.mountCard(t.loadErrorMessage ?? "We couldn't load this page. Check your connection and try again.", [
+      { label: t.retryButton ?? "Try again", run: onRetry },
+      { label: t.closeButton ?? "Close", run: onClose }
+    ]);
+  }
+
+  /**
+   * The link cannot be opened here (the service refused it, so no frame was ever created): the dialog (or the
+   * inline container) shows the refusal and a Close control, and nothing else. The caller has already told the
+   * host; `onClose` only ends what is on screen.
+   */
+  showRefusal(onClose: () => void): void {
+    this.language = this.frameOptions.language ?? (typeof navigator !== "undefined" && navigator.language ? navigator.language : "en");
+    const previouslyFocused = document.activeElement;
+    if (!this.overlay && !this.container) this.createDOM();
+    this.setupEventListeners();
+    this.state.isOpen = true;
+    this.pushToTop();
+    // No frame exists for a refused link: its element goes, so nothing of it is left in the page.
+    this.iframe?.remove();
+    this.iframe = null;
+    if (!this.embedded) {
+      this.overlay?.classList.add("active");
+      this.lockPageScroll();
+      this.showCurtain();
+      this.opener = previouslyFocused instanceof HTMLElement && previouslyFocused !== document.body ? previouslyFocused : null;
+    }
+    const t = this.translations();
+    this.mountCard(t.refusalMessage ?? "This link can't be opened here.", [{ label: t.closeButton ?? "Close", run: onClose }]);
+  }
+
+  /** The card over the frame's place: a message and its buttons; the first button takes focus. */
+  private mountCard(text: string, actions: Array<{ label: string; run: () => void }>): void {
+    const host = this.container;
+    if (!host) return;
+    this.hideLoadError();
     const card = document.createElement("div");
     card.className = CSS_CLASSES.loadError;
     const message = document.createElement("p");
     message.setAttribute("role", "alert");
-    message.textContent = t.loadErrorMessage ?? "We couldn't load this page. Check your connection and try again.";
-    const retry = document.createElement("button");
-    retry.type = "button";
-    retry.textContent = t.retryButton ?? "Try again";
-    retry.addEventListener("click", () => onRetry());
-    card.append(message, retry);
-    this.iframe.src = "about:blank";
-    this.iframe.inert = true;
-    this.iframe.style.display = "none";
+    message.textContent = text;
+    card.appendChild(message);
+    for (const action of actions) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = action.label;
+      button.addEventListener("click", () => action.run());
+      card.appendChild(button);
+    }
     this.loadingEl?.classList.add("hidden");
     host.appendChild(card);
     this.loadError = card;
-    retry.focus({ preventScroll: true });
+    card.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
   }
 
   /** Removes the "could not load" card and gives the frame back; a no-op without one. */

@@ -482,15 +482,19 @@ The modal's size is unchanged.
 | `onSuccess` | `(result) => void` | Once, when the link is completed. Sugar over the `success` event. |
 | `onExit` | `(result) => void` | Once, when the flow ends without a connection. Sugar over the `exit` event. |
 | `onEvent` | `(event) => void` | Every event below. |
-| `baseUrl` | `string` | The origin that serves the link. Default `https://verify.didit.me`. Only for staging or a test page. |
+| `baseUrl` | `string` | The origin that serves the link. Default `https://verify.didit.me`. Only for staging or a test page. It must be `https`; `http` is accepted only for `localhost` and `127.0.0.1`. |
 | `apiBaseUrl` | `string` | The API origin that is asked, before any frame exists, whether the token may be embedded on this page. Default `https://verification.didit.me`. |
 
 A token that is not a Bank Link token throws a `DiditBankLinkError` (`code: "invalid_token"`) synchronously, before anything is shown.
+An invalid option (a `baseUrl` or `apiBaseUrl` that is not `https`, a callback that is not a function, an unknown `theme`, a bad `locale`, `height` or `maxHeight`) is never silent: the call throws a `DiditBankLinkError` with `code: "invalid_options"`, writes a console warning that says which option, and, when `onEvent` is a function, calls it synchronously with `error` and `code: "invalid_options"`.
+`resumeBankLink` does the same, and its promise rejects.
 Before it creates the frame the SDK asks the API whether the token may be embedded on this page (`POST /v3/bank/link-session/frame-policy/`, no credentials).
 An unknown or closed link, or a page origin that is not in the link's `allowed_origins`, opens no frame: you get `error` with `invalid_token` or `origin_not_allowed`, then `exit` with `reason: "not_allowed"`, and the console shows which origin to add (to the link's `allowed_origins` or to the application's Bank Link setting).
+The person is not left with an empty page: the modal (or your container) shows a short message in their language, that the connection cannot be opened here and to contact the company that sent the link, with a Close button.
+Closing it fires nothing more, because the flow has already ended with the events above.
 A network failure or a timeout on that call gives `error` with `network`, then `exit` with `reason: "failed"`.
 If the frame itself never loads (blocked by the network or a content blocker, a wrong `baseUrl`, an offline device), the SDK waits 25 seconds for the frame's first message and then gives `error` with `network` once, removes the frame and shows a message with a "Try again" button in the modal or the container (in the person's language).
-The flow is not over: "Try again" asks the API again and creates a fresh frame, and closing it ends the flow with `exit` and `reason: "closed"`.
+The flow is not over: "Try again" asks the API again and creates a fresh frame, and "Close" ends the flow with `exit` and `reason: "closed"` like a close anywhere else.
 The 25 seconds sit above the hosted page's own worst case (about 21 seconds to its own error screen), so a slow page that does answer is never cut short.
 An answer the SDK cannot use (not the documented shape, or an identifier it refuses) is not a network failure: you get `error` with `unknown`, then `exit` with `reason: "failed"`, and no frame is created.
 `handle.state` is `opening` until the frame reports `opened`.
@@ -515,7 +519,23 @@ A close from the frame's own button or Escape (`close_request`) ends the flow ex
 | `accounts_selected` | `count` | The person chose accounts |
 | `success` | `link_id`, `connection_id` (optional), `check_id` (optional), `resumed` (optional) | The link was completed |
 | `exit` | `reason` (`closed`, `cancelled`, `bank_unavailable`, `expired`, `failed`, `not_allowed`), `step`, `link_id` (optional), `resumed` (optional) | The flow ended without a connection |
-| `error` | `code` | `invalid_token`, `origin_not_allowed`, `network` and `unknown` come before any frame exists and are followed by `exit`; `popup_blocked` and other codes do not end the flow |
+| `error` | `code` | `invalid_token`, `origin_not_allowed`, `network` and `unknown` come before any frame exists and are followed by `exit` (the frame-never-loaded `network` is not followed by `exit` until the person closes or retries); `invalid_options` comes with the thrown error and no `exit`; `popup_blocked` and other codes do not end the flow |
+
+`exit.step` is the poll step the person was on when the flow ended, or `null` before the first one.
+The step names are part of the contract and never change: `consent`, `segment`, `institution`, `unsupported`, `email`, `email_verify`, `bank_hop`, `accounts`, `confirm_reuse`, `confirm_one_time_fallback`, `renew`, `reconfirm`, `collecting`, `done`, `ended`.
+`institution` is the bank list; the screen may label it differently for the person, but the name here stays `institution`.
+
+### Blocked bank window
+
+When the browser blocks the bank window, the SDK reports `error` with `popup_blocked` (it does not end the flow) and takes the person to the bank with a full-page redirect (`bank_redirect` with `via: "redirect"`).
+The person comes back to the `redirect_url` registered for your application, and `resumeBankLink` continues the flow there.
+
+### Reloading the page mid-flow
+
+A plain reload of your page while the flow is open does not resume it by itself: `resumeBankLink` answers `{ resumed: false }`, because only a return from the bank carries a resume code.
+Open the link again with the same token.
+While the link is still open, the same browser tab opens it again where it was (the tab keeps its own instance id for this, and the service gives the same instance a new session).
+Another tab or browser can open the link only when it is not open somewhere else, and a link that already completed or failed cannot be opened again; the frame says so on screen.
 
 ### Full-page redirect and `resumeBankLink`
 
