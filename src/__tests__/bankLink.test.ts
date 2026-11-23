@@ -492,7 +492,7 @@ describe("frame policy for a resume", () => {
       [() => jest.spyOn(bankLinkRuntime, "fetchPolicy").mockResolvedValue({ valid: true, frame_id: FRAME_ID, allowed_origins: ["https://other.example"] }),
         [{ name: "error", code: "origin_not_allowed" }, { name: "exit", reason: "not_allowed", step: null }]],
       [() => jest.spyOn(bankLinkRuntime, "fetchPolicy").mockRejectedValue(new Error("offline")),
-        [{ name: "error", code: "network" }, { name: "exit", reason: "failed", step: null }]]
+        [{ name: "error", code: "network" }]] // not over: a card with Try again and Close, no exit until the person closes
     ];
     jest.spyOn(console, "warn").mockImplementation(() => undefined);
     for (const [arrange, expected] of cases) {
@@ -563,7 +563,7 @@ describe("frame policy", () => {
     expect(text).not.toContain(TOKEN);
   });
 
-  it("ends with error network and exit on a failed call or a timeout", async () => {
+  it("a failed policy call or a timeout reports error network once and leaves a card with Try again and Close, no exit yet", async () => {
     for (const failure of [
       () => policy().mockRejectedValue(new Error("offline")),
       () => policy().mockRejectedValue(new DOMException("aborted", "AbortError"))
@@ -573,15 +573,38 @@ describe("frame policy", () => {
       const onEvent = jest.fn();
       const handle = await open({ token: TOKEN, onEvent });
       expect(document.querySelector("iframe")).toBeNull();
-      expect(onEvent.mock.calls.map((c) => c[0])).toEqual([
-        { name: "error", code: "network" },
-        { name: "exit", reason: "failed", step: null }
-      ]);
-      expect(handle.state).toBe("closed");
+      expect(onEvent.mock.calls.map((c) => c[0])).toEqual([{ name: "error", code: "network" }]);
+      const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>(".didit-load-error button"));
+      expect(buttons.map((b) => b.textContent)).toEqual(["Try again", "Close"]);
+      expect(document.querySelector(".didit-load-error")?.textContent).toContain("couldn't load the bank connection");
+      expect(handle.state).toBe("opening");
     }
   });
 
-  it("an answer the SDK cannot use is not a network failure: error unknown, then exit failed, no frame", async () => {
+  it("Try again repeats the policy call and loads the frame; Close fires exit closed", async () => {
+    policy().mockRejectedValue(new Error("offline"));
+    const onEvent = jest.fn();
+    await open({ token: TOKEN, onEvent });
+    policy().mockResolvedValue({ valid: true, frame_id: FRAME_ID, allowed_origins: [window.location.origin] });
+    (document.querySelector(".didit-load-error button") as HTMLButtonElement).click();
+    await flush();
+    expect(document.querySelector(".didit-load-error")).toBeNull();
+    expect(new URL(frame().src).pathname).toBe(`/bank/frame/${FRAME_ID}`);
+    expect(frame().style.display).toBe("");
+    expect(policy()).toHaveBeenCalledTimes(2);
+
+    DiditSdk.reset();
+    policy().mockRejectedValue(new Error("offline"));
+    const onExit = jest.fn();
+    await open({ token: TOKEN, onExit });
+    (document.querySelectorAll<HTMLButtonElement>(".didit-load-error button")[1]).click();
+    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(onExit).toHaveBeenCalledWith({ reason: "closed", step: null });
+    expect(document.querySelector(".didit-modal-overlay")).toBeNull();
+    expect(document.documentElement.style.overflow).toBe("");
+  });
+
+  it("an answer the SDK cannot use is not a network failure: error unknown, the same card, no frame", async () => {
     jest.spyOn(console, "warn").mockImplementation(() => undefined);
     for (const failure of [
       () => policy().mockResolvedValue({ valid: true, frame_id: "../x", allowed_origins: [window.location.origin] }),
@@ -594,12 +617,22 @@ describe("frame policy", () => {
       const onEvent = jest.fn();
       const handle = await open({ token: TOKEN, onEvent });
       expect(document.querySelector("iframe")).toBeNull();
-      expect(onEvent.mock.calls.map((c) => c[0])).toEqual([
-        { name: "error", code: "unknown" },
-        { name: "exit", reason: "failed", step: null }
-      ]);
-      expect(handle.state).toBe("closed");
+      expect(onEvent.mock.calls.map((c) => c[0])).toEqual([{ name: "error", code: "unknown" }]);
+      expect(document.querySelector(".didit-load-error")).not.toBeNull();
+      expect(handle.state).toBe("opening");
     }
+  });
+
+  it("the host's close() while the card shows ends the flow with exit closed", async () => {
+    policy().mockRejectedValue(new Error("offline"));
+    const onEvent = jest.fn();
+    const handle = await open({ token: TOKEN, onEvent });
+    handle.close();
+    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([
+      { name: "error", code: "network" },
+      { name: "exit", reason: "closed", step: null }
+    ]);
+    expect(document.querySelector(".didit-load-error")).toBeNull();
   });
 
   it("accepts the frame id shape the backend mints: frm_<32 hex>-<digits>-<hex>", async () => {

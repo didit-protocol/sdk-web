@@ -1524,15 +1524,38 @@ export class VerificationModal {
    * frame); `onClose` when they press Close.
    */
   showLoadError(onRetry: () => void, onClose: () => void): void {
+    // Before any frame exists (the policy call failed) the dialog opens just for the card.
+    if (!this.state.isOpen) this.presentWithoutFrame();
     if (!this.container || !this.iframe) return;
     const t = this.translations();
-    this.iframe.src = "about:blank";
-    this.iframe.inert = true;
-    this.iframe.style.display = "none";
+    if (this.iframe.getAttribute("src")) {
+      this.iframe.src = "about:blank";
+      this.iframe.inert = true;
+      this.iframe.style.display = "none";
+    } else {
+      // A frame that never had an address leaves the page; hideLoadError puts it back for a retry.
+      this.iframe.remove();
+    }
     this.mountCard(t.loadErrorMessage ?? "We couldn't load this page. Check your connection and try again.", [
       { label: t.retryButton ?? "Try again", run: onRetry },
       { label: t.closeButton ?? "Close", run: onClose }
     ]);
+  }
+
+  /** Opens the dialog (or readies the inline container) with no frame address yet: only a card will show. */
+  private presentWithoutFrame(): void {
+    this.language = this.frameOptions.language ?? (typeof navigator !== "undefined" && navigator.language ? navigator.language : "en");
+    const previouslyFocused = document.activeElement;
+    if (!this.overlay && !this.container) this.createDOM();
+    this.setupEventListeners();
+    this.state.isOpen = true;
+    this.pushToTop();
+    if (!this.embedded) {
+      this.overlay?.classList.add("active");
+      this.lockPageScroll();
+      this.showCurtain();
+      this.opener = previouslyFocused instanceof HTMLElement && previouslyFocused !== document.body ? previouslyFocused : null;
+    }
   }
 
   /**
@@ -1541,21 +1564,10 @@ export class VerificationModal {
    * host; `onClose` only ends what is on screen.
    */
   showRefusal(onClose: () => void): void {
-    this.language = this.frameOptions.language ?? (typeof navigator !== "undefined" && navigator.language ? navigator.language : "en");
-    const previouslyFocused = document.activeElement;
-    if (!this.overlay && !this.container) this.createDOM();
-    this.setupEventListeners();
-    this.state.isOpen = true;
-    this.pushToTop();
+    this.presentWithoutFrame();
     // No frame exists for a refused link: its element goes, so nothing of it is left in the page.
     this.iframe?.remove();
     this.iframe = null;
-    if (!this.embedded) {
-      this.overlay?.classList.add("active");
-      this.lockPageScroll();
-      this.showCurtain();
-      this.opener = previouslyFocused instanceof HTMLElement && previouslyFocused !== document.body ? previouslyFocused : null;
-    }
     const t = this.translations();
     this.mountCard(t.refusalMessage ?? "This link can't be opened here.", [{ label: t.closeButton ?? "Close", run: onClose }]);
   }
@@ -1590,6 +1602,7 @@ export class VerificationModal {
     this.loadError.remove();
     this.loadError = null;
     if (this.iframe) {
+      if (!this.iframe.isConnected && this.container) this.container.insertBefore(this.iframe, this.confirmOverlay);
       this.iframe.inert = this.state.showConfirmation;
       this.iframe.style.removeProperty("display");
     }

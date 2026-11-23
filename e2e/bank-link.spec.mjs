@@ -131,12 +131,18 @@ test.describe("Bank Link in the web SDK, against a stub frame that speaks the co
     expect((await records(page)).exit).toEqual([{ reason: "not_allowed", step: null }]);
   });
 
-  test("an unreachable API ends with error network and exit, never a hung opening state", async ({ page }) => {
+  test("an unreachable API gives error network and a card with Try again and Close, never a hung opening state", async ({ page }) => {
     await page.goto(`${HOST_PAGE}?api=http://localhost:1`);
     await page.evaluate(() => window.openModal());
-    await expect.poll(async () => (await records(page)).exit).toEqual([{ reason: "failed", step: null }]);
-    expect((await records(page)).events[0].code).toBe("network");
+    const card = page.locator(".didit-load-error");
+    await expect(card).toBeVisible();
+    await expect(card.getByRole("button", { name: "Try again" })).toBeVisible();
+    expect((await records(page)).events).toEqual([{ name: "error", code: "network" }]);
+    expect((await records(page)).exit).toEqual([]);
     await expect(page.locator(FRAME)).toHaveCount(0);
+    await card.getByRole("button", { name: "Close" }).click();
+    await expect.poll(async () => (await records(page)).exit).toEqual([{ reason: "closed", step: null }]);
+    await expect(page.locator(OVERLAY)).toHaveCount(0);
   });
 });
 
@@ -310,8 +316,9 @@ test.describe("Bank Link modal: focus, scroll and layout", () => {
   test("a frame id with a dot is refused with error unknown, never network", async ({ page }) => {
     await page.goto(`${HOST_PAGE}?token=blt_dotframe_0123456789ab`);
     await page.evaluate(() => window.openModal());
-    await expect.poll(async () => (await records(page)).exit).toEqual([{ reason: "failed", step: null }]);
-    expect((await records(page)).events[0].code).toBe("unknown");
+    await expect(page.locator(".didit-load-error")).toBeVisible();
+    expect((await records(page)).events).toEqual([{ name: "error", code: "unknown" }]);
+    expect((await records(page)).exit).toEqual([]);
     await expect(page.locator(FRAME)).toHaveCount(0);
   });
 

@@ -495,7 +495,7 @@ class BankLinkSession implements BankLinkHandle {
       );
     } catch {
       window.clearTimeout(timer);
-      if (!this.tornDown) this.refuse("network", "failed");
+      this.couldNotLoad("network");
       return;
     }
     window.clearTimeout(timer);
@@ -505,7 +505,7 @@ class BankLinkSession implements BankLinkHandle {
       // The service answered, but not in the documented shape (for example a frame id the SDK refuses): nothing is wrong
       // with the network, so the host is not told "network". "unknown" is the code the SDK already uses for a value it cannot use.
       console.warn("[Didit] Bank Link was not opened: the frame-policy answer could not be used.");
-      return this.refuse("unknown", "failed");
+      return this.couldNotLoad("unknown");
     }
     if (!policy.valid) return this.refuse("invalid_token", "not_allowed");
     if (!policy.allowedOrigins.includes(window.location.origin)) {
@@ -569,14 +569,23 @@ class BankLinkSession implements BankLinkHandle {
   }
 
   /**
-   * The frame's document never loaded (the timeout, or the browser's own `error` event on the frame): one `error`
-   * with the `network` code, the frame removed and a retry offered in its place. It reports once per attempt.
+   * The frame's document never loaded (the timeout, or the browser's own `error` event on the frame): the same
+   * single `error` with the `network` code and the same card (see `couldNotLoad`).
    */
   private frameDidNotLoad(): void {
+    this.couldNotLoad("network");
+  }
+
+  /**
+   * Nothing usable came back (the frame never loaded, the policy call failed, or its answer cannot be used): one
+   * `error` event, and the person sees a message with Try again and Close, never an empty page. The flow is not over:
+   * no `exit` until the person closes or the host calls `close()`. It reports once per attempt.
+   */
+  private couldNotLoad(code: "network" | "unknown"): void {
     if (this.tornDown || this.ended || this.awaitingRetry) return;
     this.clearLoadTimer();
     this.awaitingRetry = true;
-    this.emit({ name: "error", code: "network" });
+    this.emit({ name: "error", code });
     if (this.tornDown) return; // the host closed the flow from its callback
     this.modal.showLoadError(() => this.retry(), () => this.close());
   }
