@@ -81,7 +81,7 @@ test.describe("Bank Link in the web SDK, against a stub frame that speaks the co
     const frame = await open(page, "modal");
     await frame.getByRole("button", { name: "Continue on this page" }).click();
     // Wait for the navigation to settle before the next one, or the two interrupt each other.
-    await page.waitForURL(/^http:\/\/localhost:4173\/bank\/link\//);
+    await page.waitForURL(/^http:\/\/localhost:4173\/bank\/link\//, { waitUntil: "commit" });
     // The hosted page does not exist in this fixture: assert what the SDK stored, then return as the hosted page would.
     await page.goto(HOST_PAGE);
     const stored = await page.evaluate(() => window.sessionStorage.getItem("didit_bank_link_resume"));
@@ -283,7 +283,7 @@ test.describe("Bank Link modal: focus, scroll and layout", () => {
     const code = "rsc_stubresume0001.c2VjcmV0X3ZhbHVl";
     const frame = await open(page, "modal");
     await frame.getByRole("button", { name: "Continue on this page" }).click();
-    await page.waitForURL(/^http:\/\/localhost:4173\/bank\/link\//);
+    await page.waitForURL(/^http:\/\/localhost:4173\/bank\/link\//, { waitUntil: "commit" });
     const fragment = new URLSearchParams(new URL(page.url()).hash.slice(1));
     expect(fragment.get("resume_code")).toBe(code); // the dotted code was accepted from the frame and forwarded as is
     await page.goto(`${HOST_PAGE}?didit_resume=${code}`);
@@ -295,7 +295,7 @@ test.describe("Bank Link modal: focus, scroll and layout", () => {
     const code = "rsc_stubresume0001.c2VjcmV0X3ZhbHVl";
     const frame = await open(page, "modal");
     await frame.getByRole("button", { name: "Continue on this page" }).click();
-    await page.waitForURL(/^http:\/\/localhost:4173\/bank\/link\//);
+    await page.waitForURL(/^http:\/\/localhost:4173\/bank\/link\//, { waitUntil: "commit" });
     await page.goto(`${HOST_PAGE}?didit_resume=${code}&keep=1&noresume=1`);
     // The page skipped its own automatic call (noresume): the test drives the two calls itself.
     const failure = await page.evaluate(() => window.resumeWith({ apiBaseUrl: "not a url" }));
