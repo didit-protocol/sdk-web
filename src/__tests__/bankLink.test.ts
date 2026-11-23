@@ -1175,6 +1175,11 @@ describe("an invalid option is loud", () => {
     const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
     const onEvent = jest.fn();
     expect(() => DiditSdk.shared.openBankLink({ token: TOKEN, apiBaseUrl: "http://api.example.com", onEvent })).toThrow(DiditBankLinkError);
+    window.sessionStorage.setItem(
+      BANK_LINK_RESUME_STORAGE_KEY,
+      JSON.stringify({ v: 1, instance_id: "6e1b8c34-7d02-4f95-a3c6-0b9e5d2a7f18", link_ref: null, container: null, ts: Date.now() })
+    );
+    window.history.replaceState(null, "", "/return?didit_resume=rsc_0123456789abcdef.0123456789abcdef");
     await expect(DiditSdk.shared.resumeBankLink({ baseUrl: "http://verify.example.com", onEvent })).rejects.toMatchObject({ code: "invalid_options" });
     expect(onEvent.mock.calls.map((c) => c[0])).toEqual([
       { name: "error", code: "invalid_options" },
@@ -1196,5 +1201,60 @@ describe("an invalid option is loud", () => {
       throw new Error("host bug");
     });
     expect(() => DiditSdk.shared.openBankLink({ token: TOKEN, baseUrl: "http://x.example.com", onEvent })).toThrow(DiditBankLinkError);
+  });
+});
+
+describe("an invalid option reports exactly once per call", () => {
+  const BAD: Array<[string, object]> = [
+    ["http baseUrl", { baseUrl: "http://example.com" }],
+    ["unparseable baseUrl", { baseUrl: "not a url" }],
+    ["http apiBaseUrl", { apiBaseUrl: "http://api.example.com" }],
+    ["onSuccess not a function", { onSuccess: "x" }],
+    ["onExit not a function", { onExit: 5 }],
+    ["unknown theme", { theme: "blue" }],
+    ["bad locale", { locale: "!!" }],
+    ["zero height", { height: 0 }],
+    ["empty height", { height: "" }],
+    ["negative maxHeight", { maxHeight: -1 }]
+  ];
+  const record = () =>
+    window.sessionStorage.setItem(
+      BANK_LINK_RESUME_STORAGE_KEY,
+      JSON.stringify({ v: 1, instance_id: "6e1b8c34-7d02-4f95-a3c6-0b9e5d2a7f18", link_ref: null, container: null, ts: Date.now() })
+    );
+
+  it.each(BAD)("openBankLink, %s: one throw, one error event, one warning", (_name, bad) => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onEvent = jest.fn();
+    expect(() => DiditSdk.shared.openBankLink({ token: TOKEN, onEvent, ...bad } as never)).toThrow(DiditBankLinkError);
+    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([{ name: "error", code: "invalid_options" }]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(document.querySelector("iframe")).toBeNull();
+  });
+
+  it.each(BAD)("resumeBankLink, %s: one rejection, one error event, one warning, the code kept", async (_name, bad) => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    record();
+    window.history.replaceState(null, "", "/return?didit_resume=rsc_0123456789abcdef.0123456789abcdef");
+    const onEvent = jest.fn();
+    await expect(DiditSdk.shared.resumeBankLink({ onEvent, ...bad } as never)).rejects.toBeInstanceOf(DiditBankLinkError);
+    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([{ name: "error", code: "invalid_options" }]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(window.location.search).toContain("didit_resume=");
+  });
+
+  it("a page that calls resumeBankLink on load and openBankLink later with the same bad baseUrl hears it once", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onEvent = jest.fn();
+    const bad = { baseUrl: "http://example.com", onEvent };
+    expect(await DiditSdk.shared.resumeBankLink(bad)).toEqual({ resumed: false }); // nothing to resume: nothing reported
+    expect(() => DiditSdk.shared.openBankLink({ token: TOKEN, ...bad })).toThrow(DiditBankLinkError);
+    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([{ name: "error", code: "invalid_options" }]);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("an onEvent that is not a function cannot hear anything, and nothing else breaks", () => {
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    expect(() => DiditSdk.shared.openBankLink({ token: TOKEN, onEvent: "x" as never })).toThrow(DiditBankLinkError);
   });
 });
