@@ -1243,14 +1243,22 @@ describe("an invalid option reports exactly once per call", () => {
     expect(window.location.search).toContain("didit_resume=");
   });
 
-  it("a page that calls resumeBankLink on load and openBankLink later with the same bad baseUrl hears it once", async () => {
+  it("two calls with a bad option each report once, and a corrected call gets a fresh result", async () => {
     const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
     const onEvent = jest.fn();
     const bad = { baseUrl: "http://example.com", onEvent };
-    expect(await DiditSdk.shared.resumeBankLink(bad)).toEqual({ resumed: false }); // nothing to resume: nothing reported
+    await expect(DiditSdk.shared.resumeBankLink(bad)).rejects.toBeInstanceOf(DiditBankLinkError); // a page load with nothing to resume
+    expect(onEvent).toHaveBeenCalledTimes(1);
     expect(() => DiditSdk.shared.openBankLink({ token: TOKEN, ...bad })).toThrow(DiditBankLinkError);
-    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([{ name: "error", code: "invalid_options" }]);
-    expect(warn).toHaveBeenCalledTimes(1);
+    expect(onEvent.mock.calls.map((c) => c[0])).toEqual([
+      { name: "error", code: "invalid_options" },
+      { name: "error", code: "invalid_options" }
+    ]);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(await DiditSdk.shared.resumeBankLink({ onEvent })).toEqual({ resumed: false }); // fixed options: nothing reported
+    expect(onEvent).toHaveBeenCalledTimes(2);
+    await open({ token: TOKEN, onEvent });
+    expect(document.querySelector("iframe")).not.toBeNull();
   });
 
   it("an onEvent that is not a function cannot hear anything, and nothing else breaks", () => {

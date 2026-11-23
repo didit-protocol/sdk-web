@@ -487,8 +487,8 @@ The modal's size is unchanged.
 
 A token that is not a Bank Link token throws a `DiditBankLinkError` (`code: "invalid_token"`) synchronously, before anything is shown.
 An invalid option (a `baseUrl` or `apiBaseUrl` that is not `https`, a callback that is not a function, an unknown `theme`, a bad `locale`, `height` or `maxHeight`) is never silent: the call throws a `DiditBankLinkError` with `code: "invalid_options"`, writes a console warning that says which option, and, when `onEvent` is a function, calls it synchronously with `error` and `code: "invalid_options"`.
-`resumeBankLink` does the same, and its promise rejects, but only when there is something to resume (a page load with nothing to resume checks nothing and reports nothing), and before it touches the address, so a corrected call still finds its code.
-Each rejected call reports exactly once.
+`resumeBankLink` does the same, and its promise rejects, before it touches the address, so a corrected call still finds its code.
+Each rejected call reports exactly once, however many times you call; nothing is remembered between calls.
 Before it creates the frame the SDK asks the API whether the token may be embedded on this page (`POST /v3/bank/link-session/frame-policy/`, no credentials).
 An unknown or closed link, or a page origin that is not in the link's `allowed_origins`, opens no frame: you get `error` with `invalid_token` or `origin_not_allowed`, then `exit` with `reason: "not_allowed"`, and the console shows which origin to add (to the link's `allowed_origins` or to the application's Bank Link setting).
 The person is not left with an empty page: the modal (or your container) shows a short message in their language, that the connection cannot be opened here and to contact the company that sent the link, with a Close button.
@@ -547,7 +547,13 @@ On that page call `resumeBankLink` with the same callbacks you gave `openBankLin
 A hash route in your page's address is kept in the return URL; the hosted page adds its resume parameter to the query, before the hash.
 
 ```ts
-const { resumed } = await DiditSdk.shared.resumeBankLink({ onSuccess, onExit });
+try {
+  const { resumed } = await DiditSdk.shared.resumeBankLink({ onSuccess, onExit });
+} catch (error) {
+  // A wrong option (for example a plain http baseUrl) is a programming error: it rejects with
+  // DiditBankLinkError (code "invalid_options"), so it shows up here and not as an unhandled rejection.
+  console.error(error);
+}
 ```
 
 Like `openBankLink`, it first asks the API (with the resume code, which the call does not consume) whether the page may embed the flow, and refuses in the same way.

@@ -940,16 +940,15 @@ export function resumeBankLink(options: BankLinkResumeOptions = {}): Promise<Ban
     // Everything that can throw is checked before the address or the stored record is touched, so a
     // corrected retry of the call still finds its single-use code.
     assertCallbacks(options);
+    // Everything that can throw is checked before the address or the stored record is touched (a corrected call
+    // still finds its code); every call with a bad option reports it, once.
+    const origin = resolveBankLinkOrigin(options.baseUrl);
+    const apiOrigin = resolveBankLinkOrigin(options.apiBaseUrl, "apiBaseUrl", BANK_LINK_DEFAULT_API_ORIGIN);
     const record = readResumeRecord();
     if (!record) return Promise.resolve(none);
     const params = new URLSearchParams(window.location.search);
     const code = params.get(BANK_LINK_RESUME_QUERY_PARAM);
     if (!code || !RESUME_CODE_PATTERN.test(code)) return Promise.resolve(none);
-    // There is something to resume, so the rest of the options are checked now and still before the address is
-    // touched. A page load with nothing to resume validates (and reports) nothing more, so a bad option on a page
-    // that calls both functions is reported once, by the call that was going to use it.
-    const origin = resolveBankLinkOrigin(options.baseUrl);
-    const apiOrigin = resolveBankLinkOrigin(options.apiBaseUrl, "apiBaseUrl", BANK_LINK_DEFAULT_API_ORIGIN);
     const containerOption = options.container ?? record.container ?? undefined;
     let element: HTMLElement | null = null;
     try {
