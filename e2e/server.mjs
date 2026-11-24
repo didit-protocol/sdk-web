@@ -11,6 +11,7 @@ const RECORDINGS = JSON.parse(
 ).scenarios;
 // Requests each test lane received, so parallel browsers never read each other's.
 const received = new Map();
+const silentServed = new Set();
 const CONTENT_TYPES = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -20,7 +21,11 @@ const CONTENT_TYPES = {
 };
 
 function resolveRequestPath(requestUrl) {
-  const pathname = decodeURIComponent(new URL(requestUrl, `http://${HOST}:${PORT}`).pathname);
+  let pathname = decodeURIComponent(new URL(requestUrl, `http://${HOST}:${PORT}`).pathname);
+  // The Bank Link frame path the SDK builds (/bank/frame/<instance id>) serves the contract stub page.
+  // A frame id that starts with `frame_silent` is a document that loads and then never posts a message.
+  if (/^\/bank\/frame\/frame_silent[\w-]*$/.test(pathname)) pathname = "/e2e/fixtures/bank-link-frame-silent.html";
+  else if (/^\/bank\/frame\/[\w-]+$/.test(pathname)) pathname = "/e2e/fixtures/bank-link-frame.html";
   const filePath = resolve(ROOT, `.${pathname}`);
 
   return filePath.startsWith(`${ROOT}${sep}`) ? filePath : null;
@@ -75,8 +80,41 @@ async function serveEventLane(request, response, pathname) {
   return true;
 }
 
+/**
+ * The Bank Link frame-policy call, POST /v3/bank/link-session/frame-policy/ (cross-origin from the host page, so it
+ * answers the preflight). The token picks the answer: `_invalid` is an unknown link, `_otherorigin` allows only
+ * another origin, anything else is allowed for the host page's origin.
+ */
+async function serveFramePolicy(request, response) {
+  const cors = {
+    "Access-Control-Allow-Origin": request.headers.origin ?? "*",
+    "Access-Control-Allow-Headers": "content-type",
+    "Access-Control-Allow-Methods": "POST"
+  };
+  if (request.method === "OPTIONS") {
+    response.writeHead(204, cors);
+    response.end();
+    return;
+  }
+  const body = JSON.parse(await readBody(request));
+  // A resume code is asked the same way (and not consumed): `_invalid` codes are unknown, `_otherorigin` ones are not allowed here.
+  const token = body.token ?? body.resume_code;
+  let answer = { valid: true, frame_id: "frame_stub_0001", allowed_origins: [`http://${HOST}:${PORT}`] };
+  if (token.includes("_invalid")) answer = { valid: false, frame_id: null, allowed_origins: [] };
+  // `_silentonce` tokens: the first policy answer for the token points at a silent frame, later ones at a working one.
+  if (token.includes("_silentonce") && !silentServed.has(token)) {
+    silentServed.add(token);
+    answer.frame_id = "frame_silent_0001";
+  }
+  if (token.includes("_dotframe")) answer.frame_id = "frm_0123456789abcdef.1763800000.abcdef";
+  if (token.includes("_otherorigin")) answer.allowed_origins = ["https://other.example"];
+  response.writeHead(200, { ...cors, "Content-Type": "application/json" });
+  response.end(JSON.stringify(answer));
+}
+
 async function serve(request, response) {
   const { pathname } = new URL(request.url ?? "/", `http://${HOST}:${PORT}`);
+  if (pathname === "/v3/bank/link-session/frame-policy/") return serveFramePolicy(request, response);
   if (pathname.startsWith("/e2e/lane/")) {
     try {
       if (await serveEventLane(request, response, pathname)) return;

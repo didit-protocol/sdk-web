@@ -20,7 +20,9 @@ export const CSS_CLASSES = {
   confirmOverlay: "didit-confirm-overlay",
   confirmBox: "didit-confirm-box",
   embedded: "didit-embedded",
-  curtain: "didit-modal-curtain"
+  curtain: "didit-modal-curtain",
+  focusSentinel: "didit-focus-sentinel",
+  loadError: "didit-load-error"
 } as const;
 
 export const SDK_VERSION = "__SDK_PACKAGE_VERSION__";
@@ -126,3 +128,41 @@ export const languages  = [
     "zh-TW",
     "zh",
 ]
+
+/** The origin that serves Bank Link, by default. An integrator can point the SDK at another one (see `BankLinkOptions.baseUrl`). */
+export const BANK_LINK_DEFAULT_ORIGIN = "https://verify.didit.me";
+
+/** Every Bank Link wire message has a `type` that starts with this prefix and `v: BANK_LINK_PROTOCOL_VERSION`. */
+export const BANK_LINK_MESSAGE_PREFIX = "didit:bank_link:";
+export const BANK_LINK_PROTOCOL_VERSION = 1;
+
+/** What the Bank Link frame may use: the link's copy buttons. It never gets the camera, microphone or location. */
+export const BANK_LINK_IFRAME_ALLOW = "clipboard-write";
+
+/**
+ * Where the SDK keeps, in the page's own sessionStorage (first party to the integrator, so a
+ * frame's partitioned storage does not matter), the instance id and the record that lets
+ * `resumeBankLink` pick the flow up after a full-page redirect. Neither holds a token.
+ */
+export const BANK_LINK_INSTANCE_STORAGE_KEY = "didit_bank_link_instance";
+export const BANK_LINK_RESUME_STORAGE_KEY = "didit_bank_link_resume";
+export const BANK_LINK_RESUME_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** The query parameter the hosted page adds to the integrator's return URL: a single-use resume code. */
+export const BANK_LINK_RESUME_QUERY_PARAM = "didit_resume";
+
+/** The window name of the bank popup, so a second request reuses the same window. */
+export const BANK_LINK_POPUP_NAME = "didit_bank";
+
+/** The API that answers the frame-policy call before a frame is created (see `BankLinkOptions.apiBaseUrl`). */
+export const BANK_LINK_DEFAULT_API_ORIGIN = "https://verification.didit.me";
+export const BANK_LINK_FRAME_POLICY_PATH = "/v3/bank/link-session/frame-policy/";
+export const BANK_LINK_FRAME_POLICY_TIMEOUT_MS = 8000;
+/**
+ * How long the SDK waits for the frame's first message before it calls the frame not loaded. The hosted page posts
+ * nothing until its first call to the API answers; it measured about 1.6 s at the median, and the page's own worst
+ * case to a visible error (every call has a timeout and the opening calls retry once) is about 21 s. 25 s sits above
+ * that, so a slow frame that reaches its own error screen is never preempted, and a frame that never loaded
+ * (blocked, offline) is reported instead of leaving the host with silence.
+ */
+export const BANK_LINK_FRAME_LOAD_TIMEOUT_MS = 25000;

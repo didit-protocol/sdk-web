@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bank Link SDK fixture</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 24px; }
+      #bank { width: min(520px, 100%); height: 420px; border: 1px dashed #999; margin-top: 16px; }
+    </style>
+  </head>
+  <body>
+    <button id="open-modal">Open modal</button>
+    <button id="open-inline">Open inline</button>
+    <div id="bank"></div>
+    <div id="auto" style="width: 420px"></div>
+    <div id="spacer" style="height: 3000px"></div>
+    <script type="module">
+      import { DiditSdk } from "../../dist/didit-sdk.esm.js";
+
+      // What the integrator's page observes, in order.
+      window.records = { events: [], success: [], exit: [], resume: null };
+      // The hosted page is a stub served from another origin (localhost, not 127.0.0.1).
+      const baseUrl = new URLSearchParams(location.search).get("base") ?? "http://localhost:4173";
+      // The token picks the stub's frame-policy answer (see e2e/server.mjs); `api` points the SDK at another API origin.
+      const query = new URLSearchParams(location.search);
+      const token = query.get("token") ?? "blt_0123456789abcdefghij";
+      const apiBaseUrl = query.get("api") ?? "http://localhost:4173";
+      const callbacks = {
+        onEvent: (event) => window.records.events.push(event),
+        onSuccess: (result) => window.records.success.push(result),
+        onExit: (result) => window.records.exit.push(result)
+      };
+
+      let current = null;
+      window.openModal = () => (current = DiditSdk.shared.openBankLink({ token, baseUrl, apiBaseUrl, ...callbacks }));
+      window.openInline = () => (current = DiditSdk.shared.openBankLink({ token, baseUrl, apiBaseUrl, container: "#bank", ...callbacks }));
+      window.closeLink = () => current?.close();
+      // A container with no height of its own: the frame follows the height of the screen it shows.
+      window.openInlineAuto = (extra = {}) => DiditSdk.shared.openBankLink({ token, baseUrl, apiBaseUrl, container: "#auto", ...extra, ...callbacks });
+      document.getElementById("open-modal").onclick = window.openModal;
+      document.getElementById("open-inline").onclick = window.openInline;
+
+      // A test that drives the calls itself: resolves to the result, or to the error code it threw.
+      window.resumeWith = (extra) =>
+        DiditSdk.shared.resumeBankLink({ baseUrl, apiBaseUrl, ...callbacks, ...extra }).catch((error) => ({ error: error.code }));
+
+      // Safe on every page load: it only acts on the page a redirect returned to.
+      if (!query.has("noresume")) {
+        DiditSdk.shared.resumeBankLink({ baseUrl, apiBaseUrl, ...callbacks }).then((result) => (window.records.resume = result));
+      }
+    </script>
+  </body>
+</html>

@@ -431,6 +431,142 @@ Key points:
 
 Full guide: [SDK Transaction Submission](https://docs.didit.me/transaction-monitoring/sdk-transaction-submission).
 
+## Bank Link
+
+`openBankLink` lets a person connect their bank from your page, as a modal or inline.
+Your server creates the link and gives the page its `client_token` (`blt_...`); the SDK shows the flow and tells your page how it ended.
+The bank's own sign-in cannot run inside a frame, so the flow opens it in a separate window where the browser allows it, and falls back to a full-page redirect on a phone or when the window is blocked.
+
+```ts
+import { DiditSdk } from "@didit-protocol/sdk-web";
+
+const handle = DiditSdk.shared.openBankLink({
+  token: "blt_...", // the link's client_token, created by your server
+  onSuccess: ({ link_id }) => fetch("/api/bank/linked", { method: "POST", body: link_id }),
+  onExit: ({ reason }) => console.log("ended without a connection:", reason),
+  onEvent: (event) => console.log(event.name)
+});
+
+handle.close(); // optional: closes the flow and fires exit with reason "closed"
+```
+
+Confirm the link on your server before you trust it: read it with `GET /v3/bank/links/{id}/` and your API key, or wait for the webhook.
+The ids in `onSuccess` are a convenience and are never proof.
+
+### Inline
+
+Pass `container` (a selector or an element) and the flow renders inside it instead of opening a modal.
+
+```ts
+DiditSdk.shared.openBankLink({ token: "blt_...", container: "#bank", onSuccess, onExit });
+```
+
+The frame's height depends on who owns the container's height:
+
+- **The container has no height of its own** (an auto-height block): the frame follows the height of the screen it shows, so the container grows and shrinks with the flow like any block, and nothing is out of reach. Set `maxHeight` (pixels) to cap it; beyond the cap the page inside the frame scrolls.
+- **The container has a height of its own** (a `height` or `min-height` rule that sets it, or the `height` option): the frame keeps that height and the page inside scrolls.
+
+The SDK measures this once, when the flow reports its first height, and adds no scroll or resize listeners.
+The modal's size is unchanged.
+
+### Options
+
+| Option | Type | Notes |
+|---|---|---|
+| `token` | `string` | The `client_token` (`blt_...`) or the hosted link URL. Required. |
+| `container` | `string \| HTMLElement` | Inline mode. Without it the flow opens as a modal. |
+| `locale` | `string` | A language code such as `es` or `pt-BR`; by default the link's own language. |
+| `theme` | `"light" \| "dark" \| "auto"` | Default `"auto"`. `"light"` and `"dark"` are passed to the frame in the URL fragment (`theme`), which then shows that scheme; `"auto"` passes nothing and the frame follows the person's device. The modal's own close button follows the scheme the frame reports. |
+| `height` | `number \| string` | Inline only. A fixed height (pixels or a CSS length); the page inside the frame scrolls. |
+| `maxHeight` | `number` | Inline only. The tallest the frame grows to while it follows its content, in pixels. |
+| `onSuccess` | `(result) => void` | Once, when the link is completed. Sugar over the `success` event. |
+| `onExit` | `(result) => void` | Once, when the flow ends without a connection. Sugar over the `exit` event. |
+| `onEvent` | `(event) => void` | Every event below. |
+| `baseUrl` | `string` | The origin that serves the link. Default `https://verify.didit.me`. Only for staging or a test page. It must be `https`; `http` is accepted only for `localhost` and `127.0.0.1`. |
+| `apiBaseUrl` | `string` | The API origin that is asked, before any frame exists, whether the token may be embedded on this page. Default `https://verification.didit.me`. |
+
+A token that is not a Bank Link token throws a `DiditBankLinkError` (`code: "invalid_token"`) synchronously, before anything is shown.
+An invalid option (a `baseUrl` or `apiBaseUrl` that is not `https`, a callback that is not a function, an unknown `theme`, a bad `locale`, `height` or `maxHeight`) is never silent: the call throws a `DiditBankLinkError` with `code: "invalid_options"`, writes a console warning that says which option, and, when `onEvent` is a function, calls it synchronously with `error` and `code: "invalid_options"`.
+`resumeBankLink` does the same, and its promise rejects, before it touches the address, so a corrected call still finds its code.
+Each rejected call reports exactly once, however many times you call; nothing is remembered between calls.
+Before it creates the frame the SDK asks the API whether the token may be embedded on this page (`POST /v3/bank/link-session/frame-policy/`, no credentials).
+An unknown or closed link, or a page origin that is not in the link's `allowed_origins`, opens no frame: you get `error` with `invalid_token` or `origin_not_allowed`, then `exit` with `reason: "not_allowed"`, and the console shows which origin to add (to the link's `allowed_origins` or to the application's Bank Link setting).
+The person is not left with an empty page: the modal (or your container) shows a short message in their language, that the connection cannot be opened here and to contact the company that sent the link, with a Close button.
+Closing it fires nothing more, because the flow has already ended with the events above.
+A network failure or a timeout on that call gives `error` with `network` once, and the modal or your container shows a message with "Try again" and "Close" buttons (in the person's language).
+If the frame itself never loads (blocked by the network or a content blocker, a wrong `baseUrl`, an offline device), the SDK waits 25 seconds for the frame's first message and then gives the same `error` with `network` once, removes the frame and shows the same card.
+The flow is not over in either case: no `exit` fires until the person presses "Close" (`exit` with `reason: "closed"`, like a close anywhere else) or you call `handle.close()`, and "Try again" repeats the call and creates a fresh frame.
+The 25 seconds sit above the hosted page's own worst case (about 21 seconds to its own error screen), so a slow page that does answer is never cut short.
+An answer the SDK cannot use (not the documented shape, or an identifier it refuses) is not a network failure: you get `error` with `unknown` and the same "Try again" and "Close" card, and no frame is created.
+`handle.state` is `opening` until the frame reports `opened`.
+Only one Bank Link is open at a time: opening a second closes the first with `exit` and `reason: "closed"`.
+
+### Events
+
+Events are notifications derived from the link's state; the outcome is always read from your server.
+Payloads carry ids only: never a token, a name, an account number or an email.
+`success` and `exit` never both fire for one link, and each fires at most once.
+Every `exit` after `opened` carries `link_id` and `step`, the last poll step the frame reported (`null` before one).
+A close from the frame's own button or Escape (`close_request`) ends the flow exactly like `handle.close()`: the same `exit`, and focus goes back to the element that opened the modal.
+
+| `name` | Payload | When |
+|---|---|---|
+| `opened` | `link_id`, `mode` (`connect` or `renew`), `access` (`one_time` or `ongoing`), `presentation` | The link was opened |
+| `consent_shown` | `link_id`, `consent_version` | The consent screen was shown |
+| `consent_accepted` | `link_id`, `consent_version` | The person accepted |
+| `institution_selected` | `institution_id`, `country` | The person picked a bank |
+| `bank_redirect` | `via` (`popup` or `redirect`) | The bank hop started |
+| `bank_returned` | `result` (`ok`, `cancelled`, `failed`, `timeout`, `unsupported`) | The person came back from the bank |
+| `accounts_selected` | `count` | The person chose accounts |
+| `success` | `link_id`, `connection_id` (optional), `check_id` (optional), `resumed` (optional) | The link was completed |
+| `exit` | `reason` (`closed`, `cancelled`, `bank_unavailable`, `expired`, `failed`, `not_allowed`), `step`, `link_id` (optional), `resumed` (optional) | The flow ended without a connection |
+| `error` | `code` | `invalid_token` and `origin_not_allowed` come before any frame exists and are followed by `exit` (the person sees a refusal card); `network` and `unknown` before or while the frame loads leave a "Try again" and "Close" card and no `exit` until the person closes or you call `close()`; `invalid_options` comes with the thrown error and no `exit`; `popup_blocked` and other codes do not end the flow |
+
+Every `error` the person can be affected by has something on screen, in every language the SDK ships.
+
+`exit.step` is the poll step the person was on when the flow ended, or `null` before the first one.
+The step names are part of the contract and never change: `consent`, `segment`, `institution`, `unsupported`, `email`, `email_verify`, `bank_hop`, `accounts`, `confirm_reuse`, `confirm_one_time_fallback`, `renew`, `reconfirm`, `collecting`, `done`, `ended`.
+`institution` is the bank list; the screen may label it differently for the person, but the name here stays `institution`.
+
+### Blocked bank window
+
+When the browser blocks the bank window, the SDK reports `error` with `popup_blocked` (it does not end the flow) and takes the person to the bank with a full-page redirect (`bank_redirect` with `via: "redirect"`).
+The person comes back to the `redirect_url` registered for your application, and `resumeBankLink` continues the flow there.
+
+### Reloading the page mid-flow
+
+A plain reload of your page while the flow is open does not resume it by itself: `resumeBankLink` answers `{ resumed: false }`, because only a return from the bank carries a resume code.
+Open the link again with the same token.
+While the link is still open, the same browser tab opens it again where it was (the tab keeps its own instance id for this, and the service gives the same instance a new session).
+Another tab or browser can open the link only when it is not open somewhere else, and a link that already completed or failed cannot be opened again; the frame says so on screen.
+
+### Full-page redirect and `resumeBankLink`
+
+On a phone, or when the browser blocks the bank window, the whole page goes to the bank and comes back to the `redirect_url` registered for your application.
+On that page call `resumeBankLink` with the same callbacks you gave `openBankLink`; it is safe on every page load and does nothing when there is nothing to resume.
+A hash route in your page's address is kept in the return URL; the hosted page adds its resume parameter to the query, before the hash.
+
+```ts
+try {
+  const { resumed } = await DiditSdk.shared.resumeBankLink({ onSuccess, onExit });
+} catch (error) {
+  // A wrong option (for example a plain http baseUrl) is a programming error: it rejects with
+  // DiditBankLinkError (code "invalid_options"), so it shows up here and not as an unhandled rejection.
+  console.error(error);
+}
+```
+
+Like `openBankLink`, it first asks the API (with the resume code, which the call does not consume) whether the page may embed the flow, and refuses in the same way.
+It reopens the flow at its state on Didit's servers and fires `onSuccess` or `onExit` once, with `resumed: true`.
+The result never travels between windows: it always comes from Didit's servers.
+
+### Security
+
+- The token is passed to the frame in the URL fragment, so it never reaches a server log or a `Referer` header, and the SDK never stores it.
+- The SDK accepts messages only from the exact origin that serves the link and only from its own frame, and posts only to that origin.
+- Embedding works only on the origins registered for the link.
+- The sample above pins nothing; in a script tag use an exact version, for example `https://unpkg.com/@didit-protocol/sdk-web@0.7.0`.
+
 ## Event Monitoring
 
 Send what your end users do (sign-up, login, failed login, logout, password reset, MFA, device change) to Didit's [event monitoring](https://docs.didit.me/transaction-monitoring/events), where accepted events are associated with the same person as their verifications and transactions.

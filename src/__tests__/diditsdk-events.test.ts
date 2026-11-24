@@ -44,6 +44,7 @@ describe("DiditSdk.shared.submitEvent", () => {
       [
         "DEFAULT_EVENTS_BASE_URL",
         "DEFAULT_TRANSACTION_BASE_URL",
+        "DiditBankLinkError",
         "DiditEventError",
         "DiditSdk",
         "DiditTransactionError",

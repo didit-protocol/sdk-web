@@ -1,7 +1,7 @@
 import type { DiditSdkConfiguration, VerificationEvent } from "./types";
 import { DEFAULT_CONFIG, CSS_CLASSES, IFRAME_ALLOW, LAYOUT_MESSAGE_TYPE } from "./constants";
 import { SDKLogger, generateModalId, isAllowedOrigin, detectLanguageFromUrl, isRtlLanguage } from "./utils";
-import { getTranslations } from "./translations";
+import { getTranslations, type ModalTranslations } from "./translations";
 
 export interface ModalState {
   isOpen: boolean;
@@ -14,6 +14,42 @@ export interface ModalCallbacks {
   onCloseConfirmed: () => void;
   onMessage: (event: VerificationEvent) => void;
   onIframeLoad: () => void;
+}
+
+/**
+ * What a caller other than `startVerification` changes in the frame host. Every field is optional and
+ * the defaults are the verification flow's own behaviour, so a modal built without options is unchanged.
+ */
+export interface FrameHostOptions {
+  /** The iframe `allow` list; defaults to the verification flow's {@link IFRAME_ALLOW}. */
+  iframeAllow?: string;
+  /** The language of the modal's own text, when it is not read from the frame URL's path. */
+  language?: string;
+  /** The modal's own text (labels and exit confirmation) for a language; defaults to the verification texts. */
+  translations?: (language: string) => ModalTranslations;
+  /** The iframe `referrerpolicy`; none is set by default. */
+  referrerPolicy?: ReferrerPolicy;
+  /** The element an embedded frame renders in, for a caller that holds the element rather than an id. */
+  embeddedElement?: HTMLElement;
+  /**
+   * Whether a message from `origin` may be read, given the frame's current `src`. Defaults to
+   * {@link isAllowedOrigin}. It runs before anything else, and the message's source window must still be
+   * this frame's window.
+   */
+  isTrustedOrigin?: (origin: string, iframeSrc: string) => boolean;
+  /**
+   * Sees every message (origin and source already checked, JSON already parsed) before the host's own
+   * handling; returning true means it consumed the message.
+   */
+  interceptMessage?: (message: unknown, event: MessageEvent) => boolean;
+  /**
+   * Embedded only. Makes the frame's height follow the flow's reported `contentHeight` when the host element has no
+   * height of its own (the host grows like a block), capped by `maxHeight`; with `height` the frame keeps that
+   * height. Without this option an embedded frame always fills the host element.
+   */
+  embeddedHeight?: { height?: number | string; maxHeight?: number };
+  /** Called when the browser fires an `error` event on the frame (some browsers do when a frame cannot be loaded). */
+  onIframeError?: () => void;
 }
 
 export type FlowKind = "handoff" | "step";
@@ -43,7 +79,7 @@ export interface FlowLayout {
 /** The inline scroll styles a modal overrides to lock the page, as they were before. */
 interface PageScrollLock {
   holders: Set<VerificationModal>;
-  root: { overflow: string; overscrollBehavior: string };
+  root: { overflow: string; overscrollBehavior: string; scrollbarGutter: string; paddingRight: string };
   /** Only set when the page scrolls its body rather than the window, so the body was locked too. */
   body: { overflow: string } | null;
 }
@@ -69,6 +105,7 @@ export class VerificationModal {
   private modalId: string;
   private config: Required<Pick<DiditSdkConfiguration, "zIndex" | "showCloseButton" | "showExitConfirmation">>;
   private callbacks: ModalCallbacks;
+  private frameOptions: FrameHostOptions;
   private state: ModalState = {
     isOpen: false,
     isLoading: true,
@@ -107,8 +144,18 @@ export class VerificationModal {
   /** The ground below the layout viewport (see showCurtain), while this modal is open. */
   private curtain: HTMLDivElement | null = null;
   private boundPlaceCurtain: (() => void) | null = null;
+  /** Embedded height: null until measured, then whether the host grows with the frame (see applyEmbeddedHeight). */
+  private embeddedFollowsContent: boolean | null = null;
+  /** The element that had focus when the modal opened; the person gets back to it when it closes. */
+  private opener: HTMLElement | null = null;
+  /** The "could not load" card over the frame, while there is one (see showLoadError). */
+  private loadError: HTMLDivElement | null = null;
 
-  constructor(configuration: DiditSdkConfiguration | undefined, callbacks: ModalCallbacks) {
+  constructor(
+    configuration: DiditSdkConfiguration | undefined,
+    callbacks: ModalCallbacks,
+    frameOptions: FrameHostOptions = {}
+  ) {
     this.modalId = generateModalId();
     this.config = {
       zIndex: configuration?.zIndex ?? DEFAULT_CONFIG.zIndex,
@@ -116,9 +163,12 @@ export class VerificationModal {
       showExitConfirmation: configuration?.showExitConfirmation ?? DEFAULT_CONFIG.showExitConfirmation
     };
     this.callbacks = callbacks;
+    this.frameOptions = frameOptions;
     this.containerElement = configuration?.containerElement ?? document.body;
     this.embedded = configuration?.embedded ?? false;
-    if (this.embedded && configuration?.embeddedContainerId) {
+    if (this.embedded && frameOptions.embeddedElement) {
+      this.embeddedContainer = frameOptions.embeddedElement;
+    } else if (this.embedded && configuration?.embeddedContainerId) {
       this.embeddedContainer = document.getElementById(configuration.embeddedContainerId);
     }
   }
@@ -150,8 +200,26 @@ export class VerificationModal {
         opacity: 1;
       }
 
+      /* The dialog itself takes focus when it opens; its ring is the frame's, not the backdrop's. */
+      .${CSS_CLASSES.overlay}:focus {
+        outline: none;
+      }
+
+      /* Focus sentinels keep Tab inside the dialog; they are focusable but take no room. */
+      .${CSS_CLASSES.focusSentinel} {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        opacity: 0;
+        pointer-events: none;
+      }
+
       .${CSS_CLASSES.container} {
         position: relative;
+        box-sizing: border-box;
         width: 100%;
         max-width: 440px;
         height: min(860px, calc(100vh - 2rem));
@@ -165,11 +233,33 @@ export class VerificationModal {
         transform: scale(1);
       }
 
+      /*
+       * The frame fills its container's content box exactly: its box is pinned on every side, so a
+       * host page's own iframe rules (a border, a margin, an inline baseline gap, a max-width) cannot
+       * leave a strip of the overlay or the page showing next to it.
+       */
       .${CSS_CLASSES.iframe} {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        box-sizing: border-box;
+        display: block;
         width: 100%;
         height: 100%;
-        border: none;
-        display: block;
+        min-width: 0;
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        vertical-align: top;
+      }
+
+      /* A host's global iframe height rules (min-height, max-height) must not undo the pinned box. */
+      .${CSS_CLASSES.container} > .${CSS_CLASSES.iframe} {
+        min-height: 0;
+        max-height: none;
       }
 
       .${CSS_CLASSES.closeButton} {
@@ -542,13 +632,91 @@ export class VerificationModal {
         }
       }
 
+      /*
+       * The frame never loaded (blocked, offline): its message and a retry, over the frame's place. The ground and
+       * the text follow the flow's theme when it is known and the device's otherwise.
+       */
+      .${CSS_CLASSES.loadError} {
+        position: absolute;
+        inset: 0;
+        z-index: 15;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        padding: 1.5rem;
+        text-align: center;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 0.9375rem;
+        line-height: 1.5;
+        background: #ffffff;
+        color: #1a1a1a;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .${CSS_CLASSES.loadError} {
+          background: ${FLOW_GROUND.dark};
+          color: #f5f5f7;
+        }
+      }
+
+      .${CSS_CLASSES.container}[data-didit-theme="light"] .${CSS_CLASSES.loadError} {
+        background: #ffffff;
+        color: #1a1a1a;
+      }
+
+      .${CSS_CLASSES.container}[data-didit-theme="dark"] .${CSS_CLASSES.loadError} {
+        background: ${FLOW_GROUND.dark};
+        color: #f5f5f7;
+      }
+
+      .${CSS_CLASSES.loadError} p {
+        margin: 0;
+        max-width: 22rem;
+      }
+
+      .${CSS_CLASSES.loadError} button {
+        border: none;
+        border-radius: 8px;
+        padding: 0.625rem 1.25rem;
+        font: inherit;
+        font-weight: 500;
+        cursor: pointer;
+        background: #2567ff;
+        color: #ffffff;
+      }
+
+      .${CSS_CLASSES.loadError} button + button {
+        background: transparent;
+        color: inherit;
+        opacity: 0.8;
+      }
+
+      .${CSS_CLASSES.loadError} button:focus-visible {
+        outline: 2px solid #2567ff;
+        outline-offset: 2px;
+      }
+
+      .${CSS_CLASSES.embedded} .${CSS_CLASSES.loadError} {
+        position: relative;
+        inset: auto;
+        height: 100%;
+        min-height: 12rem;
+      }
+
       .${CSS_CLASSES.embedded} {
         position: relative;
+        box-sizing: border-box;
+        display: block;
         width: 100%;
         height: 100%;
       }
 
+      /* The host's element owns the size: the frame stays in the flow and fills it. */
       .${CSS_CLASSES.embedded} .${CSS_CLASSES.iframe} {
+        position: static;
         width: 100%;
         height: 100%;
         max-height: none;
@@ -569,7 +737,7 @@ export class VerificationModal {
       this.createEmbeddedDOM();
       return;
     }
-    const t = getTranslations(this.language);
+    const t = this.translations();
 
     this.overlay = document.createElement("div");
     this.overlay.id = this.modalId;
@@ -577,6 +745,7 @@ export class VerificationModal {
     this.overlay.setAttribute("role", "dialog");
     this.overlay.setAttribute("aria-modal", "true");
     this.overlay.setAttribute("aria-label", t.ariaLabelModal);
+    this.overlay.tabIndex = -1;
 
     this.container = document.createElement("div");
     this.container.className = CSS_CLASSES.container;
@@ -610,9 +779,10 @@ export class VerificationModal {
 
     this.iframe = document.createElement("iframe");
     this.iframe.className = CSS_CLASSES.iframe;
-    this.iframe.setAttribute("allow", IFRAME_ALLOW);
+    this.applyIframeAttributes(this.iframe);
     this.iframe.setAttribute("title", t.ariaLabelModal);
     this.iframe.addEventListener("load", () => this.handleIframeLoad());
+    this.iframe.addEventListener("error", () => this.frameOptions.onIframeError?.());
 
     this.confirmOverlay = document.createElement("div");
     this.confirmOverlay.className = CSS_CLASSES.confirmOverlay;
@@ -638,7 +808,11 @@ export class VerificationModal {
     this.container.appendChild(this.loadingEl);
     this.container.appendChild(this.iframe);
     this.container.appendChild(this.confirmOverlay);
+    // Without a close button the frame is the first stop, and Shift+Tab out of it cannot be heard from
+    // this document: a leading sentinel catches it. With the button, the keydown handler does.
+    if (!this.config.showCloseButton) this.overlay.appendChild(this.createFocusSentinel("start"));
     this.overlay.appendChild(this.container);
+    this.overlay.appendChild(this.createFocusSentinel("end"));
 
     this.overlay.addEventListener("click", (e) => {
       if (e.target === this.overlay) {
@@ -647,6 +821,36 @@ export class VerificationModal {
     });
 
     this.containerElement.appendChild(this.overlay);
+  }
+
+  /**
+   * A frame is one tab stop from this page's side, so Tab out of its last element would walk past
+   * the dialog into the page behind. The sentinel sits right after the dialog's content: landing on
+   * it sends focus back to the first stop. The way back (Shift+Tab on the first stop) is the
+   * keydown handler's, because the first stop is in this document.
+   */
+  private createFocusSentinel(edge: "start" | "end"): HTMLSpanElement {
+    const sentinel = document.createElement("span");
+    sentinel.className = CSS_CLASSES.focusSentinel;
+    sentinel.tabIndex = 0;
+    sentinel.setAttribute("aria-hidden", "true");
+    sentinel.addEventListener("focus", () => {
+      const stops = this.tabStops();
+      const target = edge === "start" ? stops[stops.length - 1] : stops[0];
+      (target ?? this.overlay)?.focus({ preventScroll: true });
+    });
+    return sentinel;
+  }
+
+  /** The elements Tab visits inside the dialog, in order: the exit confirmation's buttons while it shows, else the close button and the frame. */
+  private tabStops(): HTMLElement[] {
+    if (this.state.showConfirmation) {
+      return Array.from(this.confirmOverlay?.querySelectorAll<HTMLElement>("button") ?? []);
+    }
+    const close = this.container?.querySelector<HTMLElement>(`.${CSS_CLASSES.closeButton}`);
+    // While a card shows (could not load, refused), its buttons stand where the frame was and the frame is out of reach.
+    if (this.loadError) return Array.from(this.loadError.querySelectorAll<HTMLElement>("button"));
+    return [close, this.iframe].filter((el): el is HTMLElement => el instanceof HTMLElement);
   }
 
   private createEmbeddedDOM(): void {
@@ -667,13 +871,23 @@ export class VerificationModal {
 
     this.iframe = document.createElement("iframe");
     this.iframe.className = CSS_CLASSES.iframe;
-    this.iframe.setAttribute("allow", IFRAME_ALLOW);
-    this.iframe.setAttribute("title", getTranslations(this.language).ariaLabelModal);
+    this.applyIframeAttributes(this.iframe);
+    this.iframe.setAttribute("title", this.translations().ariaLabelModal);
     this.iframe.addEventListener("load", () => this.handleIframeLoad());
+    this.iframe.addEventListener("error", () => this.frameOptions.onIframeError?.());
 
     this.container.appendChild(this.loadingEl);
     this.container.appendChild(this.iframe);
     this.embeddedContainer.appendChild(this.container);
+  }
+
+  private translations(): ModalTranslations {
+    return (this.frameOptions.translations ?? getTranslations)(this.language);
+  }
+
+  private applyIframeAttributes(iframe: HTMLIFrameElement): void {
+    iframe.setAttribute("allow", this.frameOptions.iframeAllow ?? IFRAME_ALLOW);
+    if (this.frameOptions.referrerPolicy) iframe.referrerPolicy = this.frameOptions.referrerPolicy;
   }
 
   private setupEventListeners(): void {
@@ -748,7 +962,8 @@ export class VerificationModal {
 
   private handleMessage(event: MessageEvent): void {
     if (!this.iframe?.src) return;
-    if (!isAllowedOrigin(event.origin, this.iframe.src )) {
+    const isTrustedOrigin = this.frameOptions.isTrustedOrigin ?? isAllowedOrigin;
+    if (!isTrustedOrigin(event.origin, this.iframe.src )) {
       return SDKLogger.warn("Received postMessage from unallowed origin:", event.origin);
     }
 
@@ -773,6 +988,8 @@ export class VerificationModal {
       SDKLogger.warn("Failed to parse postMessage:", event.data);
       return;
     }
+
+    if (this.frameOptions.interceptMessage?.(messageData, event)) return;
 
     if (messageData.type === "didit:close_request") {
       this.handleCloseRequest();
@@ -814,7 +1031,11 @@ export class VerificationModal {
 
   /** Embedded mode keeps filling the integrator's host element, whatever the flow reports. */
   private applyFlowLayout(layout: FlowLayout): void {
-    if (this.embedded || !this.container) return;
+    if (this.embedded) {
+      this.applyEmbeddedHeight(layout.contentHeight);
+      return;
+    }
+    if (!this.container) return;
     SDKLogger.log("Flow layout:", layout);
     this.container.classList.add(CSS_CLASSES.flowSized);
     this.container.dataset.diditTheme = layout.colorScheme;
@@ -825,6 +1046,31 @@ export class VerificationModal {
     this.matchPageBackground(layout.colorScheme);
     if (this.curtain) this.curtain.dataset.diditTheme = layout.colorScheme;
     this.setModalKind(layout.kind, layout.kind === "handoff" && this.handoffHeight(layout) === shownHeight);
+  }
+
+  /**
+   * Embedded height (see FrameHostOptions.embeddedHeight). Whether the host fixed its own height is measured once:
+   * with the frame at 0 the host's height is its own; if the frame at the content height makes it taller, the host
+   * follows its content and so does the frame. A host with an explicit height (or one the frame cannot grow) keeps it.
+   */
+  private applyEmbeddedHeight(contentHeight: number): void {
+    const options = this.frameOptions.embeddedHeight;
+    const frame = this.container;
+    const host = this.embeddedContainer;
+    if (!options || !frame || !host) return;
+    if (options.height !== undefined) {
+      frame.style.height = typeof options.height === "number" ? `${options.height}px` : options.height;
+      return;
+    }
+    const wanted = options.maxHeight ? Math.min(contentHeight, options.maxHeight) : contentHeight;
+    if (this.embeddedFollowsContent === null) {
+      frame.style.height = "0px";
+      const without = host.offsetHeight;
+      frame.style.height = `${wanted}px`;
+      this.embeddedFollowsContent = host.offsetHeight > without;
+    }
+    if (this.embeddedFollowsContent) frame.style.height = `${wanted}px`;
+    else frame.style.removeProperty("height");
   }
 
   /** Whether the window is a computer-sized one: a phone is full screen and never waits for a layout. */
@@ -945,14 +1191,31 @@ export class VerificationModal {
     const clips = (overflow: string) => overflow !== "" && overflow !== "visible";
     const bodyScrollsItself =
       clips(window.getComputedStyle(root).overflowY) && clips(window.getComputedStyle(body).overflowY);
+    // A classic scrollbar leaves with the overflow and the page would jump wider: its width is kept
+    // (jsdom and overlay scrollbars have none, and then nothing is added).
+    const scrollbarWidth = root.clientWidth > 0 ? Math.max(0, window.innerWidth - root.clientWidth) : 0;
     VerificationModal.pageScrollLock = {
       holders: new Set([this]),
-      root: { overflow: root.style.overflow, overscrollBehavior: root.style.overscrollBehavior },
+      root: {
+        overflow: root.style.overflow,
+        overscrollBehavior: root.style.overscrollBehavior,
+        scrollbarGutter: root.style.getPropertyValue("scrollbar-gutter"),
+        paddingRight: root.style.paddingRight
+      },
       body: bodyScrollsItself ? { overflow: body.style.overflow } : null
     };
+    const paddingRight = scrollbarWidth > 0 ? window.getComputedStyle(root).paddingRight : "";
     root.style.overflow = "hidden";
     root.style.overscrollBehavior = "none";
     if (bodyScrollsItself) body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      if (typeof CSS !== "undefined" && CSS.supports?.("scrollbar-gutter", "stable")) {
+        root.style.setProperty("scrollbar-gutter", "stable");
+      } else {
+        root.style.paddingRight =
+          paddingRight && paddingRight !== "0px" ? `calc(${paddingRight} + ${scrollbarWidth}px)` : `${scrollbarWidth}px`;
+      }
+    }
   }
 
   private unlockPageScroll(): void {
@@ -962,6 +1225,10 @@ export class VerificationModal {
     const root = document.documentElement;
     root.style.overflow = lock.root.overflow;
     root.style.overscrollBehavior = lock.root.overscrollBehavior;
+    if (lock.root.scrollbarGutter) root.style.setProperty("scrollbar-gutter", lock.root.scrollbarGutter);
+    else root.style.removeProperty("scrollbar-gutter");
+    if (lock.root.paddingRight) root.style.paddingRight = lock.root.paddingRight;
+    else root.style.removeProperty("padding-right");
     if (lock.body) document.body.style.overflow = lock.body.overflow;
   }
 
@@ -1017,6 +1284,10 @@ export class VerificationModal {
 
   /** Back to the neutral look until the newly loaded flow reports its theme and direction. */
   private resetFlowLayout(): void {
+    if (this.embedded && this.container && this.frameOptions.embeddedHeight) {
+      this.embeddedFollowsContent = null;
+      this.container.style.removeProperty("height");
+    }
     if (this.embedded || !this.container) return;
     this.restorePageBackground();
     this.container.classList.remove(CSS_CLASSES.flowSized, CSS_CLASSES.sizeAnimated);
@@ -1056,6 +1327,17 @@ export class VerificationModal {
       return;
     }
 
+    if (event.key === "Tab" && event.shiftKey && !this.embedded) {
+      // Shift+Tab on the dialog itself or on its first stop wraps to the last stop, never out to the page behind.
+      const stops = this.tabStops();
+      const active = document.activeElement;
+      if (stops.length && (active === this.overlay || active === stops[0])) {
+        event.preventDefault();
+        stops[stops.length - 1].focus({ preventScroll: true });
+      }
+      return;
+    }
+
     if (event.key === "Escape") {
       event.preventDefault();
       if (this.state.showConfirmation) {
@@ -1086,7 +1368,7 @@ export class VerificationModal {
   private showConfirmation(trigger?: HTMLElement): void {
     if (!this.confirmOverlay || this.state.showConfirmation) return;
     const activeElement = document.activeElement;
-    this.confirmationTrigger = trigger ?? (activeElement instanceof HTMLElement && activeElement !== document.body
+    this.confirmationTrigger = trigger ?? (activeElement instanceof HTMLElement && activeElement !== document.body && activeElement !== this.overlay
       ? activeElement
       : this.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`) ?? this.iframe);
     this.state.showConfirmation = true;
@@ -1140,7 +1422,9 @@ export class VerificationModal {
   }
 
   open(verificationUrl: string): void {
-    this.language = detectLanguageFromUrl(verificationUrl);
+    const wasOpen = this.state.isOpen;
+    const previouslyFocused = document.activeElement;
+    this.language = this.frameOptions.language ?? detectLanguageFromUrl(verificationUrl);
 
     if (!this.overlay && !this.container) {
       this.createDOM();
@@ -1154,6 +1438,7 @@ export class VerificationModal {
 
     this.state.isLoading = true;
     this.hideConfirmation();
+    this.hideLoadError();
     this.loadingEl?.classList.remove("hidden");
     this.resetFlowLayout();
     if (!this.embedded && !this.isPhoneWindow()) this.waitForFirstLayout();
@@ -1174,12 +1459,18 @@ export class VerificationModal {
     // close() still gives the page back the values it had before any modal opened.
     this.lockPageScroll();
     this.showCurtain();
+    if (!wasOpen) {
+      this.opener = previouslyFocused instanceof HTMLElement && previouslyFocused !== document.body ? previouslyFocused : null;
+      // Focus moves into the dialog: Tab and Shift+Tab stay inside it (see createFocusSentinel).
+      this.overlay?.focus({ preventScroll: true });
+    }
   }
 
   close(): void {
     SDKLogger.log("Closing");
 
     this.hideConfirmation(false);
+    this.hideLoadError();
     this.state.isOpen = false;
     this.state.isLoading = true;
     this.state.showConfirmation = false;
@@ -1198,6 +1489,14 @@ export class VerificationModal {
     this.overlay?.classList.remove("active");
     this.removeCurtain();
     this.unlockPageScroll();
+    this.restoreOpenerFocus();
+  }
+
+  /** Back to the element that had focus when the modal opened, if it is still in the page. */
+  private restoreOpenerFocus(): void {
+    const opener = this.opener;
+    this.opener = null;
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
   }
 
   destroy(): void {
@@ -1217,6 +1516,107 @@ export class VerificationModal {
     this.iframe = null;
     this.loadingEl = null;
     this.confirmOverlay = null;
+  }
+
+  /**
+   * The frame's document never loaded: the frame is blanked and hidden and a message with a retry button and a
+   * close button takes its place. `onRetry` runs when the person presses Try again (the caller then opens a fresh
+   * frame); `onClose` when they press Close.
+   */
+  showLoadError(onRetry: () => void, onClose: () => void): void {
+    // Before any frame exists (the policy call failed) the dialog opens just for the card.
+    if (!this.state.isOpen) this.presentWithoutFrame();
+    if (!this.container || !this.iframe) return;
+    const t = this.translations();
+    if (this.iframe.getAttribute("src")) {
+      this.iframe.src = "about:blank";
+      this.iframe.inert = true;
+      this.iframe.style.display = "none";
+    } else {
+      // A frame that never had an address leaves the page; hideLoadError puts it back for a retry.
+      this.iframe.remove();
+    }
+    this.mountCard(t.loadErrorMessage ?? "We couldn't load this page. Check your connection and try again.", [
+      { label: t.retryButton ?? "Try again", run: onRetry },
+      { label: t.closeButton ?? "Close", run: onClose }
+    ]);
+  }
+
+  /** Opens the dialog (or readies the inline container) with no frame address yet: only a card will show. */
+  private presentWithoutFrame(): void {
+    this.language = this.frameOptions.language ?? (typeof navigator !== "undefined" && navigator.language ? navigator.language : "en");
+    const previouslyFocused = document.activeElement;
+    if (!this.overlay && !this.container) this.createDOM();
+    this.setupEventListeners();
+    this.state.isOpen = true;
+    this.pushToTop();
+    if (!this.embedded) {
+      this.overlay?.classList.add("active");
+      this.lockPageScroll();
+      this.showCurtain();
+      this.opener = previouslyFocused instanceof HTMLElement && previouslyFocused !== document.body ? previouslyFocused : null;
+    }
+  }
+
+  /**
+   * The link cannot be opened here (the service refused it, so no frame was ever created): the dialog (or the
+   * inline container) shows the refusal and a Close control, and nothing else. The caller has already told the
+   * host; `onClose` only ends what is on screen.
+   */
+  showRefusal(onClose: () => void): void {
+    this.presentWithoutFrame();
+    // No frame exists for a refused link: its element goes, so nothing of it is left in the page.
+    this.iframe?.remove();
+    this.iframe = null;
+    const t = this.translations();
+    this.mountCard(t.refusalMessage ?? "This link can't be opened here.", [{ label: t.closeButton ?? "Close", run: onClose }]);
+  }
+
+  /** The card over the frame's place: a message and its buttons; the first button takes focus. */
+  private mountCard(text: string, actions: Array<{ label: string; run: () => void }>): void {
+    const host = this.container;
+    if (!host) return;
+    this.hideLoadError();
+    const card = document.createElement("div");
+    card.className = CSS_CLASSES.loadError;
+    const message = document.createElement("p");
+    message.setAttribute("role", "alert");
+    message.textContent = text;
+    card.appendChild(message);
+    for (const action of actions) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = action.label;
+      button.addEventListener("click", () => action.run());
+      card.appendChild(button);
+    }
+    this.loadingEl?.classList.add("hidden");
+    host.appendChild(card);
+    this.loadError = card;
+    card.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
+  }
+
+  /** Removes the "could not load" card and gives the frame back; a no-op without one. */
+  private hideLoadError(): void {
+    if (!this.loadError) return;
+    this.loadError.remove();
+    this.loadError = null;
+    if (this.iframe) {
+      if (!this.iframe.isConnected && this.container) this.container.insertBefore(this.iframe, this.confirmOverlay);
+      this.iframe.inert = this.state.showConfirmation;
+      this.iframe.style.removeProperty("display");
+    }
+  }
+
+  /** Leaves the "could not load" state before a retry opens a fresh frame. */
+  clearLoadError(): void {
+    this.hideLoadError();
+    this.loadingEl?.classList.remove("hidden");
+  }
+
+  /** The frame's window, for a caller that posts to it (always with an exact target origin). */
+  frameWindow(): Window | null {
+    return this.iframe?.contentWindow ?? null;
   }
 
   isOpen(): boolean {

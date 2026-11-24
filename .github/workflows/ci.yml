@@ -37,6 +37,13 @@ jobs:
       - run: npm run test:auth -- --runInBand
       - run: npm run build -w @didit-protocol/example-auth-nextjs
       - run: npm run build -w @didit-protocol/example-auth-react
+      - name: Upload the built bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sdk-web-dist
+          path: dist/
+          retention-days: 3
+          if-no-files-found: error
 
   auth:
     runs-on: ubuntu-latest
