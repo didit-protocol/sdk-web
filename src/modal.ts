@@ -38,7 +38,12 @@ export interface FlowLayout {
   contentHeight: number;
   colorScheme: "light" | "dark";
   dir: "ltr" | "rtl";
+  /** Height of the strip the flow shows above its top bar (a sandbox session's), in CSS pixels; 0 without one. */
+  topInset: number;
 }
+
+/** A strip is a line or two of text: a taller value is not one, and would push the close button out of reach. */
+const MAX_TOP_INSET = 160;
 
 /** The inline scroll styles a modal overrides to lock the page, as they were before. */
 interface PageScrollLock {
@@ -467,7 +472,7 @@ export class VerificationModal {
       }
 
       .${CSS_CLASSES.flowSized} .${CSS_CLASSES.closeButton} {
-        top: 8px;
+        top: calc(8px + var(--didit-top-inset, 0px));
         right: 8px;
         width: 44px;
         height: 44px;
@@ -795,11 +800,12 @@ export class VerificationModal {
   /**
    * Reads a didit:layout message's data. Without a positive contentHeight the
    * message is ignored; a missing or unknown colorScheme follows the device,
-   * and a missing or unknown dir follows the verification URL's language.
+   * a missing or unknown dir follows the verification URL's language, and the
+   * close button keeps its place without a plausible topInset.
    */
   private readFlowLayout(data: unknown): FlowLayout | null {
     const fields = typeof data === "object" && data !== null ? (data as Record<string, unknown>) : {};
-    const { contentHeight, colorScheme, dir, kind } = fields;
+    const { contentHeight, colorScheme, dir, kind, topInset } = fields;
     if (typeof contentHeight !== "number" || !Number.isFinite(contentHeight) || contentHeight <= 0) {
       return null;
     }
@@ -808,7 +814,9 @@ export class VerificationModal {
       kind: kind === "handoff" ? "handoff" : "step",
       contentHeight: Math.ceil(contentHeight),
       colorScheme: colorScheme === "light" || colorScheme === "dark" ? colorScheme : prefersDark ? "dark" : "light",
-      dir: dir === "ltr" || dir === "rtl" ? dir : isRtlLanguage(this.language) ? "rtl" : "ltr"
+      dir: dir === "ltr" || dir === "rtl" ? dir : isRtlLanguage(this.language) ? "rtl" : "ltr",
+      topInset:
+        typeof topInset === "number" && topInset > 0 && topInset <= MAX_TOP_INSET ? Math.ceil(topInset) : 0
     };
   }
 
@@ -822,6 +830,8 @@ export class VerificationModal {
     // The height the person sees now, before the reported content height can change it.
     const shownHeight = this.container.offsetHeight;
     this.container.style.setProperty("--didit-content-height", `${layout.contentHeight}px`);
+    // The close button sits under the flow's strip, over its top bar.
+    this.container.style.setProperty("--didit-top-inset", `${layout.topInset}px`);
     this.matchPageBackground(layout.colorScheme);
     if (this.curtain) this.curtain.dataset.diditTheme = layout.colorScheme;
     this.setModalKind(layout.kind, layout.kind === "handoff" && this.handoffHeight(layout) === shownHeight);
@@ -1024,6 +1034,7 @@ export class VerificationModal {
     delete this.container.dataset.diditDir;
     delete this.container.dataset.diditKind;
     this.container.style.removeProperty("--didit-content-height");
+    this.container.style.removeProperty("--didit-top-inset");
     if (this.firstLayoutTimeout !== null) {
       window.clearTimeout(this.firstLayoutTimeout);
       this.firstLayoutTimeout = null;

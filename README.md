@@ -267,7 +267,7 @@ Browsers that support dynamic viewport units use `dvh`, while older supported br
 
 When the hosted verification page reports its layout with a `didit:layout` message, the modal takes the page's light or dark theme and its text direction. Its `kind` field (`handoff` or `step`, `step` when missing) sets the modal's size as described above.
 
-The close button becomes a 44px circle over the page's top bar. It follows the page's light or dark theme and moves to the left for right-to-left languages. If a large text size makes the exit confirmation taller than a short page, the confirmation scrolls inside the modal. Pages that never report a layout get the phone-shaped size. Embedded mode keeps filling its host element. There is nothing to configure, and every existing option keeps working.
+The close button becomes a 44px circle over the page's top bar. It follows the page's light or dark theme, moves to the left for right-to-left languages, and sits under the strip a sandbox session shows above its top bar (the message's `topInset`). If a large text size makes the exit confirmation taller than a short page, the confirmation scrolls inside the modal. Pages that never report a layout get the phone-shaped size. Embedded mode keeps filling its host element. There is nothing to configure, and every existing option keeps working.
 
 The SDK tells the page how it is shown with two query parameters on the verification URL: `sdk_presentation` (`modal` or `embedded`) and, in a modal, `sdk_close_button` (`true` or `false`, following `showCloseButton`). The SDK handles the `didit:layout` message itself and does not pass it to `onEvent`.
 
