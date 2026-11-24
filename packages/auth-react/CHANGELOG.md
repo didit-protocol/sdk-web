@@ -6,7 +6,7 @@ All notable changes to `@didit-protocol/auth-react` are documented in this file.
 
 ### Changed
 
-- The "Powered by Didit" lockup uses the current Didit logo (new ring colours and wordmark).
+- The "Powered by Didit" lockup uses the current Didit wordmark. The ring stays the registered Didit isotype.
 
 ## [0.2.0] - 2026-11-12
 
