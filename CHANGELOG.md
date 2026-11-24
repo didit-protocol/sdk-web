@@ -2,6 +2,11 @@
 
 All notable changes to `@didit-protocol/sdk-web` will be documented in this file.
 
+## [0.7.0] - 2026-11-24
+
+### Changed
+- In a sandbox session the hosted flow starts with a strip above its top bar. The modal's close button now sits under that strip, on the top bar, instead of over it. The flow reports the strip's height in its layout message (`topInset`), and nothing needs to be configured. A live session, and a page that reports no height, keep the button where it was.
+
 ## [0.6.0] - 2026-11-12
 
 ### Added
