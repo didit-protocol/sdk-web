@@ -502,6 +502,16 @@ test("moves the close button to the left for a right-to-left flow", async ({ pag
   expect(box).toMatchObject({ width: 44, height: 44, top: 8, left: 8 });
 });
 
+test("draws the close button under the strip a sandbox flow shows above its top bar", async ({ page }) => {
+  const iframe = await openFlowFixture(page, { width: 1440, height: 900 }, "?layout=600&kind=step");
+
+  await postLayout(page, iframe, { contentHeight: 600, kind: "step", topInset: 32 });
+  expect(await closeButtonBox(page)).toMatchObject({ width: 44, height: 44, top: 40, right: 8 });
+
+  await postLayout(page, iframe, { contentHeight: 600, kind: "step" });
+  expect(await closeButtonBox(page)).toMatchObject({ top: 8, right: 8 });
+});
+
 test("shows the keyboard focus on the close button", async ({ page, browserName }) => {
   // WebKit leaves buttons out of the Tab order unless the platform setting is on.
   test.skip(browserName === "webkit", "WebKit skips buttons when tabbing by default");

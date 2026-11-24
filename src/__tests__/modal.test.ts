@@ -563,6 +563,23 @@ describe("VerificationModal flow layout", () => {
     expect(getContainer(modal).dataset.diditDir).toBe("ltr");
   });
 
+  it("draws the close button under the strip the flow shows above its top bar, and only under a plausible one", () => {
+    const { modal } = openModal();
+    const inset = () => getContainer(modal).style.getPropertyValue("--didit-top-inset");
+
+    postLayout(modal, { contentHeight: 600, topInset: 31.2 });
+    expect(inset()).toBe("32px");
+
+    for (const topInset of [0, -8, 4000, Number.NaN, "32", null]) {
+      postLayout(modal, { contentHeight: 600, topInset });
+      expect(inset()).toBe("0px");
+    }
+
+    postLayout(modal, { contentHeight: 600, topInset: 32 });
+    modal.open("https://verify.didit.me/session/b");
+    expect(inset()).toBe("");
+  });
+
   it("goes back to the fixed modal when it is re-opened or closed", () => {
     const { modal } = openModal();
 
