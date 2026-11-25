@@ -1,4 +1,4 @@
-import { detectBotFromNavigator } from "./device/bot";
+import { getLoadedCollector, isBrowserEnvironment, loadCollector, resetCollectorForTesting } from "./collector";
 import { canonicalNavigator, COMPOSITE_HASH_VERSION, compositeHashOf } from "./device/canonical";
 import { payloadToHeaders } from "./device/headers";
 import { collectNavigatorSignals } from "./device/signals/navigator";
@@ -9,30 +9,25 @@ import type { DeviceFingerprintPayload } from "./device/types";
 /**
  * The device fingerprint this entry sends with events, transactions and sign-ins.
  *
- * One implementation, two sizes. The files under `device/` are the only place that knows how the
- * stored id is kept, which signals describe a device and how they become the composite hash. This
- * entry uses the part of them that fits its 5 KB promise (the stored id, the navigator and the
- * webview kind: the `lite` tier); `@didit-protocol/signals/device` uses all of them (the `full`
- * tier) and, once `enableDeviceIntelligence()` is called, is what this entry sends instead.
+ * Two sizes of one fingerprint. This file builds the lite one (the stored id, the navigator and
+ * the webview kind) because it is small enough to live in the core entry and answers at once. The
+ * full one, with the automation evidence, comes from the collector, a separate file loaded after
+ * the core. A request waits for the collector for at most COLLECTOR_WAIT_MS and goes out with the
+ * lite payload when it is not there by then, so a slow or blocked file never delays a request.
  */
 
-/** Where the payload comes from when it is not the lite one built here. */
-interface DeviceSignalsProvider {
-  /** Collects the payload. A rejection is not kept: the next request asks again. */
-  get: () => Promise<DeviceFingerprintPayload | null>;
-  /** The payload if it is collected already, without waiting (a page that is closing cannot wait). */
-  peek: () => DeviceFingerprintPayload | null;
-}
+/** How long a request waits for the collector before it goes out with the lite payload. */
+const COLLECTOR_WAIT_MS = 2000;
 
-let provider: DeviceSignalsProvider | null = null;
-let cachedPayload: DeviceFingerprintPayload | null = null;
+let litePayload: DeviceFingerprintPayload | null = null;
+/** The lite payload before its hash is known: what an exiting page can still send. */
 let pendingPayload: DeviceFingerprintPayload | null = null;
-let cachedPayloadPromise: Promise<DeviceFingerprintPayload | null> | null = null;
-/** Raised when the source of the payload changes, so a collection started before it is recognised. */
-let generation = 0;
+let litePromise: Promise<DeviceFingerprintPayload> | null = null;
+let collectorPayload: DeviceFingerprintPayload | null = null;
+let collecting: Promise<DeviceFingerprintPayload | null> | null = null;
 
-async function buildPayload(): Promise<DeviceFingerprintPayload> {
-  // These layers answer at once, so the id is in the payload before anything is awaited.
+async function buildLitePayload(): Promise<DeviceFingerprintPayload> {
+  // These layers answer at once, so the id is stored before anything is awaited.
   const persistent = loadOrCreatePersistentId();
   const navigatorSignals = collectNavigatorSignals();
   const webview = detectWebViewContext(navigatorSignals.userAgent);
@@ -51,7 +46,6 @@ async function buildPayload(): Promise<DeviceFingerprintPayload> {
       navigator: navigatorSignals,
       webview,
     },
-    bot: detectBotFromNavigator(navigatorSignals),
     compositeHash: "",
   };
 
@@ -65,56 +59,108 @@ async function buildPayload(): Promise<DeviceFingerprintPayload> {
   return { ...payload, compositeHash };
 }
 
-function isBrowserEnvironment(): boolean {
-  return typeof window !== "undefined" && typeof navigator !== "undefined" && typeof document !== "undefined";
-}
-
-/**
- * Collects the device fingerprint. Resolves to null outside a browser
- * environment (SSR, Node, workers) so callers degrade to a fingerprint-less
- * request instead of sending junk signals. Never intended to throw into the
- * submit path: callers still guard with .catch(() => null).
- */
-export async function getDeviceFingerprintPayload(): Promise<DeviceFingerprintPayload | null> {
-  if (!isBrowserEnvironment()) return null;
-  if (cachedPayload) return cachedPayload;
-  if (!cachedPayloadPromise) {
-    const started = generation;
-    cachedPayloadPromise = (provider ? provider.get() : buildPayload()).then(
+/** Builds the lite payload once. The stored id exists as soon as this returns. */
+function ensureLitePayload(): Promise<DeviceFingerprintPayload> {
+  if (!litePromise) {
+    litePromise = buildLitePayload().then(
       (payload) => {
-        // The source changed while this was being collected (`enableDeviceIntelligence()` called
-        // with the lite collection still running): its result must not become the cached payload,
-        // and whoever waited for it gets the payload of the source that replaced it.
-        if (started !== generation) return getDeviceFingerprintPayload();
-        cachedPayload = payload;
+        litePayload = payload;
         return payload;
       },
       (error) => {
-        if (started !== generation) return getDeviceFingerprintPayload();
         // Do not cache failures; a later call may succeed.
-        cachedPayloadPromise = null;
+        litePromise = null;
         throw error;
-      }
+      },
     );
   }
-  return cachedPayloadPromise;
-}
-
-/** Internal exit snapshot: never waits for WebCrypto or changes the cached payload. */
-export function getAvailableDeviceFingerprintPayload(): DeviceFingerprintPayload | null {
-  return cachedPayload ?? (provider ? provider.peek() : pendingPayload);
+  return litePromise;
 }
 
 /**
- * Makes another collector the source of the fingerprint this entry sends (null: back to the lite
- * one). `enableDeviceIntelligence()` of `@didit-protocol/signals/device` calls it; nothing else should.
+ * Starts the collector's collection, or joins the one under way. Resolves to its payload, or to
+ * null when it cannot load or fails. A failed load is not tried again on this page; a failed
+ * collection is, on the next call.
  */
-export function setDeviceSignalsProvider(next: DeviceSignalsProvider | null): void {
-  provider = next;
-  generation += 1;
-  cachedPayload = null;
-  pendingPayload = null;
-  cachedPayloadPromise = null;
+function startCollection(): Promise<DeviceFingerprintPayload | null> {
+  if (collectorPayload) return Promise.resolve(collectorPayload);
+  if (!collecting) {
+    const attempt: Promise<DeviceFingerprintPayload | null> = loadCollector()
+      .then((collector) => (collector ? collector.collect() : null))
+      .then(
+        (payload) => {
+          if (payload) collectorPayload = payload;
+          return payload ?? null;
+        },
+        () => null,
+      )
+      .then((payload) => {
+        if (collecting === attempt) collecting = null;
+        return payload;
+      });
+    collecting = attempt;
+  }
+  return collecting;
+}
+
+/** The collector's payload if it arrives within COLLECTOR_WAIT_MS, else null. Never rejects. */
+function waitForCollector(): Promise<DeviceFingerprintPayload | null> {
+  if (collectorPayload) return Promise.resolve(collectorPayload);
+  // The lite payload goes first: it stores the device id before the collector starts.
+  ensureLitePayload().catch(() => undefined);
+  const collection = startCollection();
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), COLLECTOR_WAIT_MS);
+    collection.then((payload) => {
+      clearTimeout(timer);
+      resolve(payload);
+    });
+  });
+}
+
+/**
+ * Collects the device fingerprint: the collector's full payload when it arrives within
+ * COLLECTOR_WAIT_MS of this call, else the lite one. Resolves to null outside a browser
+ * environment (SSR, Node, workers) so callers degrade to a fingerprint-less request instead of
+ * sending junk signals. Never intended to throw into the submit path: callers still guard with
+ * .catch(() => null).
+ */
+export async function getDeviceFingerprintPayload(): Promise<DeviceFingerprintPayload | null> {
+  if (!isBrowserEnvironment()) return null;
+  const full = await waitForCollector();
+  return full ?? ensureLitePayload();
+}
+
+/**
+ * Internal exit snapshot: never waits, never starts a load and never changes what is cached. The
+ * collector's payload if there is one, else the lite payload, else the lite one before its hash.
+ */
+export function getAvailableDeviceFingerprintPayload(): DeviceFingerprintPayload | null {
+  if (collectorPayload) return collectorPayload;
+  try {
+    const peeked = getLoadedCollector()?.peek() ?? null;
+    if (peeked) return peeked;
+  } catch {
+    // A collector that throws is as good as one with nothing yet.
+  }
+  return litePayload ?? pendingPayload;
+}
+
+/**
+ * The automation evidence of this page as compact JSON text, for a request your own backend sends
+ * to Didit (for example a sign-in your server forwards). Didit's servers read it and decide the
+ * score. Waits for the collector for at most 2 seconds; null outside a browser, when the
+ * collector is not there in time, or when it failed. Never rejects.
+ */
+export async function getSignalsEvidence(): Promise<string | null> {
+  if (!isBrowserEnvironment()) return null;
+  try {
+    if (!(await waitForCollector())) return null;
+    return getLoadedCollector()?.evidence() ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** The device headers a Didit API reads from the payload. */
@@ -128,9 +174,14 @@ export const buildFingerprintHeaders = payloadToHeaders;
 export const getStoredDeviceId = readStoredPersistentId;
 
 export function resetDeviceFingerprintForTesting(): void {
-  setDeviceSignalsProvider(null);
+  litePayload = null;
+  pendingPayload = null;
+  litePromise = null;
+  collectorPayload = null;
+  collecting = null;
+  resetCollectorForTesting();
   resetPersistentIdForTesting();
 }
 
 export { randomBase64Url } from "./device/hash";
-export type { DeviceSignalsProvider };
+export { COLLECTOR_WAIT_MS };

@@ -53,8 +53,8 @@ describe("DiditSdk.shared.submitEvent", () => {
         "default",
         "flush",
         "getDeviceFingerprintPayload",
+        "getSignalsEvidence",
         "getStoredDeviceId",
-        "setDeviceSignalsProvider",
         "submitEvent"
       ].sort()
     );

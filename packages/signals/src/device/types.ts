@@ -1,23 +1,14 @@
-import { type BotDetection } from "./bot";
-import { type AudioSignals } from "./signals/audio";
-import { type CanvasSignals } from "./signals/canvas";
-import { type CodecSignals } from "./signals/codecs";
-import { type EnvironmentSignals } from "./signals/environment";
-import { type FontSignals } from "./signals/fonts";
-import { type HardwareSignals } from "./signals/hardware";
-import { type MathSignals } from "./signals/math";
 import { type NavigatorSignals } from "./signals/navigator";
-import { type WebGLSignals } from "./signals/webgl";
 import { type WebViewSignals } from "./signals/webview";
 import { type COMPOSITE_HASH_VERSION } from "./canonical";
 
 /**
- * The signals every Didit web client sends, whichever entry collected them.
+ * The signals every Didit web client sends.
  *
- * `tier` says how much was collected: `lite` is the navigator and the webview kind (what the
- * 5 KB `@didit-protocol/signals` entry reads), `full` adds the families of `FullDeviceSignals`
- * (`@didit-protocol/signals/device`). The composite hash of the two tiers differs for the same
- * device, because the full one covers more of it.
+ * `tier` says how much was collected: `lite` is the navigator and the webview kind (what this
+ * package builds itself), `full` is what the separately loaded collector reports, which adds more
+ * families of signals than this package names. The composite hash of the two tiers differs for the
+ * same device, because the full one covers more of it.
  */
 interface DeviceSignals {
   platform: "web";
@@ -31,26 +22,12 @@ interface DeviceSignals {
    * of the site around it. Not part of the composite hash.
    */
   embedder?: { persistentId: string };
-}
-
-interface FullDeviceSignals extends DeviceSignals {
-  tier: "full";
-  canvas: CanvasSignals;
-  webgl: WebGLSignals;
-  audio: AudioSignals;
-  fonts: FontSignals;
-  math: MathSignals;
-  apiBitmap: string;
-  apiMissing: string[];
-  hardware: HardwareSignals;
-  environment: EnvironmentSignals;
-  // Sent for analysis and kept out of the composite hash: the codec answers are not steady enough
-  // on one browser to be part of what identifies it.
-  codecs: CodecSignals;
+  /** The further families of the full tier. Their shape is the collector's and may grow. */
+  [family: string]: unknown;
 }
 
 /** The didit-fp-v2 device fingerprint payload, sent as the `fingerprint_v2` body field. */
-interface DeviceFingerprintPayload<S extends DeviceSignals = DeviceSignals> {
+interface DeviceFingerprintPayload {
   version: 2;
   schema: "didit-fp-v2";
   platform: "web";
@@ -59,14 +36,16 @@ interface DeviceFingerprintPayload<S extends DeviceSignals = DeviceSignals> {
   persistentId: string;
   persistentIdSources: string[];
   persistentIdWasCreated: boolean;
-  signals: S;
-  bot: BotDetection;
+  signals: DeviceSignals;
   /** A hash of the signals that describe the device. Shared by devices of one kind: it is not an id. */
   compositeHash: string;
   /** The `didit-fp-*` hash of clients before didit-fp-v2. Full tier only. */
   legacyCompatibilityHash?: string;
+  /**
+   * Facts about how the page was driven, as compact JSON text. Full tier only. Didit's servers
+   * read it and decide the automation score; nothing here is scored in the browser.
+   */
+  evidence?: string;
 }
 
-type FullDeviceFingerprintPayload = DeviceFingerprintPayload<FullDeviceSignals>;
-
-export { type DeviceFingerprintPayload, type DeviceSignals, type FullDeviceFingerprintPayload, type FullDeviceSignals };
+export { type DeviceFingerprintPayload, type DeviceSignals };

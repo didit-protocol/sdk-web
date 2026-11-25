@@ -449,13 +449,9 @@ interface BehaviorTracker {
 }
 
 function trackBehavior(): BehaviorTracker {
-  // Read once, ahead of time: a page that is closing cannot wait for it.
-  let bot: { score: number; flags: string[] } | null = null;
-  getDeviceFingerprintPayload()
-    .then((fingerprint) => {
-      bot = fingerprint ? fingerprint.bot : null;
-    })
-    .catch(() => undefined);
+  // Starts the device collection ahead of time: a page that is closing cannot wait for it, and
+  // the exit snapshot only carries what has been collected by then.
+  getDeviceFingerprintPayload().catch(() => undefined);
   let actionTimes: number[] = [];
   let keyTimes: number[] = [];
   let directions = new Array<number>(8).fill(0);
@@ -540,11 +536,6 @@ function trackBehavior(): BehaviorTracker {
       for (const gap of keyGaps) buckets[Math.min(7, Math.floor(gap / 60))] += 1;
       payload.keystroke_entropy = round(entropy(buckets));
     }
-    // The browser's own automation flags, on the 0-100 scale event rules read.
-    if (bot) {
-      payload.bot_score = Math.round(bot.score * 100);
-      if (bot.flags.length) payload.bot_flags = bot.flags.join(",");
-    }
     reset();
     emit("session", "bot_signal_observed", payload);
   };
@@ -622,13 +613,12 @@ function stopAutocapture(): void {
  * pass them as the event's `device_context`. Use it where the person is not signed in yet (a
  * forgotten password, a failed sign-in), so that event meets the same device as the ones sent here.
  */
-async function getDeviceContext(): Promise<{ persistent_device_id?: string; fingerprint?: string; bot_score?: number }> {
+async function getDeviceContext(): Promise<{ persistent_device_id?: string; fingerprint?: string }> {
   const fingerprint = await getDeviceFingerprintPayload().catch(() => null);
   if (!fingerprint) return {};
   return {
     ...(fingerprint.persistentId ? { persistent_device_id: fingerprint.persistentId } : {}),
     ...(fingerprint.compositeHash ? { fingerprint: fingerprint.compositeHash } : {}),
-    bot_score: Math.round(fingerprint.bot.score * 100),
   };
 }
 

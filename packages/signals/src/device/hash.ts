@@ -24,14 +24,6 @@ function bytesToBase64Url(bytes: Uint8Array): string {
   return output;
 }
 
-function bytesToHex(bytes: Uint8Array): string {
-  let output = "";
-  for (let i = 0; i < bytes.length; i++) {
-    output += bytes[i].toString(16).padStart(2, "0");
-  }
-  return output;
-}
-
 function toBytes(input: string | Uint8Array): Uint8Array {
   if (typeof input === "string") {
     return new TextEncoder().encode(input);
@@ -52,14 +44,6 @@ async function sha256Bytes(input: string | Uint8Array): Promise<Uint8Array> {
   view.set(bytes);
   const digest = await crypto.subtle.digest("SHA-256", view);
   return new Uint8Array(digest);
-}
-
-async function sha256Hex(input: string | Uint8Array): Promise<string> {
-  return bytesToHex(await sha256Bytes(input));
-}
-
-async function sha256Base64Url(input: string | Uint8Array): Promise<string> {
-  return bytesToBase64Url(await sha256Bytes(input));
 }
 
 // SHA-256 truncated to the leading 128 bits, base64url-encoded (22 chars).
@@ -88,13 +72,4 @@ function randomBase64Url(byteLength: number): string {
   return bytesToBase64Url(randomBytes(byteLength));
 }
 
-export {
-  bytesToBase64Url,
-  bytesToHex,
-  randomBase64Url,
-  randomBytes,
-  sha256_128,
-  sha256Base64Url,
-  sha256Bytes,
-  sha256Hex,
-};
+export { bytesToBase64Url, randomBase64Url, sha256_128, sha256Bytes };

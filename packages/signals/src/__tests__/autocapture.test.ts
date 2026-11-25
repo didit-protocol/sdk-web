@@ -4,7 +4,7 @@ import { buildEventRequestBody } from "../events";
 import type { DiditEvent, SubmitEventOptions } from "../types";
 
 const submitEvent = jest.fn<(options: SubmitEventOptions) => string>();
-const fingerprint = { persistentId: "pid-1", compositeHash: "hash-1", bot: { score: 0.9, flags: ["webdriver"] } };
+const fingerprint = { persistentId: "pid-1", compositeHash: "hash-1" };
 
 jest.unstable_mockModule("@didit-protocol/signals", () => ({
   submitEvent,
@@ -276,8 +276,6 @@ describe("behaviour", () => {
       // Dispatched by a script, as these are: a person's input is trusted.
       untrusted_actions: 6,
       pointer_entropy: 0,
-      bot_score: 90,
-      bot_flags: "webdriver",
     });
   });
 
@@ -396,6 +394,6 @@ describe("what goes on the wire", () => {
   });
 
   it("gives the device identifiers for an event the integrator's backend sends itself", async () => {
-    expect(await getDeviceContext()).toEqual({ persistent_device_id: "pid-1", fingerprint: "hash-1", bot_score: 90 });
+    expect(await getDeviceContext()).toEqual({ persistent_device_id: "pid-1", fingerprint: "hash-1" });
   });
 });

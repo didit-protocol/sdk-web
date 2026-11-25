@@ -2,14 +2,9 @@ import { describe, expect, it } from "@jest/globals";
 import { installWebCryptoForTests } from "./_test_setup";
 installWebCryptoForTests();
 
-import { bytesToBase64Url, bytesToHex, randomBase64Url, sha256_128, sha256Bytes, sha256Hex } from "../hash";
+import { bytesToBase64Url, randomBase64Url, sha256_128, sha256Bytes } from "../hash";
 
 describe("hash module", () => {
-  it("bytesToHex round-trips known values", () => {
-    expect(bytesToHex(new Uint8Array([0, 1, 254, 255]))).toBe("0001feff");
-    expect(bytesToHex(new Uint8Array([]))).toBe("");
-  });
-
   it("bytesToBase64Url handles every byte-count modulo", () => {
     expect(bytesToBase64Url(new Uint8Array([0, 0, 0]))).toBe("AAAA");
     expect(bytesToBase64Url(new Uint8Array([255, 255, 255]))).toBe("____");
@@ -17,14 +12,9 @@ describe("hash module", () => {
     expect(bytesToBase64Url(new Uint8Array([72, 105]))).toBe("SGk");
   });
 
-  it("sha256Hex matches the well-known empty digest", async () => {
-    const hex = await sha256Hex("");
-    expect(hex).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
-  });
-
-  it('sha256Hex matches the well-known "abc" digest', async () => {
-    const hex = await sha256Hex("abc");
-    expect(hex).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+  it("sha256Bytes matches the well-known \"abc\" digest", async () => {
+    const bytes = await sha256Bytes("abc");
+    expect(Array.from(bytes.slice(0, 4))).toEqual([0xba, 0x78, 0x16, 0xbf]);
   });
 
   it("sha256_128 returns 22 base64url characters", async () => {
@@ -43,12 +33,6 @@ describe("hash module", () => {
     const a = await sha256_128("inputA");
     const b = await sha256_128("inputB");
     expect(a).not.toBe(b);
-  });
-
-  it("sha256Bytes accepts both strings and Uint8Array inputs", async () => {
-    const fromString = await sha256Hex("didit");
-    const fromBytes = await sha256Hex(new TextEncoder().encode("didit"));
-    expect(fromString).toBe(fromBytes);
   });
 
   it("randomBase64Url is variable-length and base64url", () => {

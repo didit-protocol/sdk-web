@@ -2,8 +2,8 @@ export { submitEvent, flush, configureEvents, DiditEventError, DEFAULT_EVENTS_BA
 export {
   getDeviceFingerprintPayload,
   buildFingerprintHeaders,
-  getStoredDeviceId,
-  setDeviceSignalsProvider
+  getSignalsEvidence,
+  getStoredDeviceId
 } from "./fingerprint";
 
 export type {
@@ -18,4 +18,3 @@ export type {
   DeviceFingerprintSignals,
   DeviceFingerprintNavigatorSignals
 } from "./types";
-export type { DeviceSignalsProvider } from "./fingerprint";
