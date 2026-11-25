@@ -84,6 +84,27 @@ function indexedDbHolds(page, id) {
   }, id);
 }
 
+/**
+ * Whether an entry this test puts in Cache storage is still there on the next page. A browser
+ * session that keeps no data on disk can drop it (the test build of WebKit does, for any cache a
+ * page makes): the id has then nowhere to last, and there is nothing to bring back.
+ */
+async function cacheStorageLasts(page) {
+  await open(page);
+  const made = await page.evaluate(async () => {
+    if (!("caches" in window)) return false;
+    await (await caches.open("e2e-probe")).put("/e2e-probe", new Response("probe"));
+    return true;
+  });
+  if (!made) return false;
+  await open(page);
+  return page.evaluate(async () => {
+    const lasted = Boolean(await (await caches.open("e2e-probe")).match("/e2e-probe"));
+    await caches.delete("e2e-probe");
+    return lasted;
+  });
+}
+
 const clearPageStores = (page) =>
   page.evaluate(() => {
     localStorage.removeItem("didit-pid-v1");
@@ -189,9 +210,9 @@ test.describe("with durableDeviceId: the id is also kept in IndexedDB and Cache 
   });
 
   test("Cache storage alone brings the id back after cookies, localStorage and IndexedDB were cleared", async ({ page }) => {
+    test.skip(!(await cacheStorageLasts(page)), "this browser session keeps no Cache storage entry from one page to the next");
     await open(page, DURABLE);
     const known = await settledId(page);
-    test.skip((await cacheHolds(page, known)) === null, "this browser gives the page no Cache storage");
     // The collector writes the slower stores after it has answered.
     await expect.poll(() => cacheHolds(page, known), { timeout: 5000 }).toBe(true);
 
