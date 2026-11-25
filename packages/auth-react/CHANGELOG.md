@@ -2,7 +2,9 @@
 
 All notable changes to `@didit-protocol/auth-react` are documented in this file.
 
-## [Unreleased]
+## [0.3.0] - 2026-11-25
+
+Released with `@didit-protocol/auth` 0.3.0.
 
 ### Changed
 
