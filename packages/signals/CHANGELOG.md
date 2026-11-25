@@ -2,6 +2,21 @@
 
 All notable changes to `@didit-protocol/signals` will be documented in this file.
 
+## [0.3.0] - 2026-11-25
+
+### Added
+- `getSignalsEvidence()`: the evidence text of the page (facts about how it is driven, as compact JSON), for a request your own backend sends to Didit on its behalf. `getSignalsEvidence({ wait: false })` never waits for the collector: it resolves to the evidence if the collector has finished, else to `null`.
+- `getDeviceFingerprintPayload({ tier: "lite" })`: the lite payload at once, with the same stored id and composite hash on every call, without loading the collector.
+- The full payload carries `evidence`.
+
+### Changed
+- The full device fingerprint is the default. It comes from a collector shipped with the package as one built file (`dist/collector.mjs`, about 13.5 KB gzipped) that the core loads the first time something is sent. A request waits for it for at most 2 seconds and otherwise goes out with the lite payload.
+- The page sends facts and Didit's servers decide the automation score. The payload has no `bot` member and no request carries `X-Didit-FP-Bot-Score`.
+- The script-tag build contains the collector and is about 19.3 KB minified and gzipped.
+
+### Removed
+- The `@didit-protocol/signals/device` entry (`enableDeviceIntelligence()`, `getFingerprintPayload()`), `setDeviceSignalsProvider()` and the `DeviceSignalsProvider` type. The full fingerprint is the default now, so there is nothing to enable.
+
 ## [0.2.0] - 2026-11-12
 
 ### Added
