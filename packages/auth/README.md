@@ -242,7 +242,9 @@ if (result.status === "approved") location.assign(result.redirectTo);
 ## Device signals
 
 Auth requests carry the device signals of `@didit-protocol/signals`: a
-persistent device id, a fingerprint hash and the webview kind.
+persistent device id, a fingerprint hash and the webview kind, and, from
+version 0.3.0, the device evidence (`X-Didit-Signals`): what the page read
+about the browser that runs it, such as whether an automation tool drives it.
 They are sent by default (`deviceSignals: "auto"`) to your application's Didit
 origin, which accepts them from the origins you registered as allowed origins.
 Your application's bot protection reads them, so leave them on. `"always"` is

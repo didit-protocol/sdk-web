@@ -82,7 +82,7 @@ function cors(request, headers) {
       // What the Didit API answers: the device headers of @didit-protocol/signals are allowed, so
       // the browser lets the client send them to another origin.
       "Access-Control-Allow-Headers":
-        "Authorization, Content-Type, X-Didit-PID, X-Didit-FP-Hash, X-Didit-FP-V2, X-Didit-FP-Webview, X-Didit-FP-Bot-Score",
+        "Authorization, Content-Type, X-Didit-PID, X-Didit-FP-Hash, X-Didit-FP-V2, X-Didit-FP-Webview, X-Didit-FP-Bot-Score, X-Didit-Signals",
       "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
       Vary: "Origin"
     });
