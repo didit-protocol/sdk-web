@@ -103,12 +103,17 @@ function startCollection(): Promise<DeviceFingerprintPayload | null> {
   return collecting;
 }
 
+/** Starts the collector's collection, or joins the one under way, and never waits for it. */
+function beginCollection(): Promise<DeviceFingerprintPayload | null> {
+  // The lite payload goes first: it stores the device id before the collector starts.
+  ensureLitePayload().catch(() => undefined);
+  return startCollection();
+}
+
 /** The collector's payload if it arrives within COLLECTOR_WAIT_MS, else null. Never rejects. */
 function waitForCollector(): Promise<DeviceFingerprintPayload | null> {
   if (collectorPayload) return Promise.resolve(collectorPayload);
-  // The lite payload goes first: it stores the device id before the collector starts.
-  ensureLitePayload().catch(() => undefined);
-  const collection = startCollection();
+  const collection = beginCollection();
 
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(null), COLLECTOR_WAIT_MS);
@@ -125,10 +130,16 @@ function waitForCollector(): Promise<DeviceFingerprintPayload | null> {
  * environment (SSR, Node, workers) so callers degrade to a fingerprint-less request instead of
  * sending junk signals. Never intended to throw into the submit path: callers still guard with
  * .catch(() => null).
+ *
+ * `{ tier: "lite" }` answers at once with the lite payload and never loads or waits for the
+ * collector. Its id and hash are the same on every call, so it suits a request that only has to
+ * say which device it comes from and must not be held up.
  */
-export async function getDeviceFingerprintPayload(): Promise<DeviceFingerprintPayload | null> {
+export async function getDeviceFingerprintPayload(options?: {
+  tier?: "lite";
+}): Promise<DeviceFingerprintPayload | null> {
   if (!isBrowserEnvironment()) return null;
-  const full = await waitForCollector();
+  const full = options?.tier === "lite" ? null : await waitForCollector();
   return full ?? ensureLitePayload();
 }
 
@@ -152,12 +163,17 @@ export function getAvailableDeviceFingerprintPayload(): DeviceFingerprintPayload
  * to Didit (for example a sign-in your server forwards). Didit's servers read it and decide the
  * score. Waits for the collector for at most 2 seconds; null outside a browser, when the
  * collector is not there in time, or when it failed. Never rejects.
+ *
+ * `{ wait: false }` never waits: it answers with the evidence if the collector has finished, else
+ * with null, and lets the collector go on loading so a later call has it.
  */
-export async function getSignalsEvidence(): Promise<string | null> {
+export async function getSignalsEvidence(options?: { wait?: boolean }): Promise<string | null> {
   if (!isBrowserEnvironment()) return null;
   try {
-    if (!(await waitForCollector())) return null;
-    return getLoadedCollector()?.evidence() ?? null;
+    let collected = collectorPayload;
+    if (options?.wait === false) void beginCollection();
+    else collected = await waitForCollector();
+    return collected ? (getLoadedCollector()?.evidence() ?? null) : null;
   } catch {
     return null;
   }

@@ -115,7 +115,7 @@ Sends everything that is waiting. Never rejects: events that could not be sent a
 
 ### Device signals
 
-- `getDeviceFingerprintPayload(): Promise<DeviceFingerprintPayload | null>` collects the didit-fp-v2 fingerprint (`null` outside a browser).
+- `getDeviceFingerprintPayload(options?): Promise<DeviceFingerprintPayload | null>` collects the didit-fp-v2 fingerprint (`null` outside a browser).
 - `buildFingerprintHeaders(payload)` returns the matching `X-Didit-*` headers.
 - `getStoredDeviceId(): string | null` returns the stored id this page already keeps, or `null`. It never creates one.
 
@@ -131,6 +131,9 @@ If it is not there by then, or it is blocked or fails, the request goes out with
 Once the collector has finished, every later request carries its payload.
 Both kinds carry the same stored id, and the composite hash of the two differs for the same device because the full one covers more of it.
 
+`getDeviceFingerprintPayload({ tier: "lite" })` answers at once with the lite payload and never loads or waits for the collector.
+Its stored id and composite hash are the same on every call, so use it for a request that only has to say which device it comes from and must not be held up.
+
 The full payload carries `evidence`: facts about how the page was driven, as compact JSON text.
 The client sends facts only.
 Didit's servers read the evidence and decide the automation score; nothing is scored in the browser, and no request carries a score.
@@ -138,6 +141,7 @@ Didit's servers read the evidence and decide the automation score; nothing is sc
 - `getSignalsEvidence(): Promise<string | null>` returns the evidence text, for a request your own backend sends to Didit on behalf of this page.
   It waits for the collector for at most 2 seconds and resolves to `null` outside a browser, on timeout or when the collector failed.
   It never rejects.
+  `getSignalsEvidence({ wait: false })` never waits: it resolves to the evidence if the collector has finished, else to `null`, and lets the collector go on loading so a later call has it.
 
 The script-tag build (`dist/didit-signals.umd.min.js`) contains the collector, so it is one file of about 19.3 KB minified and gzipped.
 

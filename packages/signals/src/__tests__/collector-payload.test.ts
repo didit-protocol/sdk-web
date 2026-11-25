@@ -126,6 +126,38 @@ describe("getDeviceFingerprintPayload with the collector", () => {
   });
 });
 
+describe("getDeviceFingerprintPayload({ tier: \"lite\" })", () => {
+  it("answers at once with the lite payload and never loads the collector", async () => {
+    const fake = fakeCollector();
+    const load = jest.fn(async () => fake.collector);
+    setCollectorLoaderForTesting(load);
+
+    const payload = await getDeviceFingerprintPayload({ tier: "lite" });
+
+    expect(payload?.signals.tier).toBe("lite");
+    expect(payload?.persistentId).toBe(localStorage.getItem("didit-pid-v1"));
+    expect(payload?.compositeHash).toBeTruthy();
+    expect(load).not.toHaveBeenCalled();
+    expect(fake.collect).not.toHaveBeenCalled();
+  });
+
+  it("stays the lite payload, with the same id and hash, after the collector has collected", async () => {
+    const before = await getDeviceFingerprintPayload({ tier: "lite" });
+    const fake = fakeCollector();
+    setCollectorLoaderForTesting(async () => fake.collector);
+    const full = getDeviceFingerprintPayload();
+    await flushPromises();
+    fake.settle();
+    expect((await full)?.signals.tier).toBe("full");
+
+    const after = await getDeviceFingerprintPayload({ tier: "lite" });
+
+    expect(after?.signals.tier).toBe("lite");
+    expect([after?.persistentId, after?.compositeHash]).toEqual([before?.persistentId, before?.compositeHash]);
+    expect(after).not.toHaveProperty("evidence");
+  });
+});
+
 describe("getAvailableDeviceFingerprintPayload", () => {
   it("never waits and never starts a load", async () => {
     const loader = jest.fn(() => Promise.reject(new Error("must not load")));
@@ -179,6 +211,46 @@ describe("getSignalsEvidence", () => {
     jest.advanceTimersByTime(COLLECTOR_WAIT_MS);
 
     await expect(pending).resolves.toBeNull();
+  });
+
+  it("with wait: false answers at once with null, starts the collector, and has the evidence once it finished", async () => {
+    jest.useFakeTimers();
+    const fake = fakeCollector();
+    setCollectorLoaderForTesting(async () => fake.collector);
+
+    // No timer is advanced: an answer here did not wait for anything.
+    await expect(getSignalsEvidence({ wait: false })).resolves.toBeNull();
+    await flushPromises();
+    expect(fake.collect).toHaveBeenCalledTimes(1);
+    // Still collecting: still null, and the collection is not started twice.
+    await expect(getSignalsEvidence({ wait: false })).resolves.toBeNull();
+    await flushPromises();
+    expect(fake.collect).toHaveBeenCalledTimes(1);
+
+    fake.settle();
+    await flushPromises();
+
+    await expect(getSignalsEvidence({ wait: false })).resolves.toBe(FAKE_EVIDENCE);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it("with wait: false never rejects when the load fails or evidence() throws", async () => {
+    setCollectorLoaderForTesting(() => Promise.reject(new Error("blocked")));
+    await expect(getSignalsEvidence({ wait: false })).resolves.toBeNull();
+    await flushPromises();
+    await expect(getSignalsEvidence({ wait: false })).resolves.toBeNull();
+
+    resetDeviceFingerprintForTesting();
+    const broken = fakeCollector();
+    broken.collector.evidence = () => {
+      throw new Error("boom");
+    };
+    setCollectorLoaderForTesting(async () => broken.collector);
+    await getSignalsEvidence({ wait: false });
+    await flushPromises();
+    broken.settle();
+    await flushPromises();
+    await expect(getSignalsEvidence({ wait: false })).resolves.toBeNull();
   });
 
   it("gives null, and never rejects, when the load fails, collect() fails or evidence() throws", async () => {
