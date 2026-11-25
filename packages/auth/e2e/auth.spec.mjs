@@ -67,7 +67,14 @@ const RESET_INPUT = fixture("password-reset").exchanges.find(({ request }) => re
 
 /** The device evidence a request carried: facts the page read, as compact JSON. */
 function expectDeviceEvidence(entry) {
-  const evidence = JSON.parse(entry.headers["x-didit-signals"]);
+  // A parse error quotes the text it could not read: it is caught here, so a failure says only that.
+  let evidence = null;
+  try {
+    evidence = JSON.parse(entry.headers["x-didit-signals"]);
+  } catch {
+    // Reported by the assertion below.
+  }
+  expect(evidence !== null && typeof evidence === "object").toBe(true);
   expect([evidence.v, evidence.p]).toEqual([2, "web"]);
   expect(typeof evidence.cv).toBe("string");
   expect(entry.headers["x-didit-signals"].length).toBeLessThanOrEqual(1024);

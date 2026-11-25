@@ -27,7 +27,8 @@ test("an event from the built package carries the collector's evidence and no bo
   });
 
   expect((await collectorFetched).ok()).toBe(true);
-  expect(posted).toHaveLength(1);
+  // The count alone: a failure must not print the requests, which carry this browser's fingerprint.
+  expect(posted.length).toBe(1);
   const { headers, body } = posted[0];
   expect(typeof body.fingerprint_v2.evidence).toBe("string");
   expect(body.fingerprint_v2.evidence.startsWith('{"v":2,"p":"web"')).toBe(true);
@@ -35,5 +36,7 @@ test("an event from the built package carries the collector's evidence and no bo
   // Booleans, never the values: a failure here must not print this browser's fingerprint or ids.
   expect("bot" in body.fingerprint_v2).toBe(false);
   expect("x-didit-fp-bot-score" in headers).toBe(false);
-  expect(headers["x-didit-pid"] === body.fingerprint_v2.persistentId).toBe(true);
+  // There is an id, and the header and the payload carry the same one.
+  const deviceId = body.fingerprint_v2.persistentId;
+  expect(typeof deviceId === "string" && deviceId.length > 0 && headers["x-didit-pid"] === deviceId).toBe(true);
 });
