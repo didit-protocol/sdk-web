@@ -1,6 +1,6 @@
 // The only module that touches @didit-protocol/signals. Auth requests carry the
 // same device headers as the verification flow (persistent device id,
-// fingerprint hash, webview kind and bot score), so every sign-in event is
+// fingerprint hash and webview kind), so every sign-in event is
 // tied to the device that made it.
 import { buildFingerprintHeaders, getDeviceFingerprintPayload } from "@didit-protocol/signals";
 

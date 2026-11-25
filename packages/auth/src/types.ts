@@ -24,7 +24,7 @@ export interface DiditAuthOptions {
   language?: DiditAuthLanguage;
   /**
    * Device signals on auth requests: a persistent device id, a fingerprint hash
-   * and a bot score, which the application's bot protection reads. "auto" (the
+   * and the webview kind, which the application's bot protection reads. "auto" (the
    * default) sends them to the application's Didit origin; "always" is the same
    * and is kept for compatibility; "off" never sends them.
    */

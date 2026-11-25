@@ -130,11 +130,6 @@ test("signs in on the hosted page and completes on the redirect page", async ({ 
     expect(deviceHeaders(call)).toEqual(expect.arrayContaining(["x-didit-fp-v2", "x-didit-pid", "x-didit-fp-hash"]));
     expect(call.headers["x-didit-pid"]).toBe(await page.evaluate(() => localStorage.getItem("didit-pid-v1")));
   }
-  // This browser is driven by a test runner, and the bot score says so: 0.8 and above is what the
-  // application's bots policy matches.
-  if (await page.evaluate(() => navigator.webdriver === true)) {
-    expect(calls.map((call) => call.headers["x-didit-fp-bot-score"])).toEqual(["0.90", "0.90"]);
-  }
 });
 
 test("sends no device signals when they are turned off", async ({ page, request }) => {
