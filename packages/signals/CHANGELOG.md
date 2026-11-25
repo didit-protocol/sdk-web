@@ -11,12 +11,12 @@ All notable changes to `@didit-protocol/signals` will be documented in this file
 - The full payload carries `evidence`.
 
 ### Changed
-- The full device fingerprint is the default. It comes from a collector shipped with the package as one built file (`dist/collector.mjs`, about 13.3 KB gzipped) that the core loads the first time something is sent. A request waits for its fingerprint for at most 2 seconds and otherwise goes out with the lite payload, without the composite hash if that is not there either.
+- The full device fingerprint is the default. It comes from a collector shipped with the package as one built file (`dist/collector.mjs`, about 13.6 KB gzipped) that the core loads the first time something is sent. A request waits for its fingerprint for at most 2 seconds and otherwise goes out with the lite payload, without the composite hash if that is not there either.
 - One device has one stored id. The lite payload names the device first and makes up an id when `localStorage` and the cookie are empty. The collector then reads every store: an id one of them still holds is the device's id and is written back, and the device is not reported as new; where there is none, both payloads report the made-up id as created. Before, the lite payload's new id could outvote the id a slower store still held.
 - The lite payload reports an iOS web view that names no app as `generic-wv`, as the full payload does, so `X-Didit-FP-Webview` is the same before and after the collector has loaded. Its composite hash does not change.
 - `flush()` with no event waiting sends nothing and no longer collects the device.
 - The page sends facts and Didit's servers decide the automation score. The payload has no `bot` member and no request carries `X-Didit-FP-Bot-Score`.
-- The script-tag build contains the collector and is about 18.8 KB minified and gzipped.
+- The script-tag build contains the collector and is about 19.1 KB minified and gzipped.
 
 ### Removed
 - The `@didit-protocol/signals/device` entry (`enableDeviceIntelligence()`, `getFingerprintPayload()`), `setDeviceSignalsProvider()` and the `DeviceSignalsProvider` type. The full fingerprint is the default now, so there is nothing to enable.

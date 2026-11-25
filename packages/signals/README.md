@@ -4,7 +4,7 @@ Didit device signals and end-user event monitoring for the browser, in under 6 K
 
 - **`submitEvent`** sends sign-ups, logins, failed logins, logouts and any other end-user event to Didit's [event monitoring](https://docs.didit.me/transaction-monitoring/events), tied to the same person as their verifications and transactions.
 - **Device signals**: the full didit-fp-v2 device fingerprint and the automation evidence are attached to every batch.
-  They come from a separate small file (about 13.3 KB gzipped) that the core loads after itself, so the core stays under 6 KB.
+  They come from a separate small file (about 13.6 KB gzipped) that the core loads after itself, so the core stays under 6 KB.
   Page exit uses what is available if the file has not finished.
 - **`@didit-protocol/signals/autocapture`** (optional, about 3 KB more) sends page views, declared actions and interaction telemetry without a `submitEvent` call for each.
 - Works alone or together with the other Didit SDKs: [`@didit-protocol/sdk-web`](https://www.npmjs.com/package/@didit-protocol/sdk-web) depends on this package and re-exports it, so an app that uses both shares one event queue per module format. Standalone CDN and script-tag builds each carry their own queue.
@@ -168,7 +168,7 @@ Didit's servers read the evidence and decide the automation score; nothing is sc
   It never rejects.
   `getSignalsEvidence({ wait: false })` never waits: it resolves to the evidence if the collector has finished, else to `null`, and lets the collector go on loading so a later call has it.
 
-The script-tag build (`dist/didit-signals.umd.min.js`) contains the collector, so it is one file of about 18.8 KB minified and gzipped.
+The script-tag build (`dist/didit-signals.umd.min.js`) contains the collector, so it is one file of about 19.1 KB minified and gzipped.
 
 ## Automatic capture: `@didit-protocol/signals/autocapture`
 
