@@ -55,31 +55,22 @@ function classifyByHostMarkers(userAgent: string): WebViewSignals {
   return { kind: "browser", hostAppVersion: null, isStandaloneBrowser: true };
 }
 
-const IOS_DEVICE = /iPhone|iPad|iPod/;
-
-/**
- * An iOS web view that names no host app, recognised by what it lacks: every standalone iOS browser
- * ends its user agent with a `Safari/` token, a bare WKWebView does not.
- */
-function isBareIosWebView(userAgent: string): boolean {
-  return (
-    classifyByHostMarkers(userAgent).kind === "browser" &&
-    IOS_DEVICE.test(userAgent) &&
-    userAgent.includes("AppleWebKit") &&
-    !userAgent.includes("Safari/")
-  );
-}
-
 /**
  * The kind of browser or in-app web view the page runs in. The collector classifies the same way,
  * so a page reports one kind before and after the collector has loaded (the two are compared in
  * e2e/webview-kind.spec.mjs).
+ *
+ * An iOS web view that names no host app is recognised by what it lacks: every standalone iOS
+ * browser ends its user agent with a `Safari/` token, a bare WKWebView does not.
  */
 function detectWebViewContext(userAgent: string): WebViewSignals {
-  if (isBareIosWebView(userAgent || "")) {
-    return { kind: "generic-wv", hostAppVersion: null, isStandaloneBrowser: false };
-  }
-  return classifyByHostMarkers(userAgent);
+  const byMarkers = classifyByHostMarkers(userAgent);
+  return byMarkers.isStandaloneBrowser &&
+    /iPhone|iPad|iPod/.test(userAgent) &&
+    userAgent.includes("AppleWebKit") &&
+    !userAgent.includes("Safari/")
+    ? { kind: "generic-wv", hostAppVersion: null, isStandaloneBrowser: false }
+    : byMarkers;
 }
 
 /**

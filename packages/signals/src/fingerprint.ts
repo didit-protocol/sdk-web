@@ -100,7 +100,6 @@ function ensureLite(): void {
       // An empty hash is omitted from headers, never replaced with a different identity.
       compositeHash: "",
     };
-    if (collectorPayload) adoptIdentity(collectorPayload);
   }
   if (liteIsHashed || hashing) return;
 
@@ -135,16 +134,10 @@ function ensureLite(): void {
  */
 function startCollection(): void {
   if (collectorPayload || collecting) return;
+  // The lite payload goes first, so the collector can be told the id this page made up.
+  ensureLite();
+  const madeUpId = lite?.persistentIdWasCreated ? lite.persistentId : null;
   const collection = (collecting = {});
-
-  let madeUpId: string | null = null;
-  try {
-    // The lite payload goes first, so the collector can be told the id this page made up.
-    ensureLite();
-    if (lite?.persistentIdWasCreated) madeUpId = lite.persistentId;
-  } catch {
-    // Without a lite payload the collector names the device on its own.
-  }
 
   loadCollector()
     .then((collector) =>
