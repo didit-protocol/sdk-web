@@ -32,6 +32,57 @@ async function openApp(page, { url = APP, scenario, skip = 0, create = true } = 
 
 const deviceHeaders = (entry) => Object.keys(entry.headers ?? {}).filter((name) => name.startsWith("x-didit-"));
 
+// The device headers the recorded API allows from another origin, as the Didit API does. A request
+// with any other header is refused by the browser before it is sent.
+const PERMITTED_DEVICE_HEADERS = ["x-didit-fp-hash", "x-didit-fp-v2", "x-didit-fp-webview", "x-didit-pid", "x-didit-signals"];
+
+/** Which device a request came from: its identifiers, nothing the API does not permit, and never a score. */
+function expectDeviceIdentity(entry, { hash = true } = {}) {
+  // The hash of the fingerprint is computed in the background. A request that does not wait can
+  // leave before it exists, so only a caller that knows it had time asks for it.
+  const required = hash ? ["x-didit-fp-v2", "x-didit-pid", "x-didit-fp-hash"] : ["x-didit-fp-v2", "x-didit-pid"];
+  expect(deviceHeaders(entry)).toEqual(expect.arrayContaining(required));
+  expect(deviceHeaders(entry).filter((name) => !PERMITTED_DEVICE_HEADERS.includes(name))).toEqual([]);
+  expect(entry.headers["x-didit-fp-bot-score"]).toBeUndefined();
+}
+
+/**
+ * Waits until the page's device collector is there, however long this browser needs. A step
+ * waits for it for two seconds at most, and a cold browser on a busy machine can need longer: the
+ * tests of what a request carries start with the collector loaded, and the waiting itself is
+ * tested with controlled timing in src/__tests__/device-evidence-timing.test.ts.
+ */
+async function collectorLoaded(page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const signals = await import("@didit-protocol/signals");
+          return (await signals.getSignalsEvidence({ wait: false })) !== null;
+        }),
+      { timeout: 30000 }
+    )
+    .toBe(true);
+}
+
+// What the recorded password reset was started with: the tests send the same input.
+const RESET_INPUT = fixture("password-reset").exchanges.find(({ request }) => request.path === "password-reset/start/").request.body;
+
+/** The device evidence a request carried: facts the page read, as compact JSON. */
+function expectDeviceEvidence(entry) {
+  // A parse error quotes the text it could not read: it is caught here, so a failure says only that.
+  let evidence = null;
+  try {
+    evidence = JSON.parse(entry.headers["x-didit-signals"]);
+  } catch {
+    // Reported by the assertion below.
+  }
+  expect(evidence !== null && typeof evidence === "object").toBe(true);
+  expect([evidence.v, evidence.p]).toEqual([2, "web"]);
+  expect(typeof evidence.cv).toBe("string");
+  expect(entry.headers["x-didit-signals"].length).toBeLessThanOrEqual(1024);
+}
+
 const storedTokens = (tab) => tab.evaluate((key) => JSON.parse(localStorage.getItem(key)), TOKENS);
 
 // Between holdOtherTabs() and deliverOtherTabs(), the tab does not see other tabs' writes to the stored
@@ -126,15 +177,48 @@ test("signs in on the hosted page and completes on the redirect page", async ({ 
   // The API allows the device headers across origins, so every call to it carries them by default.
   const calls = seen.filter((entry) => entry.headers);
   expect(calls.map(({ method, path }) => `${method} ${path}`)).toEqual(["POST token/", "GET session/"]);
-  for (const call of calls) {
-    expect(deviceHeaders(call)).toEqual(expect.arrayContaining(["x-didit-fp-v2", "x-didit-pid", "x-didit-fp-hash"]));
-    expect(call.headers["x-didit-pid"]).toBe(await page.evaluate(() => localStorage.getItem("didit-pid-v1")));
-  }
-  // This browser is driven by a test runner, and the bot score says so: 0.8 and above is what the
-  // application's bots policy matches.
-  if (await page.evaluate(() => navigator.webdriver === true)) {
-    expect(calls.map((call) => call.headers["x-didit-fp-bot-score"])).toEqual(["0.90", "0.90"]);
-  }
+  // Exchanging the code and reading the session run as the page loads: they say which device they
+  // come from at once, and wait for nothing, neither the device evidence nor the hash of the
+  // fingerprint. The hash is computed in the background, so either request may leave before it
+  // exists: neither is required to carry it.
+  const [exchange, sessionRead] = calls;
+  expectDeviceIdentity(exchange, { hash: false });
+  expectDeviceIdentity(sessionRead, { hash: false });
+  const storedId = await page.evaluate(() => localStorage.getItem("didit-pid-v1"));
+  // Booleans, never the values: a failure must not print this browser's id or fingerprint.
+  expect(calls.every((call) => call.headers["x-didit-pid"] === storedId)).toBe(true);
+  // A read that waits ends when the hash has been computed. From then on a read that does not wait
+  // carries it, and a request that left with a hash earlier left with this one.
+  const sentHashes = calls.map((call) => call.headers["x-didit-fp-hash"]).filter(Boolean);
+  const hash = await page.evaluate(async (sent) => {
+    const signals = await import("@didit-protocol/signals");
+    const waited = await signals.getDeviceFingerprintPayload({ tier: "lite" });
+    const later = await signals.getDeviceFingerprintPayload({ tier: "lite", wait: false });
+    const headers = signals.buildFingerprintHeaders(later);
+    return {
+      isThereOnceComputed: waited.compositeHash.length > 0,
+      isOnALaterRead: headers["X-Didit-FP-Hash"] === waited.compositeHash,
+      isTheOneSent: sent.every((value) => value === waited.compositeHash)
+    };
+  }, sentHashes);
+  expect(hash).toEqual({ isThereOnceComputed: true, isOnALaterRead: true, isTheOneSent: true });
+});
+
+test("a step of a sign-in carries the device evidence across origins, with only the headers the API permits", async ({ page, request }) => {
+  await loadRecording(request, "password-reset");
+  await openApp(page);
+  await collectorLoaded(page);
+
+  expect(await page.evaluate((input) => window.auth.password.requestReset({ email: input.email }), RESET_INPUT)).toEqual({
+    expiresIn: 1800
+  });
+  const [reset] = await requestsSeen(request);
+  expect(reset.mismatch).toBeUndefined();
+  expect(`${reset.method} ${reset.path}`).toBe("POST password-reset/start/");
+  expectDeviceIdentity(reset);
+  expectDeviceEvidence(reset);
+  // The device keeps the fingerprint it had before the collector loaded.
+  expect(deviceHeaders(reset)).not.toContain("x-didit-fp-legacy");
 });
 
 test("sends no device signals when they are turned off", async ({ page, request }) => {
@@ -389,6 +473,7 @@ test("with storage per tab, signing out in one tab leaves another tab's session 
 test("sends device signals when the page and the API share an origin", async ({ page, request }) => {
   await loadRecording(request, "password-reset");
   await openApp(page, { url: `${RECORDED_API}/e2e/fixtures/app.html` });
+  await collectorLoaded(page);
 
   expect(await page.evaluate(() => window.auth.password.requestReset({ email: "person@example.com" }))).toEqual({ expiresIn: 1800 });
   const [reset] = await requestsSeen(request);
@@ -397,6 +482,8 @@ test("sends device signals when the page and the API share an origin", async ({ 
   expect(reset.headers["x-didit-pid"]).toMatch(/^[A-Za-z0-9_-]{20,32}$/);
   expect(reset.headers["x-didit-fp-hash"]).toBeTruthy();
   expect(await page.evaluate(() => localStorage.getItem("didit-pid-v1"))).toBe(reset.headers["x-didit-pid"]);
+  expectDeviceIdentity(reset);
+  expectDeviceEvidence(reset);
 });
 
 // A client that keeps the address it opens instead of leaving the page.

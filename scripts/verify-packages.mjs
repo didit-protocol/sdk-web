@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, posix, resolve } from "node:path";
 
 const root = process.cwd();
 const destination = await mkdtemp(join(tmpdir(), "signals-package-"));
@@ -35,11 +35,7 @@ const PUBLISHED_FILES = {
     "dist/autocapture.d.ts",
     "dist/autocapture.esm.js",
     "dist/autocapture.esm.js.map",
-    "dist/device.cjs",
-    "dist/device.cjs.map",
-    "dist/device.d.ts",
-    "dist/device.esm.js",
-    "dist/device.esm.js.map",
+    "dist/collector.mjs",
     "dist/didit-signals.cjs",
     "dist/didit-signals.cjs.map",
     "dist/didit-signals.esm.js",
@@ -70,7 +66,31 @@ function pack(cwd) {
   return join(destination, archive.filename);
 }
 
+/**
+ * The core loads the device collector from a relative path. That file must be in the tarball
+ * (a path that only exists in the working tree would break every install), and nothing may read
+ * the sync state of the vendored files at runtime.
+ */
+async function assertCollectorShips() {
+  const [archive] = JSON.parse(run("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], join(root, "packages/signals")));
+  const packed = new Set(archive.files.map(({ path }) => path));
+
+  for (const file of ["dist/didit-signals.esm.js", "dist/didit-signals.cjs"]) {
+    const code = await readFile(join(root, "packages/signals", file), "utf8");
+    const imported = [...code.matchAll(/import\(\s*["'](\.\/[^"']+)["']\s*\)/g)].map((match) => match[1]);
+
+    assert.deepEqual(imported, ["./collector.mjs"], `${file} must load the collector from one relative path`);
+    // An archive names its members with "/" on every system; `join` would write "\\" on Windows.
+    assert.ok(packed.has(posix.join("dist", imported[0])), `${file} imports ${imported[0]}, which npm pack does not include`);
+    assert.ok(!code.includes("SYNC-STATE"), `${file} reads the sync state at runtime`);
+  }
+  assert.ok(![...packed].some((path) => path.includes("SYNC-STATE")), "the sync state is published");
+  const umd = await readFile(join(root, "packages/signals/dist/didit-signals.umd.min.js"), "utf8");
+  assert.ok(!/import\(\s*["']\.\//.test(umd), "the script-tag build must contain the collector, not load it");
+}
+
 try {
+  await assertCollectorShips();
   const signals = pack(join(root, "packages/signals"));
   const sdk = pack(root);
   const auth = pack(join(root, "packages/auth"));
@@ -94,16 +114,11 @@ try {
     assert.equal(typeof sdk.shared.submitEvent, 'function');
     assert.equal(await signals.getDeviceFingerprintPayload(), null);
     // The other entries share the core they were installed with: one queue, one fingerprint source.
-    const device = await import('@didit-protocol/signals/device');
     const autocapture = await import('@didit-protocol/signals/autocapture');
-    assert.equal(typeof device.enableDeviceIntelligence, 'function');
-    assert.equal(typeof device.getFingerprintPayload, 'function');
-    assert.equal(device.COMPOSITE_HASH_VERSION, 4);
+    assert.equal(typeof signals.getSignalsEvidence, 'function');
+    assert.equal(await signals.getSignalsEvidence(), null);
     assert.equal(typeof autocapture.startAutocapture, 'function');
     assert.equal(autocapture.defaultSanitizePath('/users/48213/orders'), '/users/:id/orders');
-    device.enableDeviceIntelligence();
-    assert.equal(await signals.getDeviceFingerprintPayload(), null);
-    signals.setDeviceSignalsProvider(null);
   `]);
   run(process.execPath, ["--input-type=commonjs", "-e", `
     const assert = require('node:assert/strict');
@@ -112,7 +127,7 @@ try {
     assert.equal(web.submitEvent, signals.submitEvent);
     assert.equal(web.flush, signals.flush);
     assert.equal(typeof web.default.shared.submitEvent, 'function');
-    assert.equal(typeof require('@didit-protocol/signals/device').enableDeviceIntelligence, 'function');
+    assert.equal(typeof signals.getSignalsEvidence, 'function');
     assert.equal(typeof require('@didit-protocol/signals/autocapture').startAutocapture, 'function');
   `]);
   await writeFile(join(destination, "consumer.mts"), `
@@ -126,10 +141,10 @@ try {
     export const fingerprint: DeviceFingerprintPayload | null = null;
   `);
   await writeFile(join(destination, "signals-consumer.mts"), `
-    import { getFingerprintPayload, enableDeviceIntelligence, type FullDeviceFingerprintPayload } from '@didit-protocol/signals/device';
+    import { getDeviceFingerprintPayload, getSignalsEvidence, type DeviceFingerprintPayload } from '@didit-protocol/signals';
     import { startAutocapture, track, type AutocaptureOptions } from '@didit-protocol/signals/autocapture';
-    enableDeviceIntelligence({ budgetMs: 800 });
-    getFingerprintPayload().then((payload: FullDeviceFingerprintPayload) => payload.signals.webgl.unmaskedRenderer);
+    getDeviceFingerprintPayload().then((payload: DeviceFingerprintPayload | null) => payload?.evidence);
+    getSignalsEvidence().then((evidence: string | null) => evidence);
     const options: AutocaptureOptions = { monitoringToken: () => null, sanitizePath: (pathname) => pathname };
     const stop: () => void = startAutocapture(options);
     track('auth', 'password_forgot', { method: 'email' });
@@ -165,6 +180,16 @@ try {
     verifyToken('token', { publishableKey: 'pk_test_example' }).then((claims: DiditTokenClaims) => claims.sub);
   `);
   run(process.execPath, [resolve(root, "node_modules/typescript/bin/tsc"), "--noEmit", "--strict", "--module", "nodenext", "--target", "ES2020", "consumer.mts", "signals-consumer.mts", "auth-consumer.mts"]);
+  // Outside a browser the core must not load the collector at all: put a marker in the installed
+  // copy and call everything that could load it.
+  await writeFile(join(destination, "node_modules/@didit-protocol/signals/dist/collector.mjs"), "globalThis.__collectorLoaded = true;\nexport {};\n");
+  run(process.execPath, ["--input-type=module", "-e", `
+    import assert from 'node:assert/strict';
+    import * as signals from '@didit-protocol/signals';
+    assert.equal(await signals.getDeviceFingerprintPayload(), null);
+    assert.equal(await signals.getSignalsEvidence(), null);
+    assert.equal(globalThis.__collectorLoaded, undefined);
+  `]);
   const standalone = await readFile(join(root, "dist/didit-sdk.esm.js"), "utf8");
 
   assert.ok(!standalone.includes('from "@didit-protocol/signals"') && !standalone.includes("from '@didit-protocol/signals'"));

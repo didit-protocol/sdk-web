@@ -1,0 +1,10 @@
+{
+  "source": "didit-signals",
+  "kind": "web",
+  "version": "v0.2.2",
+  "commit": "b37a36e89cd8e5ad8aa5eb30648cd8d475536002",
+  "files": {
+    "collector.d.mts": "829cec354f492a14a29d64a888a3735f06979234651b88a1ed72c292361d52d7",
+    "collector.mjs": "72679a685c752052b264013711c77cb1649fe1ab60aa49dd4e655964d66b5aaa"
+  }
+}

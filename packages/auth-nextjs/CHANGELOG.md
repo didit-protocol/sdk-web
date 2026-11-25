@@ -2,6 +2,14 @@
 
 All notable changes to `@didit-protocol/auth-nextjs` are documented in this file.
 
+## [0.3.0] - 2026-11-25
+
+### Changed
+
+- Depends on `@didit-protocol/auth` 0.3.0 and `@didit-protocol/auth-react` 0.3.0: sign-in requests from your
+  pages carry device evidence instead of a bot score (see the changelog of `@didit-protocol/auth`). No change
+  of its own.
+
 ## [0.2.0] - 2026-11-12
 
 ### Fixed

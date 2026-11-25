@@ -49,12 +49,13 @@ describe("DiditSdk.shared.submitEvent", () => {
         "DiditTransactionError",
         "SDK_VERSION",
         "buildFingerprintHeaders",
+        "configureDevice",
         "configureEvents",
         "default",
         "flush",
         "getDeviceFingerprintPayload",
+        "getSignalsEvidence",
         "getStoredDeviceId",
-        "setDeviceSignalsProvider",
         "submitEvent"
       ].sort()
     );

@@ -1,6 +1,6 @@
 {
   "name": "@didit-protocol/signals",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Didit device signals and end-user event monitoring for the browser",
   "main": "dist/didit-signals.cjs",
   "module": "dist/didit-signals.esm.js",
@@ -11,11 +11,6 @@
       "import": "./dist/didit-signals.esm.js",
       "require": "./dist/didit-signals.cjs"
     },
-    "./device": {
-      "types": "./dist/device.d.ts",
-      "import": "./dist/device.esm.js",
-      "require": "./dist/device.cjs"
-    },
     "./autocapture": {
       "types": "./dist/autocapture.d.ts",
       "import": "./dist/autocapture.esm.js",
@@ -24,9 +19,6 @@
   },
   "typesVersions": {
     "*": {
-      "device": [
-        "dist/device.d.ts"
-      ],
       "autocapture": [
         "dist/autocapture.d.ts"
       ]

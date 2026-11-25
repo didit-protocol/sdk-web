@@ -7,7 +7,8 @@
   <body>
     <script type="module">
       // ?build=esm (default) loads the sdk-web ES module build, ?build=umd its
-      // script-tag build and ?build=signals-umd the @didit-protocol/signals one.
+      // script-tag build, ?build=signals-umd the @didit-protocol/signals one and
+      // ?build=signals-esm its package ES module, which loads dist/collector.mjs on demand.
       const build = new URLSearchParams(window.location.search).get("build") ?? "esm";
 
       function loadScript(src) {
@@ -25,6 +26,7 @@
           const sdk = await import("../../dist/didit-sdk.esm.js");
           return { ...sdk, submitEvent: (options) => sdk.DiditSdk.shared.submitEvent(options) };
         }
+        if (build === "signals-esm") return import("../../packages/signals/dist/didit-signals.esm.js");
         if (build === "umd") {
           await loadScript("../../dist/didit-sdk.umd.min.js");
           return { ...window.DiditSDK, submitEvent: (options) => window.DiditSDK.DiditSdk.shared.submitEvent(options) };

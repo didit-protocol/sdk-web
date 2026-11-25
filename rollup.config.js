@@ -3,6 +3,7 @@ import typescript from '@rollup/plugin-typescript';
 import terser from '@rollup/plugin-terser';
 import dts from 'rollup-plugin-dts';
 import { readFileSync } from 'fs';
+import { collectorInlined } from './packages/signals/rollup-collector.js';
 
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'));
 const versionPlaceholder = '__SDK_PACKAGE_VERSION__';
@@ -26,7 +27,8 @@ function injectPackageVersion(version) {
   };
 }
 
-// Package imports share signals; existing browser URLs remain self-contained.
+// Package imports share signals; existing browser URLs remain self-contained, the device
+// collector of signals included.
 const external = ['@didit-protocol/signals'];
 
 const banner = `/**
@@ -58,8 +60,9 @@ export default [
   // Standalone ESM build, including existing CDN imports without an import map.
   {
     input: 'src/index.ts',
-    output: { file: 'dist/didit-sdk.esm.js', format: 'esm', banner, sourcemap: true },
+    output: { file: 'dist/didit-sdk.esm.js', format: 'esm', banner, sourcemap: true, inlineDynamicImports: true },
     plugins: [
+      collectorInlined(),
       injectPackageVersion(packageJson.version),
       resolve(),
       typescript({ tsconfig: './tsconfig.json', declaration: false }),
@@ -95,8 +98,10 @@ export default [
       banner,
       sourcemap: true,
       exports: 'named',
+      inlineDynamicImports: true,
     },
     plugins: [
+      collectorInlined(),
       injectPackageVersion(packageJson.version),
       resolve(),
       typescript({
@@ -115,8 +120,10 @@ export default [
       banner,
       sourcemap: true,
       exports: 'named',
+      inlineDynamicImports: true,
     },
     plugins: [
+      collectorInlined(),
       injectPackageVersion(packageJson.version),
       resolve(),
       typescript({

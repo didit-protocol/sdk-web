@@ -28,8 +28,12 @@ const TYPES = { ".html": "text/html; charset=utf-8", ".mjs": "text/javascript; c
 const TRANSPILED = {
   "/seeded.mjs": `${PACKAGE}/src/__tests__/helpers/seeded-random.ts`
 };
-// The fixture pages' import map resolves @didit-protocol/signals here.
-const SIGNALS = { "/signals.mjs": `${REPOSITORY}/packages/signals/dist/didit-signals.esm.js` };
+// The fixture pages' import map resolves @didit-protocol/signals here. The package loads its device
+// collector from the file beside it (`./collector.mjs`), as it does from its own dist directory.
+const SIGNALS = {
+  "/signals.mjs": `${REPOSITORY}/packages/signals/dist/didit-signals.esm.js`,
+  "/collector.mjs": `${REPOSITORY}/packages/signals/dist/collector.mjs`
+};
 
 function send(response, status, body, headers = {}) {
   response.writeHead(status, { "Cache-Control": "no-store", ...headers });
@@ -82,7 +86,7 @@ function cors(request, headers) {
       // What the Didit API answers: the device headers of @didit-protocol/signals are allowed, so
       // the browser lets the client send them to another origin.
       "Access-Control-Allow-Headers":
-        "Authorization, Content-Type, X-Didit-PID, X-Didit-FP-Hash, X-Didit-FP-V2, X-Didit-FP-Webview, X-Didit-FP-Bot-Score",
+        "Authorization, Content-Type, X-Didit-PID, X-Didit-FP-Hash, X-Didit-FP-V2, X-Didit-FP-Webview, X-Didit-FP-Bot-Score, X-Didit-Signals",
       "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
       Vary: "Origin"
     });

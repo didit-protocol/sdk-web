@@ -74,6 +74,9 @@ async function createSimulatedBuild() {
   await cp(resolve(ROOT, "src"), join(root, "src"), { recursive: true });
   await cp(resolve(ROOT, "rollup.config.js"), join(root, "rollup.config.js"));
   await cp(resolve(ROOT, "tsconfig.json"), join(root, "tsconfig.json"));
+  // The self-contained builds inline the device collector through the signals package's rollup plugin.
+  await cp(resolve(ROOT, "packages/signals/rollup-collector.js"), join(root, "packages/signals/rollup-collector.js"));
+  await cp(resolve(ROOT, "packages/signals/vendor"), join(root, "packages/signals/vendor"), { recursive: true });
   await writeFile(join(root, "package.json"), `${JSON.stringify(packageJson, null, 2)}\n`);
   await symlink(resolve(ROOT, "node_modules"), join(root, "node_modules"), "dir");
 

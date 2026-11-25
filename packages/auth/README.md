@@ -242,17 +242,34 @@ if (result.status === "approved") location.assign(result.redirectTo);
 ## Device signals
 
 Auth requests carry the device signals of `@didit-protocol/signals`: a
-persistent device id, a fingerprint hash, the webview kind and a bot score.
+persistent device id, a fingerprint hash and the webview kind, and, from
+version 0.3.0, the device evidence (`X-Didit-Signals`): what the page read
+about the browser that runs it, such as whether an automation tool drives it.
 They are sent by default (`deviceSignals: "auto"`) to your application's Didit
 origin, which accepts them from the origins you registered as allowed origins.
 Your application's bot protection reads them, so leave them on. `"always"` is
 the same as `"auto"` and is kept for compatibility. Set `"off"` to never send
 them.
 
-The bot score is the strongest automation signal found: `navigator.webdriver`,
-or a headless or automation user agent. Browser tests that drive your own
-sign-in screens are automation too: run them against a Sandbox application
-whose `bots` policy is off or in log mode.
+Every request says which device it comes from at once, and that never delays
+it: the hash of the fingerprint is added as soon as it is computed, so the
+first request of a page that does not wait can go without it. The evidence
+comes from a small file the signals package loads beside
+itself the first time a request is made. A step of a sign-in (a password, a
+code, a passkey, a reset: a request made before there is a session) waits for
+it for at most 2 seconds. Nothing else waits: reading the session, signing out
+and refreshing tokens, and what a signed-in person does to their own account
+(adding a passkey or a second factor, a step-up, consenting to an agent) carry
+it once it is there. If the file is blocked or late the step goes out without
+it.
+
+To read the evidence, that file reads no canvas, no audio, no fonts and no
+graphics of the device, and it stores nothing. The device id is kept in
+`localStorage` and a cookie, and an id your visitor cleared is gone.
+
+The client sends no automation score: it sends facts and Didit's servers decide.
+Browser tests that drive your own sign-in screens are automation too: run them
+against a Sandbox application whose `bots` policy is off or in log mode.
 
 ## Server: verify access tokens
 

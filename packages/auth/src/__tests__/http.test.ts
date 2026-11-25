@@ -67,4 +67,39 @@ describe("createHttpClient", () => {
 
     await expect(request("session/")).rejects.toMatchObject({ code: "network_error", message: "Failed to fetch" });
   });
+
+  it("tells the header provider the method, the path and whether the request carries an access token, and sends what it answers", async () => {
+    const asked: [string, string, boolean][] = [];
+    const sent: Record<string, string>[] = [];
+    const request = createHttpClient(
+      "https://auth.example.com/auth/v2/authentication/x",
+      async (_input, init) => {
+        sent.push(init?.headers as Record<string, string>);
+        // The test environment has no Response: what the client reads of one is enough.
+        return { ok: true, status: 200, text: async () => "{}", headers: { get: () => null } } as unknown as Response;
+      },
+      async (method, path, authenticated) => {
+        asked.push([method, path, authenticated]);
+        return { "X-Test": `${method} ${path}` };
+      },
+    );
+
+    await request("session/", { token: "an-access-token" });
+    await request("password/", { body: {} });
+    await request("mfa/enroll/", { body: {}, token: "an-access-token" });
+    await request("session/", { method: "DELETE", token: "an-access-token" });
+
+    expect(asked).toEqual([
+      ["GET", "session/", true],
+      ["POST", "password/", false],
+      ["POST", "mfa/enroll/", true],
+      ["DELETE", "session/", true],
+    ]);
+    expect(sent.map((headers) => headers["X-Test"])).toEqual([
+      "GET session/",
+      "POST password/",
+      "POST mfa/enroll/",
+      "DELETE session/",
+    ]);
+  });
 });

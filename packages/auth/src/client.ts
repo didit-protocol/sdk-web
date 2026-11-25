@@ -1,4 +1,4 @@
-import { deviceHeaders, deviceSignalsEnabled } from "./device";
+import { deviceHeaders, deviceSignalsEnabled, waitsForEvidence } from "./device";
 import { codeChallenge, decodeText, randomString } from "./encoding";
 import { DiditAuthError } from "./errors";
 import { createHttpClient, type RequestOptions } from "./http";
@@ -218,8 +218,11 @@ export function createDiditAuth(options: DiditAuthOptions): DiditAuth {
   // tabs at the same moment cannot drop each other or bring back one already used.
   const pendingPrefix = `${storageKey}:pending:`;
   const signals = options.deviceSignals ?? "auto";
-  const request = createHttpClient(key.origin, options.fetch ?? ((input, init) => fetch(input, init)), () =>
-    deviceSignalsEnabled(signals) ? deviceHeaders() : Promise.resolve({})
+  const request = createHttpClient(
+    key.origin,
+    options.fetch ?? ((input, init) => fetch(input, init)),
+    (method, path, authenticated) =>
+      deviceSignalsEnabled(signals) ? deviceHeaders(waitsForEvidence(method, path, authenticated)) : Promise.resolve({})
   );
   const listeners = new Set<DiditAuthListener>();
   let tokenStore: DiditAuthStorage | null = null;

@@ -84,12 +84,18 @@ test.describe("submitEvent in a real browser", () => {
     const lane = laneFor(testInfo);
     await page.clock.install();
     await open(page, lane);
+    // Only this test moves the page's time from here on: an installed clock otherwise keeps running,
+    // and on a busy machine the real time between the submit and the check below was enough to
+    // reach the five seconds.
+    await page.clock.pauseAt(Date.now() + 1000);
 
     await submit(page, "timer");
     await page.clock.runFor(4900);
     expect(await received(request, lane)).toEqual([]);
 
     await page.clock.runFor(100);
+    // The five seconds have passed. Time runs on from here, so the send and what it waits for finish.
+    await page.clock.resume();
     await expect.poll(async () => (await received(request, lane)).length).toBe(1);
     expect((await received(request, lane))[0].body.events).toEqual(scenarios.timer.request.events);
   });

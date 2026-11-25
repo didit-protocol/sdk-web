@@ -4,7 +4,7 @@ import { type NavigatorSignals } from "./signals/navigator";
 /**
  * Which fields the composite hash reads. It travels inside `signals`, the part of the payload
  * Didit stores, so a stored hash can be told apart from one of an earlier version. A change to
- * `canonicalNavigator` or to the full canonical form changes every device's hash once: raise it.
+ * `canonicalNavigator` changes every device's hash once: raise it.
  */
 const COMPOSITE_HASH_VERSION = 4;
 
@@ -66,8 +66,7 @@ function isPlaceholderBrand(name: string): boolean {
  * the same on every visit. No version numbers (a browser update is not another device) and the
  * screen shorter side first (a phone turned on its side is not another device).
  *
- * The light fingerprint hashes this and the webview kind; the full one adds the graphics, font,
- * math and API families (`canonicalize` in compose.ts). Both go through this one function.
+ * The lite fingerprint hashes this and the webview kind.
  */
 function canonicalNavigator(navigator: NavigatorSignals) {
   const screen = [navigator.screenWidth, navigator.screenHeight].sort((a, b) => (a ?? 0) - (b ?? 0));
@@ -101,4 +100,4 @@ async function compositeHashOf(canonical: unknown): Promise<string> {
   }
 }
 
-export { brandNames, canonicalNavigator, COMPOSITE_HASH_VERSION, compositeHashOf, stableStringify, userAgentWithoutVersions };
+export { canonicalNavigator, COMPOSITE_HASH_VERSION, compositeHashOf };

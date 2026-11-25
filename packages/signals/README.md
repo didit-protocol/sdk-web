@@ -1,10 +1,12 @@
 # @didit-protocol/signals
 
-Didit device signals and end-user event monitoring for the browser, in under 6 KB minified and gzipped.
+Didit device signals and end-user event monitoring for the browser, in under 6 KB minified and gzipped (the device collector is loaded separately).
 
 - **`submitEvent`** sends sign-ups, logins, failed logins, logouts and any other end-user event to Didit's [event monitoring](https://docs.didit.me/transaction-monitoring/events), tied to the same person as their verifications and transactions.
-- **Device signals**: the didit-fp-v2 device fingerprint is attached to every batch. Page exit uses the available signals if its composite hash is still pending.
-- **`@didit-protocol/signals/device`** (optional, about 10 KB more) collects the full device fingerprint: the one Didit's hosted verification flow uses.
+- **Device signals**: the didit-fp-v2 device fingerprint and the automation evidence are attached to every batch.
+  The evidence comes from a separate small file (about 13.7 KB gzipped) that the core loads after itself, so the core stays under 6 KB.
+  The same file collects the full device fingerprint, on a page that asks for it.
+  Page exit uses what is available if the file has not loaded.
 - **`@didit-protocol/signals/autocapture`** (optional, about 3 KB more) sends page views, declared actions and interaction telemetry without a `submitEvent` call for each.
 - Works alone or together with the other Didit SDKs: [`@didit-protocol/sdk-web`](https://www.npmjs.com/package/@didit-protocol/sdk-web) depends on this package and re-exports it, so an app that uses both shares one event queue per module format. Standalone CDN and script-tag builds each carry their own queue.
 
@@ -64,7 +66,7 @@ The person an event belongs to always comes from the token: Didit overwrites any
 - Every request carries the `X-Monitoring-Token` header and the device fingerprint (`fingerprint_v2` in the body plus its matching `X-Didit-*` headers).
 - Each event keeps the token it was submitted with; events with different tokens never share a request, so a sign-out and a new sign-in on the same page never mix people.
 - Delivery is best effort: the in-memory queue is lost when the page closes, and browsers may terminate requests. At page exit, browsers allow 64 KiB of `keepalive` requests per page; what does not fit stays queued and is sent if the page comes back. `sendBeacon` is not used: it cannot carry the token header.
-- Exit requests start right away with the collected persistent device id, browser signals and bot context. If WebCrypto hashing is still pending, `compositeHash` is empty and `X-Didit-FP-Hash` is omitted, and those events are stored without the composite hash. Normal batches and `flush()` wait for the complete fingerprint, and exit requests use it once it is ready.
+- Exit requests start right away with what there is by then: the persistent device id and the browser signals, with the evidence if the collector has loaded, or the full payload on a page that asked for the full fingerprint and has collected it. If WebCrypto hashing is still pending, `compositeHash` is empty and `X-Didit-FP-Hash` is omitted, and those events are stored without the composite hash. Normal batches and `flush()` wait for the complete fingerprint, and exit requests use it once it is ready.
 - On a network error, HTTP timeout (408), rate limit (429), server error (5xx) or an unreadable answer, the same events are sent again after 10, 20 and 40 seconds, then every minute. They are re-sent byte for byte, so an event Didit already stored comes back as `replayed` instead of being stored twice.
 - A refusal is final and is reported through `onError` and in the `flush()` results:
 
@@ -114,9 +116,10 @@ Sends everything that is waiting. Never rejects: events that could not be sent a
 
 ### Device signals
 
-- `getDeviceFingerprintPayload(): Promise<DeviceFingerprintPayload | null>` collects the didit-fp-v2 fingerprint (`null` outside a browser).
+- `getDeviceFingerprintPayload(options?): Promise<DeviceFingerprintPayload | null>` collects the didit-fp-v2 fingerprint (`null` outside a browser).
 - `buildFingerprintHeaders(payload)` returns the matching `X-Didit-*` headers.
 - `getStoredDeviceId(): string | null` returns the stored id this page already keeps, or `null`. It never creates one.
+- `configureDevice({ fullFingerprint?, embedderDeviceId? }): void` sets how much the page reads of its device and how it names it (see "The full fingerprint" and "A page inside a frame" below). Call it before the first event, transaction or sign-in.
 
 The fingerprint has two parts.
 The **stored id** (`persistentId`, header `X-Didit-PID`) is a random id kept in the browser's storage: it is what tells one device from another.
@@ -124,47 +127,66 @@ The **composite hash** (`compositeHash`, header `X-Didit-FP-Hash`) is a hash of 
 It has no version numbers in it and reads the screen shorter side first, so a browser update or a turned phone does not change it.
 Where the browser has no WebCrypto (a page served without TLS) the hash is left out, and the stored id is still sent.
 
-This entry reads the light tier (`signals.tier: "lite"`): the stored id from `localStorage` and a cookie, the navigator and the kind of in-app browser.
+By default the fingerprint is the lite one (`signals.tier: "lite"`: the stored id, the navigator and the kind of in-app browser), and it carries `evidence`: facts about how the page is driven, which Didit's servers read to decide an automation score (see "Evidence" below).
+The evidence comes from the collector, which the core loads as a separate file (`dist/collector.mjs`) the first time something is sent.
+By default the collector reads the evidence and nothing else: no canvas, no audio, no fonts and no graphics, and it stores nothing.
+A request waits for the collector for at most 2 seconds.
+If it is not there by then, or it is blocked or fails, the request goes out with the lite payload alone and is never delayed further.
+Past those 2 seconds the lite payload goes out without its composite hash rather than wait for it.
 
-## Full device fingerprint: `@didit-protocol/signals/device`
+`getDeviceFingerprintPayload({ tier: "lite" })` answers with the lite payload alone and never loads or waits for the collector.
+Its composite hash is the same on every call, so use it for a request that only has to say which device it comes from.
+Add `wait: false` for a request that must not be held up at all: it answers at once with the payload as it is, so a first call on a page can come without the hash.
 
-```ts
-import { enableDeviceIntelligence } from "@didit-protocol/signals/device";
-
-enableDeviceIntelligence(); // once, when your app starts
-```
-
-From then on every event, transaction and Didit Authentication request of the page carries the full tier (`signals.tier: "full"`).
-It is the collector Didit's hosted verification flow uses, so a device is described the same way wherever Didit sees it.
-
-What the full tier adds:
-
-| Signal family | What it tells |
-|---|---|
-| Stored id in `localStorage`, IndexedDB, a cookie and Cache storage | Clearing one of them does not make a known device look new |
-| Graphics (`webgl`), fonts, math, API support | What the composite hash is made of, besides the navigator |
-| Canvas, audio, hardware, media codecs | Sent for comparison; not part of the hash, because they are not steady enough on one device |
-| `environment` | Whether the page runs on an Android emulator or in a virtual machine (`null` when it cannot be told) |
-| `bot.flags` | `software-renderer`, `all-active-probes-blocked`, `desktop-no-plugins`, besides the light tier's `webdriver`, `headless-ua` and `ua-mobile-mismatch` |
-
-The collection is spread over short tasks, so the page stays responsive, and runs once per page.
-The composite hash of the two tiers differs for the same device, because the full one covers more of it; the stored id is the same.
-
-Other exports: `getFingerprintPayload(options?)`, `getCachedFingerprintPayload()`, `getCompositeDeviceId()`, `payloadToHeaders(payload)`, `attachFingerprintPayload(body, payload)`, `detectWebViewContext(userAgent)`, the `collect*Signals` functions of each family and their types.
-
-### A page inside another site's frame
-
-A browser keeps the storage of a framed page apart for every site that embeds it, and some browsers empty it when they close.
-So a page shown in a frame, such as a verification opened by `@didit-protocol/sdk-web`, does not see the stored id of the site around it.
-The embedding page can pass its own:
+#### The full fingerprint
 
 ```ts
-getFingerprintPayload({ embedderPersistentId }); // the id the embedding page passed, or null
+import { configureDevice } from "@didit-protocol/signals";
+
+configureDevice({ fullFingerprint: true });
 ```
 
-The framed page goes by that id only when its own storage has none, never writes it to its own storage, and reports it as `signals.embedder.persistentId`, so what happens in the frame can be linked with the events of the site around it.
-A value that is not a stored id is ignored.
-`@didit-protocol/sdk-web` passes the id by itself when the page already keeps one (`getStoredDeviceId()`); it creates nothing on a page that keeps none.
+With `fullFingerprint: true` the collector also collects the full device fingerprint (`signals.tier: "full"`): the graphics, font, math, canvas, audio, hardware and codec signals.
+It is off unless you turn it on, and whether you may read these signals of your visitor's device is yours to decide, under the rules your site follows.
+Once the collector has collected it, every later request carries the full payload; until then, and when the collection fails, a request carries the lite one.
+The evidence then also says how the graphics are rendered and which of these reads the browser refused, two facts the default leaves out because only the full fingerprint reads them.
+The composite hash of the two kinds differs for the same device because the full one covers more of it, and both report the same kind of in-app browser.
+
+#### Where the id is kept
+
+The stored id lives in two places, with or without the full fingerprint: `localStorage` (`didit-pid-v1`) and a cookie (`didit_pid`).
+The package makes one up the first time something is sent and stores it at once.
+An id your visitor cleared is gone: the device is new on the next page.
+Every payload is handed out with the id those two hold at that moment, so two tabs of one browser name one device.
+
+#### A page inside a frame
+
+A browser keeps a framed page's storage apart for each site that embeds it, and some browsers empty it when they close, so a framed page often has no stored id.
+`@didit-protocol/sdk-web` passes the embedding page's stored id to the verification it opens, as the `sdk_device_id` query parameter.
+A framed page that uses this package hands it over before its first event, transaction or sign-in:
+
+```ts
+import { configureDevice } from "@didit-protocol/signals";
+
+configureDevice({ embedderDeviceId: new URLSearchParams(location.search).get("sdk_device_id") });
+```
+
+The page then goes by that id while its own storage has none, never writes it to its own storage, and reports it as `signals.embedder.persistentId`, which links what happens in the frame with the events of the site around it.
+An id the page already stores is kept.
+Anything that is not a stored id is ignored.
+
+#### Evidence
+
+Once the collector has loaded, the payload carries `evidence`: facts about how the page was driven, as compact JSON text.
+The client sends facts only.
+Didit's servers read the evidence and decide the automation score; nothing is scored in the browser, and no request carries a score.
+
+- `getSignalsEvidence(): Promise<string | null>` returns the evidence text, for a request your own backend sends to Didit on behalf of this page.
+  It waits for the collector for at most 2 seconds and resolves to `null` outside a browser, on timeout or when the collector failed.
+  It never rejects.
+  `getSignalsEvidence({ wait: false })` never waits: it resolves to the evidence if the collector is there, else to `null`, and lets the collector go on loading so a later call has it.
+
+The script-tag build (`dist/didit-signals.umd.min.js`) contains the collector, so it is one file of about 19.2 KB minified and gzipped.
 
 ## Automatic capture: `@didit-protocol/signals/autocapture`
 
@@ -199,7 +221,6 @@ Every event carries `session.session_id` and a `sequence` number, so a person's 
 | `pointer_entropy` | How varied the pointer's direction was, 0 to 3 bits. Left out when the pointer hardly moved |
 | `keystroke_entropy` | How varied the rhythm of typing was, 0 to 3 bits, from the time between key presses alone |
 | `untrusted_actions` | Actions a script dispatched instead of a person |
-| `bot_score`, `bot_flags` | The device fingerprint's automation score on a 0-100 scale, and its flags |
 
 **What it never reads:** the value of any field, which keys are pressed, the text of the page, element ids or classes, query strings and URL fragments.
 A page is reported by its path, and every path segment that looks like an identifier (a number, a UUID, a long token, an email address) is replaced by `:id`: `/users/48213/orders` is sent as `/users/:id/orders`.

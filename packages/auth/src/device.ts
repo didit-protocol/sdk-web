@@ -1,10 +1,69 @@
 // The only module that touches @didit-protocol/signals. Auth requests carry the
-// same device headers as the verification flow (persistent device id,
-// fingerprint hash, webview kind and bot score), so every sign-in event is
-// tied to the device that made it.
-import { buildFingerprintHeaders, getDeviceFingerprintPayload } from "@didit-protocol/signals";
+// device headers that say which device a request comes from (persistent device
+// id, fingerprint hash and webview kind), so every sign-in event is tied to the
+// device that made it, and the device evidence the signals package collects,
+// which Didit's servers read to decide whether a sign-in is automated.
+import { buildFingerprintHeaders, getDeviceFingerprintPayload, getSignalsEvidence } from "@didit-protocol/signals";
 
 export type DeviceSignalsOption = "auto" | "always" | "off";
+
+/** The header that carries the device evidence. */
+export const SIGNALS_HEADER = "X-Didit-Signals";
+
+/**
+ * The device headers the Authentication API permits from an application's allowed origins (its
+ * Access-Control-Allow-Headers), beside the evidence header. A header outside that list makes the
+ * browser refuse the whole request across origins, so nothing else the signals package builds is
+ * forwarded, now or when it learns to build more.
+ */
+const PERMITTED_HEADERS = ["X-Didit-FP-V2", "X-Didit-PID", "X-Didit-FP-Hash", "X-Didit-FP-Webview"];
+
+// What a header value may hold, and the most the API reads. Anything else is left out: a value
+// `fetch` refuses would fail the request it was only meant to accompany.
+const HEADER_SAFE = /^[\x20-\x7e]{1,1024}$/;
+
+type DevicePayload = Awaited<ReturnType<typeof getDeviceFingerprintPayload>>;
+
+/** Where the two parts of the device headers come from. Tests pass their own. */
+export interface DeviceReaders {
+  /**
+   * Which device this is, as far as it is known now. With `wait` it may take a moment, for the
+   * hash of the fingerprint; without, it answers at once, with the hash only if it is there.
+   */
+  payload: (wait: boolean) => Promise<DevicePayload>;
+  /** The evidence text, or null. With `wait` it may take a moment to arrive; without, never. */
+  evidence: (wait: boolean) => Promise<string | null>;
+}
+
+const signalsPackage: DeviceReaders = {
+  // The small fingerprint the signals package builds itself: it never waits for the collector, and
+  // its hash does not change once the collector has loaded, so a device keeps one fingerprint.
+  payload: (wait) => getDeviceFingerprintPayload({ tier: "lite", wait }),
+  evidence: (wait) => getSignalsEvidence({ wait }),
+};
+
+let readers: DeviceReaders = signalsPackage;
+
+/** Replaces where the device headers come from (null restores the signals package). Tests only. */
+export function setDeviceReadersForTesting(next: DeviceReaders | null): void {
+  readers = next ?? signalsPackage;
+}
+
+/**
+ * Whether a request waits for the device evidence. A step of a sign-in does, for at most the two
+ * seconds the signals package waits for its collector: the evidence is what tells Didit's servers
+ * whether that step is automated. A step of a sign-in is a `POST` made before there is a session,
+ * so it carries no access token, and it is not the token exchange.
+ *
+ * Nothing else waits. Reading the session, signing out and exchanging or refreshing tokens run
+ * when a page loads. What a signed-in person does to their own account (adding a passkey or a
+ * second factor, a step-up, consenting to an agent) is a `POST` with their access token. All of
+ * these carry the evidence once it is there. The first request of a page starts the collector, so
+ * it has usually finished by the time a person submits a step.
+ */
+export function waitsForEvidence(method: string, path: string, authenticated: boolean): boolean {
+  return method === "POST" && !authenticated && path !== "token/";
+}
 
 /**
  * Whether auth requests carry device headers: in a browser, unless they are turned off.
@@ -17,11 +76,29 @@ export function deviceSignalsEnabled(option: DeviceSignalsOption): boolean {
   return option !== "off" && typeof window !== "undefined";
 }
 
-export async function deviceHeaders(): Promise<Record<string, string>> {
+/**
+ * The device headers of one request. The two parts are read independently, and neither can fail
+ * the other or the request: device signals never block a sign-in.
+ */
+export async function deviceHeaders(waitForEvidence: boolean, from: DeviceReaders = readers): Promise<Record<string, string>> {
+  // A step that waits for the evidence gives the fingerprint's hash the same time, alongside. A
+  // request that does not wait takes both as they are.
+  const [evidence] = await Promise.all([
+    from.evidence(waitForEvidence).catch(() => null),
+    waitForEvidence ? from.payload(true).catch(() => null) : null,
+  ]);
+  const headers: Record<string, string> = {};
   try {
-    return buildFingerprintHeaders(await getDeviceFingerprintPayload());
+    // The identity is read now, at once, after the wait: while a step waited, the collector may
+    // have settled which id the device goes by (an id a slower store still kept), and the step
+    // that waited carries that id, as the next request will.
+    const built: Record<string, string> = buildFingerprintHeaders(await from.payload(false));
+    for (const name of PERMITTED_HEADERS) {
+      if (typeof built[name] === "string" && built[name]) headers[name] = built[name];
+    }
   } catch {
-    // Device signals never block a sign-in.
-    return {};
+    // A payload that cannot be read, or that the headers cannot be built from, sends none of them.
   }
+  if (typeof evidence === "string" && HEADER_SAFE.test(evidence)) headers[SIGNALS_HEADER] = evidence;
+  return headers;
 }
