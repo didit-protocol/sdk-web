@@ -61,17 +61,19 @@ export function toError(status: number, body: Body, retryAfter?: number): DiditA
 export function createHttpClient(
   base: string,
   fetchImpl: typeof fetch,
-  extraHeaders: () => Promise<Record<string, string>>
+  /** The headers to add to one request, told its method and path. */
+  extraHeaders: (method: string, path: string) => Promise<Record<string, string>>
 ): HttpClient {
   return async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const headers: Record<string, string> = { Accept: "application/json", ...(await extraHeaders()) };
+    const method = options.method ?? (options.body ? "POST" : "GET");
+    const headers: Record<string, string> = { Accept: "application/json", ...(await extraHeaders(method, path)) };
     if (options.body) headers["Content-Type"] = "application/json";
     if (options.token) headers.Authorization = `Bearer ${options.token}`;
 
     let response: Response;
     try {
       response = await fetchImpl(`${base}/${path}`, {
-        method: options.method ?? (options.body ? "POST" : "GET"),
+        method,
         headers,
         body: options.body ? JSON.stringify(options.body) : undefined,
         // The runtime API authenticates with bearer tokens only: never send the auth domain's cookies.

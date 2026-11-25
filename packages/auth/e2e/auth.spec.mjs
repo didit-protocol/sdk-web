@@ -32,13 +32,23 @@ async function openApp(page, { url = APP, scenario, skip = 0, create = true } = 
 
 const deviceHeaders = (entry) => Object.keys(entry.headers ?? {}).filter((name) => name.startsWith("x-didit-"));
 
-/** The device evidence a request carried: facts the page read, as compact JSON, and never a score. */
+// The device headers the recorded API allows from another origin, as the Didit API does. A request
+// with any other header is refused by the browser before it is sent.
+const PERMITTED_DEVICE_HEADERS = ["x-didit-fp-hash", "x-didit-fp-v2", "x-didit-fp-webview", "x-didit-pid", "x-didit-signals"];
+
+/** Which device a request came from: its identifiers, nothing the API does not permit, and never a score. */
+function expectDeviceIdentity(entry) {
+  expect(deviceHeaders(entry)).toEqual(expect.arrayContaining(["x-didit-fp-v2", "x-didit-pid", "x-didit-fp-hash"]));
+  expect(deviceHeaders(entry).filter((name) => !PERMITTED_DEVICE_HEADERS.includes(name))).toEqual([]);
+  expect(entry.headers["x-didit-fp-bot-score"]).toBeUndefined();
+}
+
+/** The device evidence a request carried: facts the page read, as compact JSON. */
 function expectDeviceEvidence(entry) {
   const evidence = JSON.parse(entry.headers["x-didit-signals"]);
   expect([evidence.v, evidence.p]).toEqual([2, "web"]);
   expect(typeof evidence.cv).toBe("string");
   expect(entry.headers["x-didit-signals"].length).toBeLessThanOrEqual(1024);
-  expect(entry.headers["x-didit-fp-bot-score"]).toBeUndefined();
 }
 
 const storedTokens = (tab) => tab.evaluate((key) => JSON.parse(localStorage.getItem(key)), TOKENS);
@@ -135,13 +145,28 @@ test("signs in on the hosted page and completes on the redirect page", async ({ 
   // The API allows the device headers across origins, so every call to it carries them by default.
   const calls = seen.filter((entry) => entry.headers);
   expect(calls.map(({ method, path }) => `${method} ${path}`)).toEqual(["POST token/", "GET session/"]);
+  // Exchanging the code and reading the session run as the page loads: they say which device they
+  // come from at once, and do not wait for the device evidence.
   for (const call of calls) {
-    expect(deviceHeaders(call)).toEqual(
-      expect.arrayContaining(["x-didit-fp-v2", "x-didit-pid", "x-didit-fp-hash", "x-didit-signals"]),
-    );
+    expectDeviceIdentity(call);
     expect(call.headers["x-didit-pid"]).toBe(await page.evaluate(() => localStorage.getItem("didit-pid-v1")));
-    expectDeviceEvidence(call);
   }
+  expect(calls[0].headers["x-didit-fp-hash"]).toBe(calls[1].headers["x-didit-fp-hash"]);
+});
+
+test("a step of a sign-in carries the device evidence across origins, with only the headers the API permits", async ({ page, request }) => {
+  await loadRecording(request, "password-reset");
+  await openApp(page);
+
+  // The first request of the page: the step waits for the collector, which loads beside the package.
+  expect(await page.evaluate(() => window.auth.password.requestReset({ email: "person@example.com" }))).toEqual({ expiresIn: 1800 });
+  const [reset] = await requestsSeen(request);
+  expect(reset.mismatch).toBeUndefined();
+  expect(`${reset.method} ${reset.path}`).toBe("POST password-reset/start/");
+  expectDeviceIdentity(reset);
+  expectDeviceEvidence(reset);
+  // The device keeps the fingerprint it had before the collector loaded.
+  expect(deviceHeaders(reset)).not.toContain("x-didit-fp-legacy");
 });
 
 test("sends no device signals when they are turned off", async ({ page, request }) => {
@@ -404,6 +429,7 @@ test("sends device signals when the page and the API share an origin", async ({ 
   expect(reset.headers["x-didit-pid"]).toMatch(/^[A-Za-z0-9_-]{20,32}$/);
   expect(reset.headers["x-didit-fp-hash"]).toBeTruthy();
   expect(await page.evaluate(() => localStorage.getItem("didit-pid-v1"))).toBe(reset.headers["x-didit-pid"]);
+  expectDeviceIdentity(reset);
   expectDeviceEvidence(reset);
 });
 

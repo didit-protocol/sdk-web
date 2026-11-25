@@ -67,4 +67,32 @@ describe("createHttpClient", () => {
 
     await expect(request("session/")).rejects.toMatchObject({ code: "network_error", message: "Failed to fetch" });
   });
+
+  it("tells the header provider the method and the path of each request, and sends what it answers", async () => {
+    const asked: [string, string][] = [];
+    const sent: Record<string, string>[] = [];
+    const request = createHttpClient(
+      "https://auth.example.com/auth/v2/authentication/x",
+      async (_input, init) => {
+        sent.push(init?.headers as Record<string, string>);
+        // The test environment has no Response: what the client reads of one is enough.
+        return { ok: true, status: 200, text: async () => "{}", headers: { get: () => null } } as unknown as Response;
+      },
+      async (method, path) => {
+        asked.push([method, path]);
+        return { "X-Test": `${method} ${path}` };
+      },
+    );
+
+    await request("session/");
+    await request("password/", { body: { email: "person@example.com" } });
+    await request("session/", { method: "DELETE" });
+
+    expect(asked).toEqual([
+      ["GET", "session/"],
+      ["POST", "password/"],
+      ["DELETE", "session/"],
+    ]);
+    expect(sent.map((headers) => headers["X-Test"])).toEqual(["GET session/", "POST password/", "DELETE session/"]);
+  });
 });
