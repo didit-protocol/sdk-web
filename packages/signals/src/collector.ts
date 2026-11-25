@@ -1,4 +1,4 @@
-import type { DeviceFingerprintPayload } from "./device/types";
+import type { DeviceFingerprintPayload, DeviceSignals } from "./device/types";
 
 /**
  * The only module that touches the vendored device collector (`vendor/collector.mjs`).
@@ -8,12 +8,24 @@ import type { DeviceFingerprintPayload } from "./device/types";
  * the 6 KB core stays small and a page that never sends anything never downloads it.
  */
 
+/**
+ * The payload as the collector hands it over. It is the published payload, typed by the members
+ * this package names: the collector declares a closed set of signal families, and the published
+ * type keeps the further families open (`[family: string]`), which a closed declaration cannot be
+ * read through. Typed this way, the collector's own declarations are checked against every member
+ * named here (__tests__/collector-types.test.ts), and the payload is then handed out under the
+ * published type.
+ */
+type CollectedPayload = Omit<DeviceFingerprintPayload, "signals"> & {
+  signals: Pick<DeviceSignals, "platform" | "tier" | "compositeHashVersion" | "navigator" | "webview" | "embedder">;
+};
+
 /** What this package uses of the collector. Declared here so the public types never name its file. */
 interface DeviceCollector {
   version: string;
-  collect: (options?: { embedderPersistentId?: string | null }) => Promise<DeviceFingerprintPayload>;
+  collect: (options?: { embedderPersistentId?: string | null }) => Promise<CollectedPayload>;
   /** The payload if it is collected already; never starts a collection. */
-  peek: () => DeviceFingerprintPayload | null;
+  peek: () => CollectedPayload | null;
   /** Compact JSON text, synchronous, complete once `collect()` has resolved. */
   evidence: () => string;
 }
@@ -22,7 +34,7 @@ type CollectorLoader = () => Promise<DeviceCollector>;
 
 // "didit-signals-collector" is not a package: the build resolves it (see rollup-collector.js). The
 // core builds leave it as a relative import of a file copied next to them, the script-tag build
-// inlines it. Its types are checked against the vendored declarations in __tests__/collector-types.ts.
+// inlines it. Its types are checked against the vendored declarations in __tests__/collector-types.test.ts.
 // @ts-ignore - only the build can resolve this name
 const defaultLoader: CollectorLoader = () => import("didit-signals-collector") as Promise<DeviceCollector>;
 
@@ -73,6 +85,7 @@ function setCollectorLoaderForTesting(next: CollectorLoader | null): void {
 }
 
 export {
+  type CollectedPayload,
   type DeviceCollector,
   getLoadedCollector,
   isBrowserEnvironment,

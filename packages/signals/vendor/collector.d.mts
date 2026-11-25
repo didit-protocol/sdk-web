@@ -15,6 +15,33 @@ interface CodecSignals {
     blocked: boolean;
 }
 
+interface FontSignals {
+    available: string[];
+    count: number;
+    blocked: boolean;
+}
+
+interface HardwareSignals {
+    batteryLevelQuantized: number | null;
+    batteryCharging: boolean | null;
+    mediaDevicesKinds: Record<string, number>;
+    speechSynthesisVoices: number | null;
+    storageQuota: number | null;
+    storageUsage: number | null;
+}
+
+interface MathSignals {
+    tan_1e300: string;
+    sin_1e300: string;
+    cos_1e300: string;
+    atan2_1_2: string;
+    acosh_big: string;
+    asinh_big: string;
+    expm1_1: string;
+    log_big: string;
+    exp_1: string;
+}
+
 interface NavigatorSignals {
     userAgent: string;
     userAgentNormalized: string;
@@ -60,39 +87,6 @@ interface WebGLSignals {
     blocked: boolean;
 }
 
-interface EnvironmentSignals {
-    emulator: boolean | null;
-    virtualMachine: boolean | null;
-    matchedSignatures: string[];
-}
-
-interface FontSignals {
-    available: string[];
-    count: number;
-    blocked: boolean;
-}
-
-interface HardwareSignals {
-    batteryLevelQuantized: number | null;
-    batteryCharging: boolean | null;
-    mediaDevicesKinds: Record<string, number>;
-    speechSynthesisVoices: number | null;
-    storageQuota: number | null;
-    storageUsage: number | null;
-}
-
-interface MathSignals {
-    tan_1e300: string;
-    sin_1e300: string;
-    cos_1e300: string;
-    atan2_1_2: string;
-    acosh_big: string;
-    asinh_big: string;
-    expm1_1: string;
-    log_big: string;
-    exp_1: string;
-}
-
 type WebViewKind = "browser" | "whatsapp" | "gsa" | "instagram" | "facebook" | "messenger" | "tiktok" | "line" | "wechat" | "telegram" | "twitter" | "linkedin" | "snapchat" | "generic-wv";
 interface WebViewSignals {
     kind: WebViewKind;
@@ -122,7 +116,6 @@ interface FullDeviceSignals extends DeviceSignals {
     apiBitmap: string;
     apiMissing: string[];
     hardware: HardwareSignals;
-    environment: EnvironmentSignals;
     codecs: CodecSignals;
 }
 interface DeviceFingerprintPayload<S extends DeviceSignals = DeviceSignals> {
