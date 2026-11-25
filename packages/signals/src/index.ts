@@ -4,7 +4,7 @@ export {
   buildFingerprintHeaders,
   getSignalsEvidence,
   getStoredDeviceId,
-  setEmbedderDeviceId
+  configureDevice
 } from "./fingerprint";
 
 export type {

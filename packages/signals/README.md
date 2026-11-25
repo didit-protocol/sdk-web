@@ -4,7 +4,7 @@ Didit device signals and end-user event monitoring for the browser, in under 6 K
 
 - **`submitEvent`** sends sign-ups, logins, failed logins, logouts and any other end-user event to Didit's [event monitoring](https://docs.didit.me/transaction-monitoring/events), tied to the same person as their verifications and transactions.
 - **Device signals**: the full didit-fp-v2 device fingerprint and the automation evidence are attached to every batch.
-  They come from a separate small file (about 13.6 KB gzipped) that the core loads after itself, so the core stays under 6 KB.
+  They come from a separate small file (about 13.7 KB gzipped) that the core loads after itself, so the core stays under 6 KB.
   Page exit uses what is available if the file has not finished.
 - **`@didit-protocol/signals/autocapture`** (optional, about 3 KB more) sends page views, declared actions and interaction telemetry without a `submitEvent` call for each.
 - Works alone or together with the other Didit SDKs: [`@didit-protocol/sdk-web`](https://www.npmjs.com/package/@didit-protocol/sdk-web) depends on this package and re-exports it, so an app that uses both shares one event queue per module format. Standalone CDN and script-tag builds each carry their own queue.
@@ -118,7 +118,7 @@ Sends everything that is waiting. Never rejects: events that could not be sent a
 - `getDeviceFingerprintPayload(options?): Promise<DeviceFingerprintPayload | null>` collects the didit-fp-v2 fingerprint (`null` outside a browser).
 - `buildFingerprintHeaders(payload)` returns the matching `X-Didit-*` headers.
 - `getStoredDeviceId(): string | null` returns the stored id this page already keeps, or `null`. It never creates one.
-- `setEmbedderDeviceId(id: string | null): void` is for a page shown inside another site's frame: it tells the page the stored id of the page that embeds it (see "A page inside a frame" below).
+- `configureDevice({ durableDeviceId?, embedderDeviceId? }): void` sets how the page keeps and names its device (see "Where the id is kept" and "A page inside a frame" below). Call it before the first event, transaction or sign-in.
 
 The fingerprint has two parts.
 The **stored id** (`persistentId`, header `X-Didit-PID`) is a random id kept in the browser's storage: it is what tells one device from another.
@@ -128,20 +128,37 @@ Where the browser has no WebCrypto (a page served without TLS) the hash is left 
 
 By default the fingerprint is the full one (`signals.tier: "full"`), from the collector, which the core loads as a separate file (`dist/collector.mjs`) the first time something is sent.
 A request waits for its fingerprint for at most 2 seconds.
-If the collector is not there by then, or it is blocked or fails, the request goes out with the lite payload (`signals.tier: "lite"`: the stored id from `localStorage` and a cookie, the navigator and the kind of in-app browser) and is never delayed further.
+If the collector is not there by then, or it is blocked or fails, the request goes out with the lite payload (`signals.tier: "lite"`: the stored id, the navigator and the kind of in-app browser) and is never delayed further.
 Past those 2 seconds the lite payload goes out without its composite hash rather than wait for it.
 Once the collector has finished, every later request carries its payload.
 The composite hash of the two kinds differs for the same device because the full one covers more of it, and both report the same kind of in-app browser.
 
-One device has one stored id.
-The lite payload names the device first, from `localStorage` and the cookie, and makes up an id when both are empty.
-The collector then reads every store the browser has (IndexedDB and Cache storage too).
-An id one of them still holds is the device's id: the collector writes it back over the one made up for this page, and the device is not reported as new.
-Where no store holds one, the made-up id is the device's id, reported as created by both payloads.
-From then on both payloads carry the collector's answer, so the id of the lite payload can change once on a page, on a device whose cookie and `localStorage` were cleared.
+`getDeviceFingerprintPayload({ tier: "lite" })` answers with the lite payload and never loads or waits for the collector.
+Its composite hash is the same on every call, so use it for a request that only has to say which device it comes from.
+Add `wait: false` for a request that must not be held up at all: it answers at once with the payload as it is, so a first call on a page can come without the hash.
 
-`getDeviceFingerprintPayload({ tier: "lite" })` answers at once with the lite payload and never loads or waits for the collector.
-Its composite hash is the same on every call, so use it for a request that only has to say which device it comes from and must not be held up.
+#### Where the id is kept
+
+By default the stored id lives in two places: `localStorage` (`didit-pid-v1`) and a cookie (`didit_pid`).
+The package makes one up the first time something is sent, and both payloads carry it.
+An id your visitor cleared is gone: the device is new on the next page.
+
+```ts
+import { configureDevice } from "@didit-protocol/signals";
+
+configureDevice({ durableDeviceId: true });
+```
+
+With `durableDeviceId: true` the collector also keeps the id in IndexedDB and Cache storage, so that clearing cookies or `localStorage` alone does not make a known device look new.
+It is off unless you turn it on, and whether you may keep an id longer than your visitor's cookies is yours to decide, under the rules your site follows.
+Turning it off again does not remove the copies stored while it was on; they are no longer read.
+
+With it on, one device still has one stored id:
+
+- The lite payload names the device first, from `localStorage` and the cookie, and makes up an id when both are empty. It stores nothing yet.
+- The collector then reads every store. An id one of them still holds is the device's id: the collector writes it to the other stores, and the device is not reported as new. Where no store holds one, the made-up id is the device's id, stored in all of them and reported as created by both payloads.
+- Every payload is handed out with the id `localStorage` and the cookie hold at that moment, so the id of a payload can change once on a page, on a device whose cookie and `localStorage` were cleared.
+- Where the collector cannot be loaded, the package stores the made-up id in `localStorage` and the cookie itself.
 
 #### A page inside a frame
 
@@ -150,9 +167,9 @@ A browser keeps a framed page's storage apart for each site that embeds it, and 
 A framed page that uses this package hands it over before its first event, transaction or sign-in:
 
 ```ts
-import { setEmbedderDeviceId } from "@didit-protocol/signals";
+import { configureDevice } from "@didit-protocol/signals";
 
-setEmbedderDeviceId(new URLSearchParams(location.search).get("sdk_device_id"));
+configureDevice({ embedderDeviceId: new URLSearchParams(location.search).get("sdk_device_id") });
 ```
 
 The page then goes by that id while its own storage has none, never writes it to its own storage, and reports it as `signals.embedder.persistentId`, which links what happens in the frame with the events of the site around it.

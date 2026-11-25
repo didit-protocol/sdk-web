@@ -14,12 +14,15 @@ All notable changes to `@didit-protocol/auth` are documented in this file.
   session (a password, an email or phone code, a passkey, a second factor, a password reset). Reading the
   session, signing out, exchanging and refreshing tokens, and what a signed-in person does to their own
   account (adding a passkey or a second factor, a step-up, consenting to an agent) never wait, and carry the
-  evidence once it is there. Every request still says which device it comes from at once.
+  evidence once it is there. Every request still says which device it comes from at once; a request that does
+  not wait no longer waits for the fingerprint's hash either, so the first one of a page can go without it.
 - The device headers are the ones the Authentication API permits across origins and no other:
   `X-Didit-FP-V2`, `X-Didit-PID`, `X-Didit-FP-Hash`, `X-Didit-FP-Webview` and `X-Didit-Signals`.
 - Requires `@didit-protocol/signals` `^0.3.0`. Its device collector is a separate file that is loaded the
   first time a request is made: a bundler emits it as its own chunk, and nothing changes in your code.
   `deviceSignals: "off"` sends no device header and never loads it.
+- The device id is kept as before, in `localStorage` and a cookie. `@didit-protocol/signals` can also keep it
+  in IndexedDB and Cache storage: `configureDevice({ durableDeviceId: true })`, off by default.
 
 ## [0.2.0] - 2026-11-12
 

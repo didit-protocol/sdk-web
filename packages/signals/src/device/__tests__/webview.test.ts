@@ -76,7 +76,7 @@ describe("the lite payload of an iOS web view that names no app", () => {
     });
 
     expect(payload!.signals.webview.kind).toBe("generic-wv");
-    expect(payload!.compositeHash).toHaveLength(22);
+    expect(payload!.compositeHash.length).toBe(22);
     // A boolean, never the values: a failure must not print a fingerprint.
     expect(payload!.compositeHash === hashAsBrowser).toBe(true);
   });

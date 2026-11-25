@@ -139,6 +139,7 @@ interface BuildOptions {
     budgetMs?: number;
     embedderPersistentId?: string | null;
     newPersistentId?: string | null;
+    durableId?: boolean;
 }
 
 interface CleanRealm {
@@ -164,7 +165,7 @@ interface VerifyNativeOptions {
 }
 
 declare const version: string;
-declare function collect(options?: Pick<BuildOptions, "embedderPersistentId" | "newPersistentId">): Promise<FingerprintPayload>;
+declare function collect(options?: Pick<BuildOptions, "embedderPersistentId" | "newPersistentId" | "durableId">): Promise<FingerprintPayload>;
 declare function peek(): FingerprintPayload | null;
 declare function evidence(): string;
 declare function verifyNative(targets: NativeTarget[], options?: VerifyNativeOptions): NativeVerdict;

@@ -26,8 +26,11 @@ type DevicePayload = Awaited<ReturnType<typeof getDeviceFingerprintPayload>>;
 
 /** Where the two parts of the device headers come from. Tests pass their own. */
 export interface DeviceReaders {
-  /** Which device this is. Answers at once and is the same on every request of the page. */
-  payload: () => Promise<DevicePayload>;
+  /**
+   * Which device this is, as far as it is known now. With `wait` it may take a moment, for the
+   * hash of the fingerprint; without, it answers at once, with the hash only if it is there.
+   */
+  payload: (wait: boolean) => Promise<DevicePayload>;
   /** The evidence text, or null. With `wait` it may take a moment to arrive; without, never. */
   evidence: (wait: boolean) => Promise<string | null>;
 }
@@ -35,7 +38,7 @@ export interface DeviceReaders {
 const signalsPackage: DeviceReaders = {
   // The small fingerprint the signals package builds itself: it never waits for the collector, and
   // its hash does not change once the collector has loaded, so a device keeps one fingerprint.
-  payload: () => getDeviceFingerprintPayload({ tier: "lite" }),
+  payload: (wait) => getDeviceFingerprintPayload({ tier: "lite", wait }),
   evidence: (wait) => getSignalsEvidence({ wait }),
 };
 
@@ -78,18 +81,24 @@ export function deviceSignalsEnabled(option: DeviceSignalsOption): boolean {
  * the other or the request: device signals never block a sign-in.
  */
 export async function deviceHeaders(waitForEvidence: boolean, from: DeviceReaders = readers): Promise<Record<string, string>> {
-  const [payload, evidence] = await Promise.allSettled([from.payload(), from.evidence(waitForEvidence)]);
+  // A step that waits for the evidence gives the fingerprint's hash the same time, alongside. A
+  // request that does not wait takes both as they are.
+  const [evidence] = await Promise.all([
+    from.evidence(waitForEvidence).catch(() => null),
+    waitForEvidence ? from.payload(true).catch(() => null) : null,
+  ]);
   const headers: Record<string, string> = {};
   try {
-    const built: Record<string, string> = payload.status === "fulfilled" ? buildFingerprintHeaders(payload.value) : {};
+    // The identity is read now, at once, after the wait: while a step waited, the collector may
+    // have settled which id the device goes by (an id a slower store still kept), and the step
+    // that waited carries that id, as the next request will.
+    const built: Record<string, string> = buildFingerprintHeaders(await from.payload(false));
     for (const name of PERMITTED_HEADERS) {
       if (typeof built[name] === "string" && built[name]) headers[name] = built[name];
     }
   } catch {
-    // A payload the headers cannot be built from sends none of them.
+    // A payload that cannot be read, or that the headers cannot be built from, sends none of them.
   }
-  if (evidence.status === "fulfilled" && typeof evidence.value === "string" && HEADER_SAFE.test(evidence.value)) {
-    headers[SIGNALS_HEADER] = evidence.value;
-  }
+  if (typeof evidence === "string" && HEADER_SAFE.test(evidence)) headers[SIGNALS_HEADER] = evidence;
   return headers;
 }

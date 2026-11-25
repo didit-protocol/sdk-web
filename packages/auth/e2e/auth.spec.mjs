@@ -37,8 +37,11 @@ const deviceHeaders = (entry) => Object.keys(entry.headers ?? {}).filter((name) 
 const PERMITTED_DEVICE_HEADERS = ["x-didit-fp-hash", "x-didit-fp-v2", "x-didit-fp-webview", "x-didit-pid", "x-didit-signals"];
 
 /** Which device a request came from: its identifiers, nothing the API does not permit, and never a score. */
-function expectDeviceIdentity(entry) {
-  expect(deviceHeaders(entry)).toEqual(expect.arrayContaining(["x-didit-fp-v2", "x-didit-pid", "x-didit-fp-hash"]));
+function expectDeviceIdentity(entry, { hash = true } = {}) {
+  // The hash of the fingerprint is computed in the background. A request that does not wait can
+  // leave before it exists, so only a caller that knows it had time asks for it.
+  const required = hash ? ["x-didit-fp-v2", "x-didit-pid", "x-didit-fp-hash"] : ["x-didit-fp-v2", "x-didit-pid"];
+  expect(deviceHeaders(entry)).toEqual(expect.arrayContaining(required));
   expect(deviceHeaders(entry).filter((name) => !PERMITTED_DEVICE_HEADERS.includes(name))).toEqual([]);
   expect(entry.headers["x-didit-fp-bot-score"]).toBeUndefined();
 }
@@ -175,13 +178,17 @@ test("signs in on the hosted page and completes on the redirect page", async ({ 
   const calls = seen.filter((entry) => entry.headers);
   expect(calls.map(({ method, path }) => `${method} ${path}`)).toEqual(["POST token/", "GET session/"]);
   // Exchanging the code and reading the session run as the page loads: they say which device they
-  // come from at once, and do not wait for the device evidence.
-  for (const call of calls) {
-    expectDeviceIdentity(call);
-    expect(call.headers["x-didit-pid"]).toBe(await page.evaluate(() => localStorage.getItem("didit-pid-v1")));
-  }
-  // A boolean, never the values: a failure must not print this browser's fingerprint.
-  expect(calls[0].headers["x-didit-fp-hash"] === calls[1].headers["x-didit-fp-hash"]).toBe(true);
+  // come from at once, and wait for nothing, neither the device evidence nor the hash of the
+  // fingerprint. The exchange is the first request of the page, so it may leave before the hash
+  // exists; the session read comes after a round trip, when it does.
+  const [exchange, sessionRead] = calls;
+  expectDeviceIdentity(exchange, { hash: false });
+  expectDeviceIdentity(sessionRead);
+  const storedId = await page.evaluate(() => localStorage.getItem("didit-pid-v1"));
+  // Booleans, never the values: a failure must not print this browser's id or fingerprint.
+  expect(calls.every((call) => call.headers["x-didit-pid"] === storedId)).toBe(true);
+  const hashes = calls.map((call) => call.headers["x-didit-fp-hash"]).filter(Boolean);
+  expect(hashes.every((hash) => hash === hashes[0])).toBe(true);
 });
 
 test("a step of a sign-in carries the device evidence across origins, with only the headers the API permits", async ({ page, request }) => {

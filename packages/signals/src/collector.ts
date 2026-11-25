@@ -31,10 +31,13 @@ interface DeviceCollector {
   /**
    * `embedderPersistentId` is the id the embedding page passed, `newPersistentId` the id this
    * package made up on this page load before the collector read the stores, if it made one up.
+   * `durableId: false` keeps the id in localStorage and the cookie only: the collector then
+   * neither reads nor writes IndexedDB and Cache storage.
    */
   collect: (options?: {
     embedderPersistentId?: string | null;
     newPersistentId?: string | null;
+    durableId?: boolean;
   }) => Promise<CollectedPayload>;
   /** The payload if it is collected already; never starts a collection. */
   peek: () => CollectedPayload | null;

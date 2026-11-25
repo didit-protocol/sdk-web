@@ -252,7 +252,9 @@ the same as `"auto"` and is kept for compatibility. Set `"off"` to never send
 them.
 
 Every request says which device it comes from at once, and that never delays
-it. The evidence comes from a small file the signals package loads beside
+it: the hash of the fingerprint is added as soon as it is computed, so the
+first request of a page that does not wait can go without it. The evidence
+comes from a small file the signals package loads beside
 itself the first time a request is made. A step of a sign-in (a password, a
 code, a passkey, a reset: a request made before there is a session) waits for
 it for at most 2 seconds. Nothing else waits: reading the session, signing out
@@ -260,6 +262,12 @@ and refreshing tokens, and what a signed-in person does to their own account
 (adding a passkey or a second factor, a step-up, consenting to an agent) carry
 it once it is there. If the file is blocked or late the step goes out without
 it.
+
+The device id is kept in `localStorage` and a cookie, and an id your visitor
+cleared is gone. `@didit-protocol/signals`, which this package installs, can
+also keep it in IndexedDB and Cache storage: call
+`configureDevice({ durableDeviceId: true })` from it before you create the
+client, if the rules your site follows allow it.
 
 The client sends no automation score: it sends facts and Didit's servers decide.
 Browser tests that drive your own sign-in screens are automation too: run them

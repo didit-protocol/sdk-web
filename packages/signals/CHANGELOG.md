@@ -6,20 +6,22 @@ All notable changes to `@didit-protocol/signals` will be documented in this file
 
 ### Added
 - `getSignalsEvidence()`: the evidence text of the page (facts about how it is driven, as compact JSON), for a request your own backend sends to Didit on its behalf. `getSignalsEvidence({ wait: false })` never waits for the collector: it resolves to the evidence if the collector has finished, else to `null`.
-- `getDeviceFingerprintPayload({ tier: "lite" })`: the lite payload at once, with the same composite hash on every call, without loading the collector.
-- `setEmbedderDeviceId(id)`: for a page shown inside another site's frame, the stored id of the page that embeds it. The page goes by it while its own storage has none, never stores it, and reports it as `signals.embedder.persistentId`. It replaces the `embedderPersistentId` option of the removed `getFingerprintPayload()`.
+- `getDeviceFingerprintPayload({ tier: "lite" })`: the lite payload, with the same composite hash on every call, without loading the collector. `wait: false` answers at once with the payload as it is.
+- `configureDevice({ durableDeviceId, embedderDeviceId })`.
+  - `durableDeviceId: true` also keeps the device id in IndexedDB and Cache storage, so that clearing cookies or `localStorage` alone does not make a known device look new. It is off by default, as it was: in 0.2 it came with `enableDeviceIntelligence()`.
+  - `embedderDeviceId` is for a page shown inside another site's frame: the stored id of the page that embeds it. The page goes by it while its own storage has none, never stores it, and reports it as `signals.embedder.persistentId`. It replaces the `embedderPersistentId` option of the removed `getFingerprintPayload()`.
 - The full payload carries `evidence`.
 
 ### Changed
-- The full device fingerprint is the default. It comes from a collector shipped with the package as one built file (`dist/collector.mjs`, about 13.6 KB gzipped) that the core loads the first time something is sent. A request waits for its fingerprint for at most 2 seconds and otherwise goes out with the lite payload, without the composite hash if that is not there either.
-- One device has one stored id. The lite payload names the device first and makes up an id when `localStorage` and the cookie are empty. The collector then reads every store: an id one of them still holds is the device's id and is written back, and the device is not reported as new; where there is none, both payloads report the made-up id as created. Before, the lite payload's new id could outvote the id a slower store still held.
+- The full device fingerprint is the default. It comes from a collector shipped with the package as one built file (`dist/collector.mjs`, about 13.7 KB gzipped) that the core loads the first time something is sent. A request waits for its fingerprint for at most 2 seconds and otherwise goes out with the lite payload, without the composite hash if that is not there either.
+- The device id is kept as before, in `localStorage` and a cookie. Every payload is handed out with the id those two hold at that moment.
 - The lite payload reports an iOS web view that names no app as `generic-wv`, as the full payload does, so `X-Didit-FP-Webview` is the same before and after the collector has loaded. Its composite hash does not change.
 - `flush()` with no event waiting sends nothing and no longer collects the device.
 - The page sends facts and Didit's servers decide the automation score. The payload has no `bot` member and no request carries `X-Didit-FP-Bot-Score`.
 - The script-tag build contains the collector and is about 19.1 KB minified and gzipped.
 
 ### Removed
-- The `@didit-protocol/signals/device` entry (`enableDeviceIntelligence()`, `getFingerprintPayload()`), `setDeviceSignalsProvider()` and the `DeviceSignalsProvider` type. The full fingerprint is the default now, so there is nothing to enable.
+- The `@didit-protocol/signals/device` entry (`enableDeviceIntelligence()`, `getFingerprintPayload()`), `setDeviceSignalsProvider()` and the `DeviceSignalsProvider` type. The full fingerprint is the default now; the durable copies of the device id that entry also turned on are `configureDevice({ durableDeviceId: true })`.
 
 ## [0.2.0] - 2026-11-12
 

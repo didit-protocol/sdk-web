@@ -6,11 +6,11 @@ installWebCryptoForTests();
 import { setCollectorLoaderForTesting } from "../collector";
 import {
   COLLECTOR_WAIT_MS,
+  configureDevice,
   getAvailableDeviceFingerprintPayload,
   getDeviceFingerprintPayload,
   getSignalsEvidence,
   resetDeviceFingerprintForTesting,
-  setEmbedderDeviceId,
   waitingCountForTesting,
 } from "../fingerprint";
 import { FAKE_EVIDENCE, fakeCollector, fullPayload } from "./fake-collector";
@@ -128,8 +128,27 @@ describe("getDeviceFingerprintPayload with the collector", () => {
   });
 });
 
+const STORED_ID = "SSSSSSSSSSSSSSSSSSSSSS";
+const KEPT_ID = "KKKKKKKKKKKKKKKKKKKKKK";
+const EMBEDDER_ID = "EEEEEEEEEEEEEEEEEEEEEE";
+const STORAGE_KEY = "didit-pid-v1";
+
+/** What a payload says about the device's id. */
+const identity = (payload: Awaited<ReturnType<typeof getDeviceFingerprintPayload>>) =>
+  payload && [payload.persistentId, payload.persistentIdSources, payload.persistentIdWasCreated];
+/** Whether two payloads carry one hash, and there is one: a boolean, so a failure prints no fingerprint. */
+const sameHash = (
+  one: Awaited<ReturnType<typeof getDeviceFingerprintPayload>>,
+  other: Awaited<ReturnType<typeof getDeviceFingerprintPayload>>,
+) => Boolean(one?.compositeHash) && one?.compositeHash === other?.compositeHash;
+/** A hash that never comes: WebCrypto accepts the digest and does not answer. */
+function hashNeverAnswers(): () => void {
+  const digest = jest.spyOn(globalThis.crypto.subtle, "digest").mockImplementation(() => new Promise(() => undefined));
+  return () => digest.mockRestore();
+}
+
 describe("getDeviceFingerprintPayload({ tier: \"lite\" })", () => {
-  it("answers at once with the lite payload and never loads the collector", async () => {
+  it("answers with the lite payload and its hash, and never loads the collector", async () => {
     const fake = fakeCollector();
     const load = jest.fn(async () => fake.collector);
     setCollectorLoaderForTesting(load);
@@ -137,13 +156,66 @@ describe("getDeviceFingerprintPayload({ tier: \"lite\" })", () => {
     const payload = await getDeviceFingerprintPayload({ tier: "lite" });
 
     expect(payload?.signals.tier).toBe("lite");
-    expect(payload?.persistentId).toBe(localStorage.getItem("didit-pid-v1"));
-    expect(payload?.compositeHash).toBeTruthy();
+    expect(payload?.persistentId).toBe(localStorage.getItem(STORAGE_KEY));
+    expect(payload?.compositeHash.length).toBe(22);
     expect(load).not.toHaveBeenCalled();
     expect(fake.collect).not.toHaveBeenCalled();
   });
 
+  it("waits for its hash for two seconds at most", async () => {
+    jest.useFakeTimers();
+    const restore = hashNeverAnswers();
+    try {
+      let settled = false;
+      const pending = getDeviceFingerprintPayload({ tier: "lite" }).then((payload) => {
+        settled = true;
+        return payload;
+      });
+      await jest.advanceTimersByTimeAsync(COLLECTOR_WAIT_MS - 1);
+      expect(settled).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+
+      expect((await pending)?.compositeHash === "").toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it("with wait: false answers at once, without a hash that is not there yet, and carries it once it is", async () => {
+    jest.useFakeTimers();
+    const fake = fakeCollector();
+    const load = jest.fn(async () => fake.collector);
+    setCollectorLoaderForTesting(load);
+
+    // No timer is advanced: the answer did not wait for anything.
+    const first = await getDeviceFingerprintPayload({ tier: "lite", wait: false });
+    expect(jest.getTimerCount()).toBe(0);
+    await jest.advanceTimersByTimeAsync(50);
+    const later = await getDeviceFingerprintPayload({ tier: "lite", wait: false });
+
+    expect(first?.signals.tier).toBe("lite");
+    expect(first?.persistentId).toBe(localStorage.getItem(STORAGE_KEY));
+    expect(later?.compositeHash.length).toBe(22);
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it("with wait: false and a hash that never comes, still answers at once", async () => {
+    jest.useFakeTimers();
+    const restore = hashNeverAnswers();
+    try {
+      const payload = await getDeviceFingerprintPayload({ tier: "lite", wait: false });
+
+      expect(payload?.compositeHash === "").toBe(true);
+      expect(payload?.persistentId).toBe(localStorage.getItem(STORAGE_KEY));
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      restore();
+    }
+  });
+
   it("stays the lite payload, with the same id and hash, after the collector has collected", async () => {
+    await getDeviceFingerprintPayload({ tier: "lite" });
+    await new Promise((resolve) => setTimeout(resolve, 50));
     const before = await getDeviceFingerprintPayload({ tier: "lite" });
     const fake = fakeCollector();
     setCollectorLoaderForTesting(async () => fake.collector);
@@ -155,17 +227,34 @@ describe("getDeviceFingerprintPayload({ tier: \"lite\" })", () => {
     const after = await getDeviceFingerprintPayload({ tier: "lite" });
 
     expect(after?.signals.tier).toBe("lite");
-    expect([after?.persistentId, after?.compositeHash]).toEqual([before?.persistentId, before?.compositeHash]);
+    expect(after?.persistentId === before?.persistentId).toBe(true);
+    expect(sameHash(after, before)).toBe(true);
     expect(after).not.toHaveProperty("evidence");
   });
 });
 
-const STORED_ID = "SSSSSSSSSSSSSSSSSSSSSS";
-const KEPT_ID = "KKKKKKKKKKKKKKKKKKKKKK";
-const EMBEDDER_ID = "EEEEEEEEEEEEEEEEEEEEEE";
+describe("getDeviceFingerprintPayload({ wait: false })", () => {
+  it("answers at once with the lite payload, starts the collector, and gives its payload once it has finished", async () => {
+    jest.useFakeTimers();
+    const fake = fakeCollector();
+    setCollectorLoaderForTesting(async () => fake.collector);
 
-describe("one device, one id: the lite payload and the collector", () => {
-  it("tells the collector the id it made up on this page", async () => {
+    // No timer is advanced: the answer did not wait for the collector.
+    const first = await getDeviceFingerprintPayload({ wait: false });
+    await flushPromises();
+    expect(first?.signals.tier).toBe("lite");
+    expect(fake.collect).toHaveBeenCalledTimes(1);
+
+    fake.settle();
+    await flushPromises();
+
+    expect((await getDeviceFingerprintPayload({ wait: false }))?.signals.tier).toBe("full");
+    expect(fake.collect).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the device id, by default: the page's two stores", () => {
+  it("stores the id it makes up at once, and tells the collector which id that is and to keep to those stores", async () => {
     const fake = fakeCollector();
     setCollectorLoaderForTesting(async () => fake.collector);
 
@@ -174,18 +263,25 @@ describe("one device, one id: the lite payload and the collector", () => {
     await flushPromises();
 
     expect(lite?.persistentIdWasCreated).toBe(true);
-    expect(fake.collect).toHaveBeenCalledWith({ embedderPersistentId: null, newPersistentId: lite?.persistentId });
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(lite?.persistentId);
+    expect(document.cookie).toContain(`didit_pid=${lite?.persistentId}`);
+    expect(fake.collect).toHaveBeenCalledWith({
+      embedderPersistentId: null,
+      newPersistentId: lite?.persistentId,
+      durableId: false,
+    });
   });
 
-  it("does not pass an id it read from a store as one it made up", async () => {
-    localStorage.setItem("didit-pid-v1", STORED_ID);
+  it("does not pass an id it read from a store as one it made up, and gives the cookie the id it lacked", async () => {
+    localStorage.setItem(STORAGE_KEY, STORED_ID);
     const fake = fakeCollector();
     setCollectorLoaderForTesting(async () => fake.collector);
 
     void getDeviceFingerprintPayload();
     await flushPromises();
 
-    expect(fake.collect).toHaveBeenCalledWith({ embedderPersistentId: null, newPersistentId: null });
+    expect(fake.collect).toHaveBeenCalledWith({ embedderPersistentId: null, newPersistentId: null, durableId: false });
+    expect(document.cookie).toContain(`didit_pid=${STORED_ID}`);
   });
 
   it("reports a new device as created in both payloads, under one id", async () => {
@@ -201,29 +297,7 @@ describe("one device, one id: the lite payload and the collector", () => {
     expect(full?.persistentIdWasCreated).toBe(true);
     expect(lite?.persistentIdWasCreated).toBe(true);
     expect(lite?.persistentId).toBe(full?.persistentId);
-    expect(lite?.persistentId).toBe(localStorage.getItem("didit-pid-v1"));
-  });
-
-  it("goes by the id a slower store still kept, once the collector has read every store", async () => {
-    const fake = fakeCollector();
-    setCollectorLoaderForTesting(async () => fake.collector);
-
-    const before = await getDeviceFingerprintPayload({ tier: "lite" });
-    const pending = getDeviceFingerprintPayload();
-    await flushPromises();
-    // The collector found the id the device had in a store this package does not read.
-    fake.settle({ persistentId: KEPT_ID, persistentIdSources: ["cache"], persistentIdWasCreated: false });
-    await pending;
-    const after = await getDeviceFingerprintPayload({ tier: "lite" });
-
-    expect(before?.persistentId).not.toBe(KEPT_ID);
-    expect(after?.signals.tier).toBe("lite");
-    expect(after?.persistentId).toBe(KEPT_ID);
-    expect(after?.persistentIdSources).toEqual(["cache"]);
-    expect(after?.persistentIdWasCreated).toBe(false);
-    // The hash describes the device, not its id: it does not move.
-    expect(after?.compositeHash).toBe(before?.compositeHash);
-    expect(getAvailableDeviceFingerprintPayload()?.persistentId).toBe(KEPT_ID);
+    expect(lite?.persistentId).toBe(localStorage.getItem(STORAGE_KEY));
   });
 
   it("names one device where storage is blocked: the collector is told the id kept in memory", async () => {
@@ -245,7 +319,11 @@ describe("one device, one id: the lite payload and the collector", () => {
 
       expect(lite?.persistentId).toMatch(/^[A-Za-z0-9_-]{20,32}$/);
       expect(full?.persistentId).toBe(lite?.persistentId);
-      expect(fake.collect).toHaveBeenCalledWith({ embedderPersistentId: null, newPersistentId: lite?.persistentId });
+      expect(fake.collect).toHaveBeenCalledWith({
+        embedderPersistentId: null,
+        newPersistentId: lite?.persistentId,
+        durableId: false,
+      });
     } finally {
       getItem.mockRestore();
       setItem.mockRestore();
@@ -254,13 +332,102 @@ describe("one device, one id: the lite payload and the collector", () => {
   });
 });
 
-describe("the two seconds a request waits", () => {
-  /** A hash that never comes: WebCrypto accepts the digest and does not answer. */
-  function hashNeverAnswers(): () => void {
-    const digest = jest.spyOn(globalThis.crypto.subtle, "digest").mockImplementation(() => new Promise(() => undefined));
-    return () => digest.mockRestore();
-  }
+describe("the device id with the durable copies on: configureDevice({ durableDeviceId: true })", () => {
+  beforeEach(() => configureDevice({ durableDeviceId: true }));
 
+  it("stores nothing before the collector has read every store, and tells the collector the id it made up", async () => {
+    const fake = fakeCollector();
+    setCollectorLoaderForTesting(async () => fake.collector);
+
+    const lite = await getDeviceFingerprintPayload({ tier: "lite" });
+    void getDeviceFingerprintPayload();
+    await flushPromises();
+
+    expect(lite?.persistentIdWasCreated).toBe(true);
+    // A copy written now would vote against an id a slower store still holds, on this page or after a reload.
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(document.cookie).not.toContain("didit_pid");
+    expect(fake.collect).toHaveBeenCalledWith({
+      embedderPersistentId: null,
+      newPersistentId: lite?.persistentId,
+      durableId: true,
+    });
+  });
+
+  it("does not repair one of its two stores from the other either: the collector settles them", async () => {
+    document.cookie = `didit_pid=${STORED_ID}; Path=/`;
+
+    const lite = await getDeviceFingerprintPayload({ tier: "lite" });
+
+    expect(identity(lite)).toEqual([STORED_ID, ["cookie"], false]);
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it("hands out the id the collector settled the stores on: the one a slower store still kept", async () => {
+    const fake = fakeCollector();
+    setCollectorLoaderForTesting(async () => fake.collector);
+
+    const before = await getDeviceFingerprintPayload({ tier: "lite" });
+    const pending = getDeviceFingerprintPayload();
+    await flushPromises();
+    // What the collector does when it finds the id the device had: it writes it to the page's
+    // stores, and answers with it.
+    localStorage.setItem(STORAGE_KEY, KEPT_ID);
+    fake.settle({ persistentId: KEPT_ID, persistentIdSources: ["cache"], persistentIdWasCreated: false });
+    const full = await pending;
+    const after = await getDeviceFingerprintPayload({ tier: "lite" });
+
+    expect(before?.persistentId).not.toBe(KEPT_ID);
+    expect(identity(full)).toEqual([KEPT_ID, ["cache"], false]);
+    expect(after?.signals.tier).toBe("lite");
+    expect(identity(after)).toEqual([KEPT_ID, ["localStorage"], false]);
+    expect(identity(getAvailableDeviceFingerprintPayload())).toEqual([KEPT_ID, ["cache"], false]);
+  });
+
+  it("hands out an id the stores get later, after the collector had already answered", async () => {
+    const fake = fakeCollector();
+    setCollectorLoaderForTesting(async () => fake.collector);
+
+    const pending = getDeviceFingerprintPayload();
+    await flushPromises();
+    fake.settle();
+    const atOnce = await pending;
+    expect(atOnce?.persistentIdWasCreated).toBe(true);
+    // A store that answered after the collector had returned held the id the device had: the
+    // collector settles the page's stores on it.
+    localStorage.setItem(STORAGE_KEY, KEPT_ID);
+
+    const full = await getDeviceFingerprintPayload();
+    const lite = await getDeviceFingerprintPayload({ tier: "lite" });
+
+    expect(full?.signals.tier).toBe("full");
+    expect(identity(full)).toEqual([KEPT_ID, ["localStorage"], false]);
+    expect(identity(lite)).toEqual([KEPT_ID, ["localStorage"], false]);
+    expect(identity(getAvailableDeviceFingerprintPayload())).toEqual([KEPT_ID, ["localStorage"], false]);
+  });
+
+  it("stores the id itself where there is no collector to do it", async () => {
+    setCollectorLoaderForTesting(() => Promise.reject(new Error("blocked")));
+
+    const payload = await getDeviceFingerprintPayload();
+
+    expect(payload?.signals.tier).toBe("lite");
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(payload?.persistentId);
+    expect(document.cookie).toContain(`didit_pid=${payload?.persistentId}`);
+  });
+
+  it("stores the id itself when the collection fails", async () => {
+    const fake = fakeCollector();
+    fake.collect.mockRejectedValue(new Error("boom"));
+    setCollectorLoaderForTesting(async () => fake.collector);
+
+    const payload = await getDeviceFingerprintPayload();
+
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(payload?.persistentId);
+  });
+});
+
+describe("the two seconds a request waits", () => {
   it("ends for the lite payload too: with neither the collector nor the hash, the request goes out without a hash", async () => {
     jest.useFakeTimers();
     const restore = hashNeverAnswers();
@@ -279,23 +446,8 @@ describe("the two seconds a request waits", () => {
       const payload = await pending;
 
       expect(payload?.signals.tier).toBe("lite");
-      expect(payload?.compositeHash).toBe("");
-      expect(payload?.persistentId).toBe(localStorage.getItem("didit-pid-v1"));
-    } finally {
-      restore();
-    }
-  });
-
-  it("ends for a lite request as well when the hash never comes", async () => {
-    jest.useFakeTimers();
-    const restore = hashNeverAnswers();
-    try {
-      const pending = getDeviceFingerprintPayload({ tier: "lite" });
-      await jest.advanceTimersByTimeAsync(COLLECTOR_WAIT_MS);
-      const payload = await pending;
-
-      expect(payload?.compositeHash).toBe("");
-      expect(payload?.persistentId).toBe(localStorage.getItem("didit-pid-v1"));
+      expect(payload?.compositeHash === "").toBe(true);
+      expect(payload?.persistentId).toBe(localStorage.getItem(STORAGE_KEY));
     } finally {
       restore();
     }
@@ -311,7 +463,7 @@ describe("the two seconds a request waits", () => {
     const payload = await pending;
 
     expect(payload?.signals.tier).toBe("lite");
-    expect(payload?.compositeHash).toBeTruthy();
+    expect(payload?.compositeHash.length).toBe(22);
   });
 
   it("leaves nothing behind for a request whose time ran out, however many there were, and one collection serves them all", async () => {
@@ -333,30 +485,42 @@ describe("the two seconds a request waits", () => {
   });
 });
 
-describe("setEmbedderDeviceId: a page inside another site's frame", () => {
+describe("configureDevice({ embedderDeviceId }): a page inside another site's frame", () => {
   it("goes by the embedding page's id while its own storage has none, and writes it nowhere", async () => {
     const fake = fakeCollector();
     setCollectorLoaderForTesting(async () => fake.collector);
-    setEmbedderDeviceId(EMBEDDER_ID);
+    configureDevice({ embedderDeviceId: EMBEDDER_ID });
 
     const lite = await getDeviceFingerprintPayload({ tier: "lite" });
     void getDeviceFingerprintPayload();
     await flushPromises();
 
-    expect(lite?.persistentId).toBe(EMBEDDER_ID);
-    expect(lite?.persistentIdSources).toEqual(["embedder"]);
-    expect(lite?.persistentIdWasCreated).toBe(false);
+    expect(identity(lite)).toEqual([EMBEDDER_ID, ["embedder"], false]);
     expect(lite?.signals.embedder).toEqual({ persistentId: EMBEDDER_ID });
-    expect(localStorage.getItem("didit-pid-v1")).toBeNull();
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
     expect(document.cookie).not.toContain("didit_pid");
     // The collector is handed the embedding page's id, and no made-up one: none was made up.
-    expect(fake.collect).toHaveBeenCalledWith({ embedderPersistentId: EMBEDDER_ID, newPersistentId: null });
+    expect(fake.collect).toHaveBeenCalledWith({
+      embedderPersistentId: EMBEDDER_ID,
+      newPersistentId: null,
+      durableId: false,
+    });
+  });
+
+  it("is not stored when there is no collector either", async () => {
+    setCollectorLoaderForTesting(() => Promise.reject(new Error("no collector")));
+    configureDevice({ embedderDeviceId: EMBEDDER_ID });
+
+    const payload = await getDeviceFingerprintPayload();
+
+    expect(payload?.persistentId).toBe(EMBEDDER_ID);
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 
   it("keeps the id the page already stores, and still says which page embeds it", async () => {
-    localStorage.setItem("didit-pid-v1", STORED_ID);
+    localStorage.setItem(STORAGE_KEY, STORED_ID);
     setCollectorLoaderForTesting(() => Promise.reject(new Error("no collector")));
-    setEmbedderDeviceId(EMBEDDER_ID);
+    configureDevice({ embedderDeviceId: EMBEDDER_ID });
 
     const lite = await getDeviceFingerprintPayload();
 
@@ -364,12 +528,28 @@ describe("setEmbedderDeviceId: a page inside another site's frame", () => {
     expect(lite?.signals.embedder).toEqual({ persistentId: EMBEDDER_ID });
   });
 
+  it("keeps the other setting it was given before", async () => {
+    const fake = fakeCollector();
+    setCollectorLoaderForTesting(async () => fake.collector);
+    configureDevice({ durableDeviceId: true });
+    configureDevice({ embedderDeviceId: EMBEDDER_ID });
+
+    void getDeviceFingerprintPayload();
+    await flushPromises();
+
+    expect(fake.collect).toHaveBeenCalledWith({
+      embedderPersistentId: EMBEDDER_ID,
+      newPersistentId: null,
+      durableId: true,
+    });
+  });
+
   it.each([["a script"], ["<script>alert(1)</script>"], [""], ["short"], [null]])(
     "ignores %j, which is not a device id",
     async (passed) => {
       const fake = fakeCollector();
       setCollectorLoaderForTesting(async () => fake.collector);
-      setEmbedderDeviceId(passed);
+      configureDevice({ embedderDeviceId: passed });
 
       const lite = await getDeviceFingerprintPayload({ tier: "lite" });
       void getDeviceFingerprintPayload();
@@ -377,7 +557,11 @@ describe("setEmbedderDeviceId: a page inside another site's frame", () => {
 
       expect(lite?.persistentIdWasCreated).toBe(true);
       expect(lite?.signals).not.toHaveProperty("embedder");
-      expect(fake.collect).toHaveBeenCalledWith({ embedderPersistentId: null, newPersistentId: lite?.persistentId });
+      expect(fake.collect).toHaveBeenCalledWith({
+        embedderPersistentId: null,
+        newPersistentId: lite?.persistentId,
+        durableId: false,
+      });
     },
   );
 });
@@ -400,7 +584,7 @@ describe("getAvailableDeviceFingerprintPayload", () => {
     const pending = getDeviceFingerprintPayload();
     // The lite payload exists before its hash does.
     expect(getAvailableDeviceFingerprintPayload()?.signals.tier).toBe("lite");
-    expect(getAvailableDeviceFingerprintPayload()?.compositeHash).toBe("");
+    expect(getAvailableDeviceFingerprintPayload()?.compositeHash === "").toBe(true);
 
     await flushPromises();
     jest.advanceTimersByTime(COLLECTOR_WAIT_MS);

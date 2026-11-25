@@ -21,7 +21,7 @@ export function fullPayload(options?: CollectOptions, identity?: Partial<Identit
     schema: "didit-fp-v2",
     platform: "web",
     collectedAt: "2026-01-01T00:00:00.000Z",
-    persistentId: madeUp ?? readStoredPersistentId() ?? "",
+    persistentId: madeUp ?? readStoredPersistentId()?.id ?? "",
     persistentIdSources: madeUp ? ["fresh"] : ["localStorage"],
     persistentIdWasCreated: Boolean(madeUp),
     ...identity,
@@ -50,7 +50,7 @@ export function fakeCollector() {
 
   const collect = jest.fn<DeviceCollector["collect"]>((options) => {
     told = options;
-    storedIdWhenCollecting.push(readStoredPersistentId());
+    storedIdWhenCollecting.push(readStoredPersistentId()?.id ?? null);
     return new Promise<CollectedPayload>((resolve, reject) => {
       resolveCollect = (payload) => {
         current = payload;

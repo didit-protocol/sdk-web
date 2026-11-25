@@ -1,27 +1,9 @@
-const BASE64URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-
+/** Base64url without padding: the form a stored id and a hash are written in. */
 function bytesToBase64Url(bytes: Uint8Array): string {
-  let output = "";
-  let i = 0;
-  for (; i + 2 < bytes.length; i += 3) {
-    const triplet = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
-    output += BASE64URL_ALPHABET[(triplet >> 18) & 0x3f];
-    output += BASE64URL_ALPHABET[(triplet >> 12) & 0x3f];
-    output += BASE64URL_ALPHABET[(triplet >> 6) & 0x3f];
-    output += BASE64URL_ALPHABET[triplet & 0x3f];
-  }
-  if (i < bytes.length) {
-    const remaining = bytes.length - i;
-    const a = bytes[i];
-    const b = remaining > 1 ? bytes[i + 1] : 0;
-    const triplet = (a << 16) | (b << 8);
-    output += BASE64URL_ALPHABET[(triplet >> 18) & 0x3f];
-    output += BASE64URL_ALPHABET[(triplet >> 12) & 0x3f];
-    if (remaining > 1) {
-      output += BASE64URL_ALPHABET[(triplet >> 6) & 0x3f];
-    }
-  }
-  return output;
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 }
 
 function toBytes(input: string | Uint8Array): Uint8Array {
