@@ -32,7 +32,8 @@ test("an event from the built package carries the collector's evidence and no bo
   expect(typeof body.fingerprint_v2.evidence).toBe("string");
   expect(body.fingerprint_v2.evidence.startsWith('{"v":2,"p":"web"')).toBe(true);
   expect(body.fingerprint_v2.signals.tier).toBe("full");
-  expect(body.fingerprint_v2).not.toHaveProperty("bot");
-  expect(headers).not.toHaveProperty("x-didit-fp-bot-score");
-  expect(headers["x-didit-pid"]).toBe(body.fingerprint_v2.persistentId);
+  // Booleans, never the values: a failure here must not print this browser's fingerprint or ids.
+  expect("bot" in body.fingerprint_v2).toBe(false);
+  expect("x-didit-fp-bot-score" in headers).toBe(false);
+  expect(headers["x-didit-pid"] === body.fingerprint_v2.persistentId).toBe(true);
 });
