@@ -131,27 +131,34 @@ describe("device evidence on auth requests", () => {
 
 describe("which requests wait for the device evidence", () => {
   it.each([
-    ["POST", "authorize/"],
-    ["POST", "password/"],
-    ["POST", "email/start/"],
-    ["POST", "email/complete/"],
-    ["POST", "phone/start/"],
-    ["POST", "phone/complete/"],
-    ["POST", "passkeys/begin/"],
-    ["POST", "passkeys/complete/"],
-    ["POST", "mfa/complete/"],
-    ["POST", "mfa/setup/"],
-    ["POST", "protection/complete/"],
-    ["POST", "password-reset/start/"],
-  ])("a step of a sign-in waits: %s %s", (method, path) => {
-    expect(waitsForEvidence(method, path)).toBe(true);
+    "authorize/",
+    "password/",
+    "email/start/",
+    "email/complete/",
+    "phone/start/",
+    "phone/complete/",
+    "passkeys/begin/",
+    "passkeys/complete/",
+    "mfa/complete/",
+    "mfa/setup/",
+    "protection/complete/",
+    "password-reset/start/",
+  ])("a step of a sign-in waits: POST %s, before there is a session", (path) => {
+    expect(waitsForEvidence("POST", path, false)).toBe(true);
   });
 
   it.each([
-    ["GET", "session/"],
-    ["DELETE", "session/"],
-    ["POST", "token/"],
-  ])("what runs when a page loads never waits: %s %s", (method, path) => {
-    expect(waitsForEvidence(method, path)).toBe(false);
+    ["GET", "session/", true],
+    ["DELETE", "session/", true],
+    ["POST", "token/", false],
+  ])("what runs when a page loads never waits: %s %s", (method, path, authenticated) => {
+    expect(waitsForEvidence(method, path, authenticated)).toBe(false);
   });
+
+  it.each(["passkeys/register/", "passkeys/confirm/", "mfa/enroll/", "mfa/confirm/", "step-up/", "agents/consent/"])(
+    "what a signed-in person does to their own account never waits: POST %s with their access token",
+    (path) => {
+      expect(waitsForEvidence("POST", path, true)).toBe(false);
+    },
+  );
 });

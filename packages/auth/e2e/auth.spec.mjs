@@ -43,6 +43,28 @@ function expectDeviceIdentity(entry) {
   expect(entry.headers["x-didit-fp-bot-score"]).toBeUndefined();
 }
 
+/**
+ * Waits until the page's device collector has finished, however long this browser needs. A step
+ * waits for it for two seconds at most, and a cold browser on a busy machine can need longer: the
+ * tests of what a request carries start from a finished collection, and the waiting itself is
+ * tested with controlled timing in src/__tests__/device-evidence-timing.test.ts.
+ */
+async function collectorFinished(page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const signals = await import("@didit-protocol/signals");
+          return (await signals.getSignalsEvidence({ wait: false })) !== null;
+        }),
+      { timeout: 30000 }
+    )
+    .toBe(true);
+}
+
+// What the recorded password reset was started with: the tests send the same input.
+const RESET_INPUT = fixture("password-reset").exchanges.find(({ request }) => request.path === "password-reset/start/").request.body;
+
 /** The device evidence a request carried: facts the page read, as compact JSON. */
 function expectDeviceEvidence(entry) {
   const evidence = JSON.parse(entry.headers["x-didit-signals"]);
@@ -151,15 +173,18 @@ test("signs in on the hosted page and completes on the redirect page", async ({ 
     expectDeviceIdentity(call);
     expect(call.headers["x-didit-pid"]).toBe(await page.evaluate(() => localStorage.getItem("didit-pid-v1")));
   }
-  expect(calls[0].headers["x-didit-fp-hash"]).toBe(calls[1].headers["x-didit-fp-hash"]);
+  // A boolean, never the values: a failure must not print this browser's fingerprint.
+  expect(calls[0].headers["x-didit-fp-hash"] === calls[1].headers["x-didit-fp-hash"]).toBe(true);
 });
 
 test("a step of a sign-in carries the device evidence across origins, with only the headers the API permits", async ({ page, request }) => {
   await loadRecording(request, "password-reset");
   await openApp(page);
+  await collectorFinished(page);
 
-  // The first request of the page: the step waits for the collector, which loads beside the package.
-  expect(await page.evaluate(() => window.auth.password.requestReset({ email: "person@example.com" }))).toEqual({ expiresIn: 1800 });
+  expect(await page.evaluate((input) => window.auth.password.requestReset({ email: input.email }), RESET_INPUT)).toEqual({
+    expiresIn: 1800
+  });
   const [reset] = await requestsSeen(request);
   expect(reset.mismatch).toBeUndefined();
   expect(`${reset.method} ${reset.path}`).toBe("POST password-reset/start/");
@@ -421,6 +446,7 @@ test("with storage per tab, signing out in one tab leaves another tab's session 
 test("sends device signals when the page and the API share an origin", async ({ page, request }) => {
   await loadRecording(request, "password-reset");
   await openApp(page, { url: `${RECORDED_API}/e2e/fixtures/app.html` });
+  await collectorFinished(page);
 
   expect(await page.evaluate(() => window.auth.password.requestReset({ email: "person@example.com" }))).toEqual({ expiresIn: 1800 });
   const [reset] = await requestsSeen(request);

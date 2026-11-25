@@ -32,23 +32,34 @@ export interface DeviceReaders {
   evidence: (wait: boolean) => Promise<string | null>;
 }
 
-const readers: DeviceReaders = {
+const signalsPackage: DeviceReaders = {
   // The small fingerprint the signals package builds itself: it never waits for the collector, and
   // its hash does not change once the collector has loaded, so a device keeps one fingerprint.
   payload: () => getDeviceFingerprintPayload({ tier: "lite" }),
   evidence: (wait) => getSignalsEvidence({ wait }),
 };
 
+let readers: DeviceReaders = signalsPackage;
+
+/** Replaces where the device headers come from (null restores the signals package). Tests only. */
+export function setDeviceReadersForTesting(next: DeviceReaders | null): void {
+  readers = next ?? signalsPackage;
+}
+
 /**
  * Whether a request waits for the device evidence. A step of a sign-in does, for at most the two
  * seconds the signals package waits for its collector: the evidence is what tells Didit's servers
- * whether that step is automated. Reading the session, signing out and exchanging or refreshing
- * tokens never wait: they run when a page loads, and carry the evidence only once it is there.
- * The first request of a page starts the collector, so it has usually finished by the time a
- * person submits a step.
+ * whether that step is automated. A step of a sign-in is a `POST` made before there is a session,
+ * so it carries no access token, and it is not the token exchange.
+ *
+ * Nothing else waits. Reading the session, signing out and exchanging or refreshing tokens run
+ * when a page loads. What a signed-in person does to their own account (adding a passkey or a
+ * second factor, a step-up, consenting to an agent) is a `POST` with their access token. All of
+ * these carry the evidence once it is there. The first request of a page starts the collector, so
+ * it has usually finished by the time a person submits a step.
  */
-export function waitsForEvidence(method: string, path: string): boolean {
-  return method === "POST" && path !== "token/";
+export function waitsForEvidence(method: string, path: string, authenticated: boolean): boolean {
+  return method === "POST" && !authenticated && path !== "token/";
 }
 
 /**

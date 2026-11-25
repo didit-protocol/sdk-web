@@ -61,12 +61,15 @@ export function toError(status: number, body: Body, retryAfter?: number): DiditA
 export function createHttpClient(
   base: string,
   fetchImpl: typeof fetch,
-  /** The headers to add to one request, told its method and path. */
-  extraHeaders: (method: string, path: string) => Promise<Record<string, string>>
+  /** The headers to add to one request, told its method, its path and whether it carries an access token. */
+  extraHeaders: (method: string, path: string, authenticated: boolean) => Promise<Record<string, string>>
 ): HttpClient {
   return async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const method = options.method ?? (options.body ? "POST" : "GET");
-    const headers: Record<string, string> = { Accept: "application/json", ...(await extraHeaders(method, path)) };
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      ...(await extraHeaders(method, path, Boolean(options.token))),
+    };
     if (options.body) headers["Content-Type"] = "application/json";
     if (options.token) headers.Authorization = `Bearer ${options.token}`;
 
