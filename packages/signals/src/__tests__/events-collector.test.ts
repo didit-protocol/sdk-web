@@ -4,7 +4,12 @@ import { installWebCryptoForTests } from "../device/__tests__/_test_setup";
 installWebCryptoForTests();
 import { setCollectorLoaderForTesting } from "../collector";
 import { configureEvents, flush, resetEventsForTesting, submitEvent } from "../events";
-import { COLLECTOR_WAIT_MS, getDeviceFingerprintPayload, resetDeviceFingerprintForTesting } from "../fingerprint";
+import {
+  COLLECTOR_WAIT_MS,
+  configureDevice,
+  getDeviceFingerprintPayload,
+  resetDeviceFingerprintForTesting,
+} from "../fingerprint";
 import { recordedEvents, replay, scenario, sentRequests } from "./device-lane";
 import { FAKE_EVIDENCE, fakeCollector } from "./fake-collector";
 
@@ -37,18 +42,18 @@ describe("events carry the collector's evidence and no score", () => {
     Reflect.deleteProperty(globalThis, "fetch");
   });
 
-  it("sends fingerprint_v2.evidence as text, never a bot member or a score header", async () => {
+  it("sends fingerprint_v2.evidence as text with the lite fingerprint, never a bot member or a score header", async () => {
     const fake = fakeCollector();
     setCollectorLoaderForTesting(async () => fake.collector);
 
     submitRecorded("accepted");
-    const flushed = flush();
-    await flushPromises();
-    fake.settle();
-    await flushed;
+    await flush();
 
     const [request] = sentRequests(fetchMock);
     expect(request.body.fingerprint_v2?.evidence).toBe(FAKE_EVIDENCE);
+    expect(request.body.fingerprint_v2?.signals).toMatchObject({ tier: "lite" });
+    // By default the collector is asked for its evidence only: no full fingerprint is collected.
+    expect(fake.collect).not.toHaveBeenCalled();
     expect(request.body.fingerprint_v2).not.toHaveProperty("bot");
     expect(request.init.headers).not.toHaveProperty("X-Didit-FP-Bot-Score");
     expect(Object.keys(request.init.headers).filter((name) => name.startsWith("X-Didit-")).sort()).toEqual([
@@ -59,14 +64,28 @@ describe("events carry the collector's evidence and no score", () => {
     ]);
   });
 
-  it("sends the collector's payload on the page-exit path, with no wait and no score header", async () => {
+  it("sends the full fingerprint with its evidence on a page that asked for it", async () => {
+    configureDevice({ fullFingerprint: true });
     const fake = fakeCollector();
     setCollectorLoaderForTesting(async () => fake.collector);
-    // The collection finished earlier on this page.
-    const pending = getDeviceFingerprintPayload();
+
+    submitRecorded("accepted");
+    const flushed = flush();
     await flushPromises();
     fake.settle();
-    await pending;
+    await flushed;
+
+    const [request] = sentRequests(fetchMock);
+    expect(request.body.fingerprint_v2?.signals).toMatchObject({ tier: "full" });
+    expect(request.body.fingerprint_v2?.evidence).toBe(FAKE_EVIDENCE);
+    expect(request.body.fingerprint_v2).not.toHaveProperty("bot");
+  });
+
+  it("sends the evidence on the page-exit path once the collector is there, with no wait and no score header", async () => {
+    const fake = fakeCollector();
+    setCollectorLoaderForTesting(async () => fake.collector);
+    // The collector arrived earlier on this page.
+    await getDeviceFingerprintPayload();
 
     submitRecorded("exit");
     window.dispatchEvent(new Event("pagehide"));
@@ -78,7 +97,7 @@ describe("events carry the collector's evidence and no score", () => {
     expect(exitRequest.init.headers).not.toHaveProperty("X-Didit-FP-Bot-Score");
   });
 
-  it("sends the lite payload on the exit path while the collector has not finished", () => {
+  it("sends the lite payload alone on the exit path while the collector is not there yet", () => {
     const fake = fakeCollector();
     setCollectorLoaderForTesting(async () => fake.collector);
 
@@ -95,8 +114,9 @@ describe("events carry the collector's evidence and no score", () => {
   it.each([
     ["cannot be loaded", () => setCollectorLoaderForTesting(() => Promise.reject(new Error("blocked")))],
     [
-      "rejects in collect()",
+      "fails to collect the full fingerprint a page asked for",
       () => {
+        configureDevice({ fullFingerprint: true });
         const fake = fakeCollector();
         fake.collect.mockRejectedValue(new Error("boom"));
         setCollectorLoaderForTesting(async () => fake.collector);
@@ -130,10 +150,9 @@ describe("events carry the collector's evidence and no score", () => {
     expect(document.cookie).not.toContain("didit_pid");
   });
 
-  it("never holds a flush longer than the bound when the collector never answers", async () => {
+  it("never holds a flush longer than the bound when the collector never arrives", async () => {
     jest.useFakeTimers();
-    const fake = fakeCollector();
-    setCollectorLoaderForTesting(async () => fake.collector);
+    setCollectorLoaderForTesting(() => new Promise(() => undefined));
 
     submitRecorded("accepted");
     const flushed = flush();

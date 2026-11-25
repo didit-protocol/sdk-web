@@ -263,11 +263,9 @@ and refreshing tokens, and what a signed-in person does to their own account
 it once it is there. If the file is blocked or late the step goes out without
 it.
 
-The device id is kept in `localStorage` and a cookie, and an id your visitor
-cleared is gone. `@didit-protocol/signals`, which this package installs, can
-also keep it in IndexedDB and Cache storage: call
-`configureDevice({ durableDeviceId: true })` from it before you create the
-client, if the rules your site follows allow it.
+To read the evidence, that file reads no canvas, no audio, no fonts and no
+graphics of the device, and it stores nothing. The device id is kept in
+`localStorage` and a cookie, and an id your visitor cleared is gone.
 
 The client sends no automation score: it sends facts and Didit's servers decide.
 Browser tests that drive your own sign-in screens are automation too: run them

@@ -1,14 +1,46 @@
 import { expect, test } from "@playwright/test";
 
-// One device, one id. The core of the built @didit-protocol/signals package names the device at
-// once, from localStorage and a cookie; the device collector it loads settles the stores. These
-// tests run the two together, in a real page, in both of the package's modes: the default, where
-// those two stores are all there is, and `durableDeviceId`, where the id is also kept in IndexedDB
-// and Cache storage.
+// One device, one id, kept in the page's two stores: localStorage and a cookie. These tests run
+// the built @didit-protocol/signals package in a real page, in both of its modes: the default,
+// where the page sends the lite fingerprint with the collector's evidence and reads nothing else
+// of the device, and `fullFingerprint`, where the collector collects the full fingerprint.
 //
 // Every id is compared in the page and reported as a boolean: a failure must not print an id.
 
-const DURABLE = { durableDeviceId: true };
+const FULL = { fullFingerprint: true };
+
+/**
+ * Counts, from before the page's own scripts run, what a full fingerprint reads and where a
+ * durable id would be kept: canvas contexts, offline audio contexts, IndexedDB and Cache storage.
+ */
+const countDeviceReads = (page) =>
+  page.addInitScript(() => {
+    const counts = (window.deviceReads = { canvasContexts: 0, audioContexts: 0, indexedDbOpens: 0, cacheOpens: 0 });
+    const counted = (owner, name, key) => {
+      const original = owner?.[name];
+      if (typeof original !== "function") return;
+      owner[name] = function (...args) {
+        counts[key] += 1;
+        return original.apply(this, args);
+      };
+    };
+    counted(HTMLCanvasElement.prototype, "getContext", "canvasContexts");
+    // The collector draws on an offscreen canvas where the browser has one.
+    counted(window.OffscreenCanvas?.prototype, "getContext", "canvasContexts");
+    counted(window.IDBFactory?.prototype, "open", "indexedDbOpens");
+    counted(window.CacheStorage?.prototype, "open", "cacheOpens");
+    const OfflineAudio = window.OfflineAudioContext;
+    if (OfflineAudio) {
+      window.OfflineAudioContext = new Proxy(OfflineAudio, {
+        construct(target, args) {
+          counts.audioContexts += 1;
+          return new target(...args);
+        }
+      });
+    }
+  });
+
+const deviceReads = (page) => page.evaluate(() => window.deviceReads);
 
 async function open(page, device) {
   await page.goto("/e2e/fixtures/events.html?build=signals-esm");
@@ -16,31 +48,39 @@ async function open(page, device) {
   if (device) await page.evaluate((options) => window.events.configureDevice(options), device);
 }
 
-async function collectorFinished(page) {
+/**
+ * Waits until the collector is there, however long this browser needs: a request waits for it for
+ * two seconds at most, and a cold browser on a busy machine can need longer.
+ */
+async function collectorLoaded(page) {
+  await expect
+    .poll(() => page.evaluate(async () => typeof (await window.events.getDeviceFingerprintPayload()).evidence), { timeout: 30000 })
+    .toBe("string");
+}
+
+async function fullFingerprintCollected(page) {
   await expect
     .poll(() => page.evaluate(async () => (await window.events.getDeviceFingerprintPayload()).signals.tier), { timeout: 30000 })
     .toBe("full");
 }
 
-/** The device's id once the collector has finished. It stays in the test, and is only ever compared. */
-async function settledId(page) {
-  await collectorFinished(page);
-  return page.evaluate(async () => (await window.events.getDeviceFingerprintPayload()).persistentId);
-}
+/** The device's id as the page hands it out. It stays in the test, and is only ever compared. */
+const currentId = (page) => page.evaluate(async () => (await window.events.getDeviceFingerprintPayload()).persistentId);
 
 /** What the page's payloads and its two stores say, compared with `known` where one is given. */
 function identities(page, known = null) {
   return page.evaluate(async (knownId) => {
     const lite = await window.events.getDeviceFingerprintPayload({ tier: "lite" });
-    const full = await window.events.getDeviceFingerprintPayload();
+    const sent = await window.events.getDeviceFingerprintPayload();
     return {
-      fullTier: full.signals.tier,
-      oneId: full.persistentId.length > 0 && lite.persistentId === full.persistentId,
-      inLocalStorage: localStorage.getItem("didit-pid-v1") === full.persistentId,
-      inCookie: document.cookie.includes(`didit_pid=${full.persistentId}`),
-      isTheKnownId: knownId === null ? null : full.persistentId === knownId,
+      tier: sent.signals.tier,
+      hasEvidence: typeof sent.evidence === "string" && sent.evidence.startsWith('{"v":2,"p":"web"'),
+      oneId: sent.persistentId.length > 0 && lite.persistentId === sent.persistentId,
+      inLocalStorage: localStorage.getItem("didit-pid-v1") === sent.persistentId,
+      inCookie: document.cookie.includes(`didit_pid=${sent.persistentId}`),
+      isTheKnownId: knownId === null ? null : sent.persistentId === knownId,
       liteSaysCreated: lite.persistentIdWasCreated,
-      fullSaysCreated: full.persistentIdWasCreated
+      sentSaysCreated: sent.persistentIdWasCreated
     };
   }, known);
 }
@@ -84,48 +124,15 @@ function indexedDbHolds(page, id) {
   }, id);
 }
 
-/**
- * Whether an entry this test puts in Cache storage is still there on the next page. A browser
- * session that keeps no data on disk can drop it (the test build of WebKit does, for any cache a
- * page makes): the id has then nowhere to last, and there is nothing to bring back.
- */
-async function cacheStorageLasts(page) {
-  await open(page);
-  const made = await page.evaluate(async () => {
-    if (!("caches" in window)) return false;
-    await (await caches.open("e2e-probe")).put("/e2e-probe", new Response("probe"));
-    return true;
-  });
-  if (!made) return false;
-  await open(page);
-  return page.evaluate(async () => {
-    const lasted = Boolean(await (await caches.open("e2e-probe")).match("/e2e-probe"));
-    await caches.delete("e2e-probe");
-    return lasted;
-  });
-}
-
 const clearPageStores = (page) =>
   page.evaluate(() => {
     localStorage.removeItem("didit-pid-v1");
     document.cookie = "didit_pid=; Path=/; Max-Age=0";
   });
-const clearCacheStorage = (page) =>
-  page.evaluate(async () => {
-    for (const name of await caches.keys()) await caches.delete(name);
-  });
-const clearIndexedDb = (page) =>
-  page.evaluate(async () => {
-    for (const { name } of await indexedDB.databases()) {
-      await new Promise((resolve) => {
-        const request = indexedDB.deleteDatabase(name);
-        request.onsuccess = request.onerror = request.onblocked = () => resolve();
-      });
-    }
-  });
 
-test.describe("by default: the page's two stores", () => {
-  test("a new device is created once: one id in both payloads and both stores, and nowhere else", async ({ page }) => {
+test.describe("by default: the lite fingerprint and the collector's evidence", () => {
+  test("a new device gets one id in both stores, and the evidence comes without a fingerprint read", async ({ page }) => {
+    await countDeviceReads(page);
     await open(page);
 
     const madeUp = await page.evaluate(async () => {
@@ -134,135 +141,156 @@ test.describe("by default: the page's two stores", () => {
       // As it always did, the package stores the id it makes up at once.
       return lite.persistentIdWasCreated && localStorage.getItem("didit-pid-v1") === lite.persistentId;
     });
-    const id = await settledId(page);
-    const keptTheMadeUpId = await page.evaluate((settled) => settled === window.madeUpId, id);
+    await collectorLoaded(page);
+    const id = await currentId(page);
+    const keptTheMadeUpId = await page.evaluate((current) => current === window.madeUpId, id);
 
     expect(madeUp).toBe(true);
     expect(keptTheMadeUpId).toBe(true);
     expect(await identities(page, id)).toEqual({
-      fullTier: "full",
+      tier: "lite",
+      hasEvidence: true,
       oneId: true,
       inLocalStorage: true,
       inCookie: true,
       isTheKnownId: true,
       liteSaysCreated: true,
-      fullSaysCreated: true
+      sentSaysCreated: true
     });
-    // The collector kept to the two stores: no copy in IndexedDB or in Cache storage.
-    expect(await cacheHolds(page, id)).not.toBe(true);
-    expect(await indexedDbHolds(page, id)).not.toBe(true);
+    // The collector was asked for its evidence only: no canvas and no audio was read, and neither
+    // IndexedDB nor Cache storage was opened.
+    expect(await deviceReads(page)).toEqual({ canvasContexts: 0, audioContexts: 0, indexedDbOpens: 0, cacheOpens: 0 });
   });
 
   test("an id the visitor cleared is gone: the device is new on the next page", async ({ page }) => {
     await open(page);
-    const known = await settledId(page);
+    await collectorLoaded(page);
+    const known = await currentId(page);
 
     await clearPageStores(page);
     await open(page);
-    await collectorFinished(page);
+    await collectorLoaded(page);
 
     expect(await identities(page, known)).toEqual({
-      fullTier: "full",
+      tier: "lite",
+      hasEvidence: true,
       oneId: true,
       inLocalStorage: true,
       inCookie: true,
       isTheKnownId: false,
       liteSaysCreated: true,
-      fullSaysCreated: true
+      sentSaysCreated: true
     });
   });
 });
 
-test.describe("with durableDeviceId: the id is also kept in IndexedDB and Cache storage", () => {
-  const RECOVERED = {
-    fullTier: "full",
-    oneId: true,
-    inLocalStorage: true,
-    inCookie: true,
-    isTheKnownId: true,
-    liteSaysCreated: false,
-    fullSaysCreated: false
-  };
+test.describe("with fullFingerprint: the collector collects the full fingerprint", () => {
+  test("under the id the page made up, kept in the page's two stores and nowhere else", async ({ page }) => {
+    await countDeviceReads(page);
+    await open(page, FULL);
 
-  test("a new device is created once, and stored only after the collector has read every store", async ({ page }) => {
-    await open(page, DURABLE);
-
-    const before = await page.evaluate(async () => {
+    const madeUp = await page.evaluate(async () => {
       const lite = await window.events.getDeviceFingerprintPayload({ tier: "lite" });
       window.madeUpId = lite.persistentId;
-      // Nothing is stored by the first read: a copy would vote against an id a slower store holds.
-      return lite.persistentIdWasCreated && localStorage.getItem("didit-pid-v1") === null && !document.cookie.includes("didit_pid=");
+      return lite.persistentIdWasCreated && localStorage.getItem("didit-pid-v1") === lite.persistentId;
     });
-    const id = await settledId(page);
-    const keptTheMadeUpId = await page.evaluate((settled) => settled === window.madeUpId, id);
+    await fullFingerprintCollected(page);
+    const id = await currentId(page);
+    const keptTheMadeUpId = await page.evaluate((current) => current === window.madeUpId, id);
 
-    expect(before).toBe(true);
+    expect(madeUp).toBe(true);
     expect(keptTheMadeUpId).toBe(true);
-    await expect.poll(() => identities(page, id), { timeout: 5000 }).toEqual({
-      fullTier: "full",
+    expect(await identities(page, id)).toEqual({
+      tier: "full",
+      hasEvidence: true,
       oneId: true,
       inLocalStorage: true,
       inCookie: true,
       isTheKnownId: true,
       liteSaysCreated: true,
-      fullSaysCreated: true
+      sentSaysCreated: true
+    });
+    const reads = await deviceReads(page);
+    // The counter counts: the full fingerprint did read a canvas.
+    expect(reads.canvasContexts).toBeGreaterThan(0);
+    // The id is in the two stores only: the collector opened neither IndexedDB nor Cache storage.
+    expect({ indexedDbOpens: reads.indexedDbOpens, cacheOpens: reads.cacheOpens }).toEqual({ indexedDbOpens: 0, cacheOpens: 0 });
+    expect(await cacheHolds(page, id)).not.toBe(true);
+    expect(await indexedDbHolds(page, id)).not.toBe(true);
+  });
+
+  test("an id the visitor cleared is gone: the device is new on the next page", async ({ page }) => {
+    await open(page, FULL);
+    await fullFingerprintCollected(page);
+    const known = await currentId(page);
+
+    await clearPageStores(page);
+    await open(page, FULL);
+    await fullFingerprintCollected(page);
+
+    expect(await identities(page, known)).toEqual({
+      tier: "full",
+      hasEvidence: true,
+      oneId: true,
+      inLocalStorage: true,
+      inCookie: true,
+      isTheKnownId: false,
+      liteSaysCreated: true,
+      sentSaysCreated: true
     });
   });
 
-  test("Cache storage alone brings the id back after cookies, localStorage and IndexedDB were cleared", async ({ page }) => {
-    test.skip(!(await cacheStorageLasts(page)), "this browser session keeps no Cache storage entry from one page to the next");
-    await open(page, DURABLE);
-    const known = await settledId(page);
-    // The collector writes the slower stores after it has answered.
-    await expect.poll(() => cacheHolds(page, known), { timeout: 5000 }).toBe(true);
+  test("an id made up while the collector could not be loaded is the device's id on the next page, where it loads", async ({ page }) => {
+    const collectorFile = "**/packages/signals/dist/collector.mjs";
+    await page.route(collectorFile, (route) => route.abort());
+    await open(page, FULL);
+    // The request goes out with the lite payload alone, under an id the page made up and stored.
+    const first = await page.evaluate(async () => {
+      const sent = await window.events.getDeviceFingerprintPayload();
+      window.sessionStorage.setItem("e2e-first-id", sent.persistentId);
+      return {
+        tier: sent.signals.tier,
+        hasEvidence: "evidence" in sent,
+        created: sent.persistentIdWasCreated,
+        stored: localStorage.getItem("didit-pid-v1") === sent.persistentId
+      };
+    });
+    const known = await page.evaluate(() => window.sessionStorage.getItem("e2e-first-id"));
 
-    await clearPageStores(page);
-    await clearIndexedDb(page);
-    expect(await indexedDbHolds(page, known)).not.toBe(true);
-    await open(page, DURABLE);
-    const madeUpAnother = await page.evaluate(async (knownId) => {
-      const lite = await window.events.getDeviceFingerprintPayload({ tier: "lite" });
-      return lite.persistentIdWasCreated && lite.persistentId !== knownId;
-    }, known);
-    await collectorFinished(page);
+    await page.unroute(collectorFile);
+    await open(page, FULL);
+    await fullFingerprintCollected(page);
 
-    expect(madeUpAnother).toBe(true);
-    expect(await identities(page, known)).toEqual(RECOVERED);
+    expect(first).toEqual({ tier: "lite", hasEvidence: false, created: true, stored: true });
+    expect(await identities(page, known)).toEqual({
+      tier: "full",
+      hasEvidence: true,
+      oneId: true,
+      inLocalStorage: true,
+      inCookie: true,
+      isTheKnownId: true,
+      liteSaysCreated: false,
+      sentSaysCreated: false
+    });
   });
 
-  test("IndexedDB alone brings the id back after cookies, localStorage and Cache storage were cleared", async ({ page }) => {
-    await open(page, DURABLE);
-    const known = await settledId(page);
-    test.skip((await indexedDbHolds(page, known)) === null, "this browser does not list the page's IndexedDB databases");
-    await expect.poll(() => indexedDbHolds(page, known), { timeout: 5000 }).toBe(true);
-
-    await clearPageStores(page);
-    await clearCacheStorage(page);
-    expect(await cacheHolds(page, known)).not.toBe(true);
-    await open(page, DURABLE);
-    await collectorFinished(page);
-
-    expect(await identities(page, known)).toEqual(RECOVERED);
-  });
-
-  test("a page left between its first read and the collection does not cost the device its id", async ({ page }) => {
-    await open(page, DURABLE);
-    const known = await settledId(page);
-    await expect.poll(async () => (await cacheHolds(page, known)) || (await indexedDbHolds(page, known)), { timeout: 5000 }).toBe(true);
-    await clearPageStores(page);
-
+  test("a page left between its first read and the collection keeps its id on the next page", async ({ page }) => {
+    await open(page, FULL);
     // A page that names the device (a first request goes out) and is left before the collector ran.
-    await open(page, DURABLE);
-    const leftNothingBehind = await page.evaluate(async (knownId) => {
-      const lite = await window.events.getDeviceFingerprintPayload({ tier: "lite", wait: false });
-      return lite.persistentIdWasCreated && lite.persistentId !== knownId && localStorage.getItem("didit-pid-v1") === null;
-    }, known);
+    const known = await page.evaluate(async () => (await window.events.getDeviceFingerprintPayload({ tier: "lite", wait: false })).persistentId);
 
-    // The next page: the collector reads the stores, and no copy of that made-up id votes in them.
-    await open(page, DURABLE);
-    await collectorFinished(page);
+    await open(page, FULL);
+    await fullFingerprintCollected(page);
 
-    expect(leftNothingBehind).toBe(true);
-    expect(await identities(page, known)).toEqual(RECOVERED);
+    expect(await identities(page, known)).toEqual({
+      tier: "full",
+      hasEvidence: true,
+      oneId: true,
+      inLocalStorage: true,
+      inCookie: true,
+      isTheKnownId: true,
+      liteSaysCreated: false,
+      sentSaysCreated: false
+    });
   });
 });

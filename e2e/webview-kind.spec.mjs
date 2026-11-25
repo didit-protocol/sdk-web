@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 // The built @didit-protocol/signals package names the kind of browser or web view twice: its core
-// does for the lite payload, and the device collector it loads does for the full one. A page must
-// report one kind, whichever payload a request went out with.
+// does for the lite payload, and the device collector does for the full one, on a page that asked
+// for the full fingerprint. Such a page must report one kind, whichever payload a request went out with.
 const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko)";
 const USER_AGENTS = [
   ["Safari on an iPhone", `${IPHONE} Version/17.5 Mobile/15E148 Safari/604.1`, "browser"],
@@ -24,9 +24,10 @@ for (const [name, userAgent, kind] of USER_AGENTS) {
   test.describe(name, () => {
     test.use({ userAgent });
 
-    test("reports one web view kind before and after the collector has loaded", async ({ page }) => {
+    test("reports one web view kind before and after the collector has collected", async ({ page }) => {
       await page.goto("/e2e/fixtures/events.html?build=signals-esm");
       await expect(page.locator("body[data-ready=true]")).toBeAttached();
+      await page.evaluate(() => window.events.configureDevice({ fullFingerprint: true }));
 
       const before = await page.evaluate(async () => {
         const payload = await window.events.getDeviceFingerprintPayload({ tier: "lite" });

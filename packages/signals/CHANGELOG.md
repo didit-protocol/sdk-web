@@ -5,23 +5,24 @@ All notable changes to `@didit-protocol/signals` will be documented in this file
 ## [0.3.0] - 2026-11-25
 
 ### Added
-- `getSignalsEvidence()`: the evidence text of the page (facts about how it is driven, as compact JSON), for a request your own backend sends to Didit on its behalf. `getSignalsEvidence({ wait: false })` never waits for the collector: it resolves to the evidence if the collector has finished, else to `null`.
-- `getDeviceFingerprintPayload({ tier: "lite" })`: the lite payload, with the same composite hash on every call, without loading the collector. `wait: false` answers at once with the payload as it is.
-- `configureDevice({ durableDeviceId, embedderDeviceId })`.
-  - `durableDeviceId: true` also keeps the device id in IndexedDB and Cache storage, so that clearing cookies or `localStorage` alone does not make a known device look new. It is off by default, as it was: in 0.2 it came with `enableDeviceIntelligence()`.
+- The payload carries `evidence`: facts about how the page is driven, as compact JSON text. It is there once the collector has loaded.
+- `getSignalsEvidence()`: the evidence text of the page, for a request your own backend sends to Didit on its behalf. `getSignalsEvidence({ wait: false })` never waits for the collector: it resolves to the evidence if the collector is there, else to `null`.
+- `getDeviceFingerprintPayload({ tier: "lite" })`: the lite payload alone, with the same composite hash on every call, without loading the collector. `wait: false` answers at once with the payload as it is.
+- `configureDevice({ fullFingerprint, embedderDeviceId })`.
+  - `fullFingerprint: true` adds the full device fingerprint to what the page sends. It is off by default, as it was: in 0.2 it was `enableDeviceIntelligence()`.
   - `embedderDeviceId` is for a page shown inside another site's frame: the stored id of the page that embeds it. The page goes by it while its own storage has none, never stores it, and reports it as `signals.embedder.persistentId`. It replaces the `embedderPersistentId` option of the removed `getFingerprintPayload()`.
-- The full payload carries `evidence`.
 
 ### Changed
-- The full device fingerprint is the default. It comes from a collector shipped with the package as one built file (`dist/collector.mjs`, about 13.7 KB gzipped) that the core loads the first time something is sent. A request waits for its fingerprint for at most 2 seconds and otherwise goes out with the lite payload, without the composite hash if that is not there either.
-- The device id is kept as before, in `localStorage` and a cookie. Every payload is handed out with the id those two hold at that moment.
-- The lite payload reports an iOS web view that names no app as `generic-wv`, as the full payload does, so `X-Didit-FP-Webview` is the same before and after the collector has loaded. Its composite hash does not change.
-- `flush()` with no event waiting sends nothing and no longer collects the device.
 - The page sends facts and Didit's servers decide the automation score. The payload has no `bot` member and no request carries `X-Didit-FP-Bot-Score`.
-- The script-tag build contains the collector and is about 19.1 KB minified and gzipped.
+- The facts come from a collector shipped with the package as one built file (`dist/collector.mjs`, about 13.7 KB gzipped) that the core loads the first time something is sent. By default it reads the evidence and nothing else: no canvas, no audio, no fonts and no graphics, and it stores nothing. A request waits for it for at most 2 seconds and otherwise goes out with the lite payload alone, without the composite hash if that is not there either.
+- What a page reads and stores about its visitor by default does not change: the lite fingerprint, and the device id in `localStorage` and a cookie. Every payload is handed out with the id those two hold at that moment.
+- The lite payload reports an iOS web view that names no app as `generic-wv`, as the full payload does, so `X-Didit-FP-Webview` is the same before and after the collector has collected. Its composite hash does not change.
+- `flush()` with no event waiting sends nothing, loads no collector and stores no id.
+- The script-tag build contains the collector and is about 19.2 KB minified and gzipped.
 
 ### Removed
-- The `@didit-protocol/signals/device` entry (`enableDeviceIntelligence()`, `getFingerprintPayload()`), `setDeviceSignalsProvider()` and the `DeviceSignalsProvider` type. The full fingerprint is the default now; the durable copies of the device id that entry also turned on are `configureDevice({ durableDeviceId: true })`.
+- The `@didit-protocol/signals/device` entry (`enableDeviceIntelligence()`, `getFingerprintPayload()`), `setDeviceSignalsProvider()` and the `DeviceSignalsProvider` type. The full fingerprint is `configureDevice({ fullFingerprint: true })`.
+- The copies of the device id that `enableDeviceIntelligence()` kept in IndexedDB and Cache storage. The id is kept in `localStorage` and a cookie in every case, so an id your visitor cleared from those two is gone. This version reads and writes no other store; copies an earlier version left in IndexedDB or Cache storage are not read.
 
 ## [0.2.0] - 2026-11-12
 

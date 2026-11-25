@@ -21,8 +21,9 @@ All notable changes to `@didit-protocol/auth` are documented in this file.
 - Requires `@didit-protocol/signals` `^0.3.0`. Its device collector is a separate file that is loaded the
   first time a request is made: a bundler emits it as its own chunk, and nothing changes in your code.
   `deviceSignals: "off"` sends no device header and never loads it.
-- The device id is kept as before, in `localStorage` and a cookie. `@didit-protocol/signals` can also keep it
-  in IndexedDB and Cache storage: `configureDevice({ durableDeviceId: true })`, off by default.
+- What the package reads and stores about a visitor does not change: the collector reads the evidence and
+  nothing else of the device (no canvas, audio, fonts or graphics), and the device id is kept as before, in
+  `localStorage` and a cookie.
 
 ## [0.2.0] - 2026-11-12
 

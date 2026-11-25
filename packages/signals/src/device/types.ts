@@ -6,9 +6,10 @@ import { type COMPOSITE_HASH_VERSION } from "./canonical";
  * The signals every Didit web client sends.
  *
  * `tier` says how much was collected: `lite` is the navigator and the webview kind (what this
- * package builds itself), `full` is what the separately loaded collector reports, which adds more
- * families of signals than this package names. The composite hash of the two tiers differs for the
- * same device, because the full one covers more of it.
+ * package builds itself, and what it sends by default), `full` is what the separately loaded
+ * collector reports on a page that asked for the full fingerprint, which adds more families of
+ * signals than this package names. The composite hash of the two tiers differs for the same
+ * device, because the full one covers more of it.
  */
 interface DeviceSignals {
   platform: "web";
@@ -42,8 +43,9 @@ interface DeviceFingerprintPayload {
   /** The `didit-fp-*` hash of clients before didit-fp-v2. Full tier only. */
   legacyCompatibilityHash?: string;
   /**
-   * Facts about how the page was driven, as compact JSON text. Full tier only. Didit's servers
-   * read it and decide the automation score; nothing here is scored in the browser.
+   * Facts about how the page was driven, as compact JSON text, read by the collector. It is there
+   * once the collector has loaded, with either tier. Didit's servers read it and decide the
+   * automation score; nothing here is scored in the browser.
    */
   evidence?: string;
 }

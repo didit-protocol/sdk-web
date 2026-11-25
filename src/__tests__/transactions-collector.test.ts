@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 import { setCollectorLoaderForTesting } from "../../packages/signals/src/collector";
 import { resetDeviceFingerprintForTesting } from "../../packages/signals/src/fingerprint";
 import { installWebCryptoForTests } from "../../packages/signals/src/device/__tests__/_test_setup";
-import { FAKE_EVIDENCE, fakeCollector, fullPayload } from "../../packages/signals/src/__tests__/fake-collector";
+import { FAKE_EVIDENCE, fakeCollector } from "../../packages/signals/src/__tests__/fake-collector";
 import { submitTransactionRequest } from "../transactions";
 
 installWebCryptoForTests();
@@ -44,12 +44,13 @@ describe("a transaction carries the collector's evidence and no score", () => {
 
   it("posts fingerprint_v2.evidence as text, no bot member and no score header", async () => {
     const fake = fakeCollector();
-    fake.collect.mockImplementation(async () => fullPayload());
     setCollectorLoaderForTesting(async () => fake.collector);
 
     const { headers, body } = await send();
 
     expect((body.fingerprint_v2 as Record<string, unknown>).evidence).toBe(FAKE_EVIDENCE);
+    // The collector is asked for its evidence only: no full fingerprint is collected by default.
+    expect(fake.collect).not.toHaveBeenCalled();
     expect(body.fingerprint_v2).not.toHaveProperty("bot");
     expect(headers).not.toHaveProperty("X-Didit-FP-Bot-Score");
     expect(headers["X-Didit-FP-V2"]).toBe("1");

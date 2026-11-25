@@ -47,12 +47,12 @@ function expectDeviceIdentity(entry, { hash = true } = {}) {
 }
 
 /**
- * Waits until the page's device collector has finished, however long this browser needs. A step
+ * Waits until the page's device collector is there, however long this browser needs. A step
  * waits for it for two seconds at most, and a cold browser on a busy machine can need longer: the
- * tests of what a request carries start from a finished collection, and the waiting itself is
+ * tests of what a request carries start with the collector loaded, and the waiting itself is
  * tested with controlled timing in src/__tests__/device-evidence-timing.test.ts.
  */
-async function collectorFinished(page) {
+async function collectorLoaded(page) {
   await expect
     .poll(
       () =>
@@ -179,22 +179,35 @@ test("signs in on the hosted page and completes on the redirect page", async ({ 
   expect(calls.map(({ method, path }) => `${method} ${path}`)).toEqual(["POST token/", "GET session/"]);
   // Exchanging the code and reading the session run as the page loads: they say which device they
   // come from at once, and wait for nothing, neither the device evidence nor the hash of the
-  // fingerprint. The exchange is the first request of the page, so it may leave before the hash
-  // exists; the session read comes after a round trip, when it does.
+  // fingerprint. The hash is computed in the background, so either request may leave before it
+  // exists: neither is required to carry it.
   const [exchange, sessionRead] = calls;
   expectDeviceIdentity(exchange, { hash: false });
-  expectDeviceIdentity(sessionRead);
+  expectDeviceIdentity(sessionRead, { hash: false });
   const storedId = await page.evaluate(() => localStorage.getItem("didit-pid-v1"));
   // Booleans, never the values: a failure must not print this browser's id or fingerprint.
   expect(calls.every((call) => call.headers["x-didit-pid"] === storedId)).toBe(true);
-  const hashes = calls.map((call) => call.headers["x-didit-fp-hash"]).filter(Boolean);
-  expect(hashes.every((hash) => hash === hashes[0])).toBe(true);
+  // A read that waits ends when the hash has been computed. From then on a read that does not wait
+  // carries it, and a request that left with a hash earlier left with this one.
+  const sentHashes = calls.map((call) => call.headers["x-didit-fp-hash"]).filter(Boolean);
+  const hash = await page.evaluate(async (sent) => {
+    const signals = await import("@didit-protocol/signals");
+    const waited = await signals.getDeviceFingerprintPayload({ tier: "lite" });
+    const later = await signals.getDeviceFingerprintPayload({ tier: "lite", wait: false });
+    const headers = signals.buildFingerprintHeaders(later);
+    return {
+      isThereOnceComputed: waited.compositeHash.length > 0,
+      isOnALaterRead: headers["X-Didit-FP-Hash"] === waited.compositeHash,
+      isTheOneSent: sent.every((value) => value === waited.compositeHash)
+    };
+  }, sentHashes);
+  expect(hash).toEqual({ isThereOnceComputed: true, isOnALaterRead: true, isTheOneSent: true });
 });
 
 test("a step of a sign-in carries the device evidence across origins, with only the headers the API permits", async ({ page, request }) => {
   await loadRecording(request, "password-reset");
   await openApp(page);
-  await collectorFinished(page);
+  await collectorLoaded(page);
 
   expect(await page.evaluate((input) => window.auth.password.requestReset({ email: input.email }), RESET_INPUT)).toEqual({
     expiresIn: 1800
@@ -460,7 +473,7 @@ test("with storage per tab, signing out in one tab leaves another tab's session 
 test("sends device signals when the page and the API share an origin", async ({ page, request }) => {
   await loadRecording(request, "password-reset");
   await openApp(page, { url: `${RECORDED_API}/e2e/fixtures/app.html` });
-  await collectorFinished(page);
+  await collectorLoaded(page);
 
   expect(await page.evaluate(() => window.auth.password.requestReset({ email: "person@example.com" }))).toEqual({ expiresIn: 1800 });
   const [reset] = await requestsSeen(request);
