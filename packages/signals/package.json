@@ -1,6 +1,6 @@
 {
   "name": "@didit-protocol/signals",
-  "version": "0.3.0",
+  "version": "0.2.0",
   "description": "Didit device signals and end-user event monitoring for the browser",
   "main": "dist/didit-signals.cjs",
   "module": "dist/didit-signals.esm.js",
