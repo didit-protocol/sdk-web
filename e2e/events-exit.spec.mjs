@@ -73,7 +73,9 @@ for (const build of ["esm", "umd", "signals-umd"]) {
       expect(sent.headers["x-didit-pid"]).toBe(sent.body.fingerprint_v2.persistentId);
       expect(sent.body.fingerprint_v2.signals.navigator.userAgent).toBeTruthy();
       expect(lifecycle.some((event) => event.type === "pagehide")).toBe(true);
-      if (collection === "pending") expect(lifecycle.find((event) => event.type === "pagehide").pending).toBe(1);
+      // The page left while the fingerprint was still being hashed. How many hashes were in flight
+      // depends on the browser: the core's own, and the collector's when it had started by then.
+      if (collection === "pending") expect(lifecycle.find((event) => event.type === "pagehide").pending).toBeGreaterThanOrEqual(1);
       if (collection === "resolved") expect(sent.body.fingerprint_v2.compositeHash).toBeTruthy();
       testInfo.annotations.push({ type: "pagehide persisted", description: String(lifecycle.find((event) => event.type === "pagehide").persisted) });
 
@@ -132,7 +134,8 @@ test("return navigation retains delivery without duplicates when back/forward ca
     const lifecycle = await page.evaluate(() => JSON.parse(sessionStorage.getItem("exit-lifecycle")));
     const hidden = lifecycle.find((event) => event.type === "pagehide");
 
-    expect(hidden.pending).toBe(1);
+    // Still hashing when the page was hidden: the core's hash, and the collector's when it had started.
+    expect(hidden.pending).toBeGreaterThanOrEqual(1);
     if (hidden.persisted) expect(lifecycle.some((event) => event.type === "pageshow" && event.persisted)).toBe(true);
     testInfo.annotations.push({ type: "restored from back/forward cache", description: String(hidden.persisted) });
     await page.evaluate(() => window.events.getDeviceFingerprintPayload());
