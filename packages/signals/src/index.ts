@@ -3,7 +3,8 @@ export {
   getDeviceFingerprintPayload,
   buildFingerprintHeaders,
   getSignalsEvidence,
-  getStoredDeviceId
+  getStoredDeviceId,
+  setEmbedderDeviceId
 } from "./fingerprint";
 
 export type {

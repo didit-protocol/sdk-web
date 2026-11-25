@@ -55,6 +55,7 @@ describe("DiditSdk.shared.submitEvent", () => {
         "getDeviceFingerprintPayload",
         "getSignalsEvidence",
         "getStoredDeviceId",
+        "setEmbedderDeviceId",
         "submitEvent"
       ].sort()
     );

@@ -2,8 +2,13 @@ import { getLoadedCollector, isBrowserEnvironment, loadCollector, resetCollector
 import { canonicalNavigator, COMPOSITE_HASH_VERSION, compositeHashOf } from "./device/canonical";
 import { payloadToHeaders } from "./device/headers";
 import { collectNavigatorSignals } from "./device/signals/navigator";
-import { detectWebViewContext } from "./device/signals/webview";
-import { loadOrCreatePersistentId, readStoredPersistentId, resetPersistentIdForTesting } from "./device/storage";
+import { detectWebViewContext, webViewKindForVersion4Hash } from "./device/signals/webview";
+import {
+  isValidPersistentId,
+  loadOrCreatePersistentId,
+  readStoredPersistentId,
+  resetPersistentIdForTesting,
+} from "./device/storage";
 import type { DeviceFingerprintPayload } from "./device/types";
 
 /**
@@ -12,140 +17,193 @@ import type { DeviceFingerprintPayload } from "./device/types";
  * Two sizes of one fingerprint. This file builds the lite one (the stored id, the navigator and
  * the webview kind) because it is small enough to live in the core entry and answers at once. The
  * full one, with the automation evidence, comes from the collector, a separate file loaded after
- * the core. A request waits for the collector for at most COLLECTOR_WAIT_MS and goes out with the
- * lite payload when it is not there by then, so a slow or blocked file never delays a request.
+ * the core. A request waits for at most COLLECTOR_WAIT_MS: for the collector, and then for what
+ * is left of the lite payload. A slow or blocked file, or a hash that does not come, never delays
+ * a request longer than that.
+ *
+ * One device has one id. The lite payload names the device first, from the stores that answer at
+ * once; the collector is told when that id was made up on this page, reads every store, and its
+ * answer is the id both payloads carry from then on.
  */
 
-/** How long a request waits for the collector before it goes out with the lite payload. */
+/** How long a request waits for its fingerprint before it goes out with what there is. */
 const COLLECTOR_WAIT_MS = 2000;
 
-let litePayload: DeviceFingerprintPayload | null = null;
-/** The lite payload before its hash is known: what an exiting page can still send. */
-let pendingPayload: DeviceFingerprintPayload | null = null;
-let litePromise: Promise<DeviceFingerprintPayload> | null = null;
+type Waiter = (payload: DeviceFingerprintPayload | null) => void;
+
+/** The lite payload: without its hash at first (what an exiting page can still send), then with it. */
+let lite: DeviceFingerprintPayload | null = null;
+let liteIsHashed = false;
+let hashing = false;
 let collectorPayload: DeviceFingerprintPayload | null = null;
-let collecting: Promise<DeviceFingerprintPayload | null> | null = null;
+/** The collection under way, if there is one. */
+let collecting: object | null = null;
+let embedderId: string | null = null;
+const liteWaiters = new Set<Waiter>();
+const collectorWaiters = new Set<Waiter>();
 
-async function buildLitePayload(): Promise<DeviceFingerprintPayload> {
-  // These layers answer at once, so the id is stored before anything is awaited.
-  const persistent = loadOrCreatePersistentId();
-  const navigatorSignals = collectNavigatorSignals();
-  const webview = detectWebViewContext(navigatorSignals.userAgent);
-  const payload: DeviceFingerprintPayload = {
-    version: 2,
-    schema: "didit-fp-v2",
-    platform: "web",
-    collectedAt: new Date().toISOString(),
-    persistentId: persistent.id,
-    persistentIdSources: persistent.sources,
-    persistentIdWasCreated: persistent.wasCreated,
-    signals: {
-      platform: "web",
-      tier: "lite",
-      compositeHashVersion: COMPOSITE_HASH_VERSION,
-      navigator: navigatorSignals,
-      webview,
-    },
-    compositeHash: "",
-  };
-
-  // Keep all synchronously collected context available during the native hash.
-  // An empty hash is omitted from headers, never replaced with a different identity.
-  pendingPayload = payload;
-  const compositeHash = await compositeHashOf({
-    navigator: canonicalNavigator(navigatorSignals),
-    webview: webview.kind,
+/**
+ * Resolves with what `release` is called with, or with null once `ms` have passed. A caller whose
+ * time ran out is forgotten then: nothing of it stays behind, however long the answer takes.
+ */
+function waitUpTo(waiters: Set<Waiter>, ms: number): Promise<DeviceFingerprintPayload | null> {
+  return new Promise((resolve) => {
+    const done: Waiter = (payload) => {
+      clearTimeout(timer);
+      waiters.delete(done);
+      resolve(payload);
+    };
+    const timer = setTimeout(done, ms, null);
+    waiters.add(done);
   });
-  return { ...payload, compositeHash };
 }
 
-/** Builds the lite payload once. The stored id exists as soon as this returns. */
-function ensureLitePayload(): Promise<DeviceFingerprintPayload> {
-  if (!litePromise) {
-    litePromise = buildLitePayload().then(
-      (payload) => {
-        litePayload = payload;
-        return payload;
-      },
-      (error) => {
-        // Do not cache failures; a later call may succeed.
-        litePromise = null;
-        throw error;
-      },
-    );
-  }
-  return litePromise;
+function release(waiters: Set<Waiter>, payload: DeviceFingerprintPayload | null): void {
+  for (const waiter of [...waiters]) waiter(payload);
+}
+
+/** Once the collector has read every store, the lite payload goes by the id it answered. */
+function adoptIdentity(full: DeviceFingerprintPayload): void {
+  if (!lite || !full.persistentId) return;
+  lite = {
+    ...lite,
+    persistentId: full.persistentId,
+    persistentIdSources: full.persistentIdSources,
+    persistentIdWasCreated: full.persistentIdWasCreated,
+  };
 }
 
 /**
- * Starts the collector's collection, or joins the one under way. Resolves to its payload, or to
- * null when it cannot load or fails. A failed load is not tried again on this page; a failed
- * collection is, on the next call.
+ * Builds the lite payload once. What a browser answers at once (the stored id, the navigator, the
+ * webview kind) is there when this returns; the hash follows, and whoever waits for it is told.
  */
-function startCollection(): Promise<DeviceFingerprintPayload | null> {
-  if (collectorPayload) return Promise.resolve(collectorPayload);
-  if (!collecting) {
-    const attempt: Promise<DeviceFingerprintPayload | null> = loadCollector()
-      .then((collector) => (collector ? collector.collect() : null))
-      .then(
-        (payload) => {
-          if (payload) collectorPayload = payload;
-          return payload ?? null;
-        },
-        () => null,
-      )
-      .then((payload) => {
-        if (collecting === attempt) collecting = null;
-        return payload;
-      });
-    collecting = attempt;
+function ensureLite(): void {
+  if (!lite) {
+    const persistent = loadOrCreatePersistentId(embedderId);
+    const navigatorSignals = collectNavigatorSignals();
+    lite = {
+      version: 2,
+      schema: "didit-fp-v2",
+      platform: "web",
+      collectedAt: new Date().toISOString(),
+      persistentId: persistent.id,
+      persistentIdSources: persistent.sources,
+      persistentIdWasCreated: persistent.wasCreated,
+      signals: {
+        platform: "web",
+        tier: "lite",
+        compositeHashVersion: COMPOSITE_HASH_VERSION,
+        navigator: navigatorSignals,
+        webview: detectWebViewContext(navigatorSignals.userAgent),
+        ...(embedderId ? { embedder: { persistentId: embedderId } } : {}),
+      },
+      // An empty hash is omitted from headers, never replaced with a different identity.
+      compositeHash: "",
+    };
+    if (collectorPayload) adoptIdentity(collectorPayload);
   }
-  return collecting;
+  if (liteIsHashed || hashing) return;
+
+  hashing = true;
+  const { signals } = lite;
+  compositeHashOf({
+    navigator: canonicalNavigator(signals.navigator),
+    webview: webViewKindForVersion4Hash(signals.navigator.userAgent),
+  })
+    .then(
+      (compositeHash) => compositeHash,
+      // A hash that failed is tried again by the next call; until then the payload has none.
+      () => null,
+    )
+    .then((compositeHash) => {
+      // `lite` is read now, not before the hash: the collector may have settled the id meanwhile.
+      // It is another payload only after a reset, and then this hash is not its hash.
+      if (lite?.signals !== signals) return;
+      hashing = false;
+      if (compositeHash !== null) {
+        lite = { ...lite, compositeHash };
+        liteIsHashed = true;
+      }
+      release(liteWaiters, lite);
+    });
 }
 
-/** Starts the collector's collection, or joins the one under way, and never waits for it. */
-function beginCollection(): Promise<DeviceFingerprintPayload | null> {
-  // The lite payload goes first: it stores the device id before the collector starts.
-  ensureLitePayload().catch(() => undefined);
-  return startCollection();
+/**
+ * Starts the collector's collection, unless one is under way or done. A failed load is not tried
+ * again on this page; a failed collection is, by the next call. However many requests wait, the
+ * collection has one handler, which tells them all.
+ */
+function startCollection(): void {
+  if (collectorPayload || collecting) return;
+  const collection = (collecting = {});
+
+  let madeUpId: string | null = null;
+  try {
+    // The lite payload goes first, so the collector can be told the id this page made up.
+    ensureLite();
+    if (lite?.persistentIdWasCreated) madeUpId = lite.persistentId;
+  } catch {
+    // Without a lite payload the collector names the device on its own.
+  }
+
+  loadCollector()
+    .then((collector) =>
+      collector ? collector.collect({ embedderPersistentId: embedderId, newPersistentId: madeUpId }) : null,
+    )
+    .then(
+      (payload): DeviceFingerprintPayload | null => payload,
+      () => null,
+    )
+    .then((payload) => {
+      // Another collection is under way only after a reset: this one has nobody to tell.
+      if (collecting !== collection) return;
+      collecting = null;
+      if (payload) {
+        collectorPayload = payload;
+        adoptIdentity(payload);
+      }
+      release(collectorWaiters, payload);
+    });
 }
 
-/** The collector's payload if it arrives within COLLECTOR_WAIT_MS, else null. Never rejects. */
+/** The collector's payload if it is there within COLLECTOR_WAIT_MS, else null. Never rejects. */
 function waitForCollector(): Promise<DeviceFingerprintPayload | null> {
   if (collectorPayload) return Promise.resolve(collectorPayload);
-  const collection = beginCollection();
-
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(null), COLLECTOR_WAIT_MS);
-    collection.then((payload) => {
-      clearTimeout(timer);
-      resolve(payload);
-    });
-  });
+  const waited = waitUpTo(collectorWaiters, COLLECTOR_WAIT_MS);
+  startCollection();
+  return waited;
 }
 
 /**
  * Collects the device fingerprint: the collector's full payload when it arrives within
- * COLLECTOR_WAIT_MS of this call, else the lite one. Resolves to null outside a browser
- * environment (SSR, Node, workers) so callers degrade to a fingerprint-less request instead of
- * sending junk signals. Never intended to throw into the submit path: callers still guard with
- * .catch(() => null).
+ * COLLECTOR_WAIT_MS of this call, else the lite one, which by then goes out without its hash if
+ * the hash is not there either. Resolves to null outside a browser environment (SSR, Node,
+ * workers) so callers degrade to a fingerprint-less request instead of sending junk signals.
+ * Never intended to throw into the submit path: callers still guard with .catch(() => null).
  *
  * `{ tier: "lite" }` answers at once with the lite payload and never loads or waits for the
- * collector. Its id and hash are the same on every call, so it suits a request that only has to
- * say which device it comes from and must not be held up.
+ * collector. Its hash is the same on every call, and its id is the device's id as far as it is
+ * known: the collector's answer once it has read every store. It suits a request that only has
+ * to say which device it comes from and must not be held up.
  */
 export async function getDeviceFingerprintPayload(options?: {
   tier?: "lite";
 }): Promise<DeviceFingerprintPayload | null> {
   if (!isBrowserEnvironment()) return null;
-  const full = options?.tier === "lite" ? null : await waitForCollector();
-  return full ?? ensureLitePayload();
+  const deadline = Date.now() + COLLECTOR_WAIT_MS;
+  if (options?.tier !== "lite") {
+    const full = await waitForCollector();
+    if (full) return full;
+  }
+  ensureLite();
+  const left = deadline - Date.now();
+  if (!liteIsHashed && left > 0) await waitUpTo(liteWaiters, left);
+  return lite;
 }
 
 /**
  * Internal exit snapshot: never waits, never starts a load and never changes what is cached. The
- * collector's payload if there is one, else the lite payload, else the lite one before its hash.
+ * collector's payload if there is one, else the lite payload, with its hash or before it.
  */
 export function getAvailableDeviceFingerprintPayload(): DeviceFingerprintPayload | null {
   if (collectorPayload) return collectorPayload;
@@ -155,7 +213,7 @@ export function getAvailableDeviceFingerprintPayload(): DeviceFingerprintPayload
   } catch {
     // A collector that throws is as good as one with nothing yet.
   }
-  return litePayload ?? pendingPayload;
+  return lite;
 }
 
 /**
@@ -171,12 +229,28 @@ export async function getSignalsEvidence(options?: { wait?: boolean }): Promise<
   if (!isBrowserEnvironment()) return null;
   try {
     let collected = collectorPayload;
-    if (options?.wait === false) void beginCollection();
-    else collected = await waitForCollector();
+    if (!collected) {
+      if (options?.wait === false) startCollection();
+      else collected = await waitForCollector();
+    }
     return collected ? (getLoadedCollector()?.evidence() ?? null) : null;
   } catch {
     return null;
   }
+}
+
+/**
+ * For a page shown inside another site's frame: the device id the embedding page keeps for Didit,
+ * when it passed one (`@didit-protocol/sdk-web` adds it to the verification it opens as the
+ * `sdk_device_id` query parameter). Call it before the first event, transaction or sign-in of the
+ * page. The page then goes by that id while its own storage has none (a framed page's storage is
+ * kept apart per embedding site, and some browsers empty it when they close), never writes it to
+ * its own storage, and reports it as `signals.embedder`, which links what happens in the frame
+ * with the events of the site around it. Anything that is not a device id is ignored, and `null`
+ * takes it back.
+ */
+export function setEmbedderDeviceId(id: string | null): void {
+  embedderId = isValidPersistentId(id) ? id : null;
 }
 
 /** The device headers a Didit API reads from the payload. */
@@ -190,13 +264,21 @@ export const buildFingerprintHeaders = payloadToHeaders;
 export const getStoredDeviceId = readStoredPersistentId;
 
 export function resetDeviceFingerprintForTesting(): void {
-  litePayload = null;
-  pendingPayload = null;
-  litePromise = null;
+  lite = null;
+  liteIsHashed = false;
+  hashing = false;
   collectorPayload = null;
   collecting = null;
+  embedderId = null;
+  liteWaiters.clear();
+  collectorWaiters.clear();
   resetCollectorForTesting();
   resetPersistentIdForTesting();
+}
+
+/** How many callers are waiting for a payload right now. */
+export function waitingCountForTesting(): number {
+  return liteWaiters.size + collectorWaiters.size;
 }
 
 export { randomBase64Url } from "./device/hash";

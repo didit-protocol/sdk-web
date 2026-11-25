@@ -14,16 +14,28 @@ import type { DeviceFingerprintPayload, DeviceSignals } from "./device/types";
  * type keeps the further families open (`[family: string]`), which a closed declaration cannot be
  * read through. Typed this way, the collector's own declarations are checked against every member
  * named here (__tests__/collector-types.test.ts), and the payload is then handed out under the
- * published type.
+ * published type. It is narrower than the published type where the collector must be: its payload
+ * is the full one and always carries the evidence.
  */
-type CollectedPayload = Omit<DeviceFingerprintPayload, "signals"> & {
-  signals: Pick<DeviceSignals, "platform" | "tier" | "compositeHashVersion" | "navigator" | "webview" | "embedder">;
+type CollectedPayload = Omit<DeviceFingerprintPayload, "signals" | "evidence"> & {
+  /** Required here, optional in the published payload: only the lite payload has none. */
+  evidence: string;
+  signals: Pick<DeviceSignals, "platform" | "compositeHashVersion" | "navigator" | "webview" | "embedder"> & {
+    tier: "full";
+  };
 };
 
 /** What this package uses of the collector. Declared here so the public types never name its file. */
 interface DeviceCollector {
   version: string;
-  collect: (options?: { embedderPersistentId?: string | null }) => Promise<CollectedPayload>;
+  /**
+   * `embedderPersistentId` is the id the embedding page passed, `newPersistentId` the id this
+   * package made up on this page load before the collector read the stores, if it made one up.
+   */
+  collect: (options?: {
+    embedderPersistentId?: string | null;
+    newPersistentId?: string | null;
+  }) => Promise<CollectedPayload>;
   /** The payload if it is collected already; never starts a collection. */
   peek: () => CollectedPayload | null;
   /** Compact JSON text, synchronous, complete once `collect()` has resolved. */

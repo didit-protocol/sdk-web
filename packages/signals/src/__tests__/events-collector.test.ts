@@ -114,6 +114,22 @@ describe("events carry the collector's evidence and no score", () => {
     expect(request.body.fingerprint_v2).not.toHaveProperty("evidence");
   });
 
+  it("a flush with nothing to send loads no collector, collects nothing and stores no id", async () => {
+    const fake = fakeCollector();
+    const load = jest.fn(async () => fake.collector);
+    setCollectorLoaderForTesting(load);
+
+    const result = await flush();
+    await flushPromises();
+
+    expect(result).toEqual({ acceptedCount: 0, replayedCount: 0, rejectedCount: 0, pendingCount: 0, results: [] });
+    expect(load).not.toHaveBeenCalled();
+    expect(fake.collect).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(localStorage.getItem("didit-pid-v1")).toBeNull();
+    expect(document.cookie).not.toContain("didit_pid");
+  });
+
   it("never holds a flush longer than the bound when the collector never answers", async () => {
     jest.useFakeTimers();
     const fake = fakeCollector();

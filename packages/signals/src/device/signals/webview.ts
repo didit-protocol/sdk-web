@@ -20,64 +20,76 @@ interface WebViewSignals {
   isStandaloneBrowser: boolean;
 }
 
-function detectWebViewContext(userAgent: string): WebViewSignals {
-  if (!userAgent) {
-    return { kind: "browser", hostAppVersion: null, isStandaloneBrowser: true };
+/**
+ * The apps whose in-app browser names itself in the user agent, in the order they are looked for:
+ * the kind, the marker that tells it, and where its version is when the marker does not capture it.
+ * The Google app comes early because on iOS its WKWebView exposes no navigator.mediaDevices at
+ * all, so no capture is ever possible there. The last entry is a web view that names no app.
+ */
+const HOST_APPS: [kind: WebViewKind, marker: RegExp, version?: RegExp][] = [
+  ["whatsapp", /WA(?:4[A]|4iOS)\/([\d.]+)/],
+  ["gsa", /GSA\/([\d.]+)/],
+  ["instagram", /Instagram\s+([\d.]+)/],
+  ["facebook", /FBAN|FBAV/, /FBAV\/([\d.]+)/],
+  ["messenger", /MessengerLiteForiOS|MessengerForiOS|FB_IAB\/Messenger/],
+  ["tiktok", /(?:musical_ly|TikTok|trill)_(\d+)/i],
+  ["line", /Line\/([\d.]+)/],
+  ["wechat", /MicroMessenger/, /MicroMessenger\/([\d.]+)/],
+  ["telegram", /Telegram/i],
+  ["twitter", /Twitter/i],
+  ["linkedin", /LinkedInApp/i],
+  ["snapchat", /Snapchat/i],
+  ["generic-wv", /\bwv\)|\bWebView\b/i],
+];
+
+/**
+ * The classification by host-app markers, as version 4 of the composite hash always made it. It
+ * knows nothing about a bare iOS web view: that one comes out as "browser" here.
+ */
+function classifyByHostMarkers(userAgent: string): WebViewSignals {
+  for (const [kind, marker, version = marker] of HOST_APPS) {
+    if (marker.test(userAgent)) {
+      return { kind, hostAppVersion: userAgent.match(version)?.[1] ?? null, isStandaloneBrowser: false };
+    }
   }
-  const ua = userAgent;
-
-  const waMatch = ua.match(/WA(?:4[A]|4iOS)\/([\d.]+)/);
-  if (waMatch) return { kind: "whatsapp", hostAppVersion: waMatch[1], isStandaloneBrowser: false };
-
-  // Google app (iOS/Android) in-app browser. On iOS its WKWebView exposes no
-  // navigator.mediaDevices at all, so no capture is ever possible there.
-  const gsaMatch = ua.match(/GSA\/([\d.]+)/);
-  if (gsaMatch) return { kind: "gsa", hostAppVersion: gsaMatch[1], isStandaloneBrowser: false };
-
-  const igMatch = ua.match(/Instagram\s+([\d.]+)/);
-  if (igMatch) return { kind: "instagram", hostAppVersion: igMatch[1], isStandaloneBrowser: false };
-
-  if (/FBAN|FBAV/.test(ua)) {
-    const fbVer = ua.match(/FBAV\/([\d.]+)/);
-    return { kind: "facebook", hostAppVersion: fbVer?.[1] ?? null, isStandaloneBrowser: false };
-  }
-
-  if (/MessengerLiteForiOS|MessengerForiOS|FB_IAB\/Messenger/.test(ua)) {
-    return { kind: "messenger", hostAppVersion: null, isStandaloneBrowser: false };
-  }
-
-  const ttMatch = ua.match(/(?:musical_ly|TikTok|trill)_(\d+)/i);
-  if (ttMatch) return { kind: "tiktok", hostAppVersion: ttMatch[1], isStandaloneBrowser: false };
-
-  const lineMatch = ua.match(/Line\/([\d.]+)/);
-  if (lineMatch) return { kind: "line", hostAppVersion: lineMatch[1], isStandaloneBrowser: false };
-
-  if (/MicroMessenger/.test(ua)) {
-    const wcVer = ua.match(/MicroMessenger\/([\d.]+)/);
-    return { kind: "wechat", hostAppVersion: wcVer?.[1] ?? null, isStandaloneBrowser: false };
-  }
-
-  if (/Telegram/i.test(ua)) {
-    return { kind: "telegram", hostAppVersion: null, isStandaloneBrowser: false };
-  }
-
-  if (/Twitter|TwitterAndroid/i.test(ua)) {
-    return { kind: "twitter", hostAppVersion: null, isStandaloneBrowser: false };
-  }
-
-  if (/LinkedInApp/i.test(ua)) {
-    return { kind: "linkedin", hostAppVersion: null, isStandaloneBrowser: false };
-  }
-
-  if (/Snapchat/i.test(ua)) {
-    return { kind: "snapchat", hostAppVersion: null, isStandaloneBrowser: false };
-  }
-
-  if (/\bwv\)|\bWebView\b/i.test(ua)) {
-    return { kind: "generic-wv", hostAppVersion: null, isStandaloneBrowser: false };
-  }
-
   return { kind: "browser", hostAppVersion: null, isStandaloneBrowser: true };
 }
 
-export { detectWebViewContext, type WebViewKind, type WebViewSignals };
+const IOS_DEVICE = /iPhone|iPad|iPod/;
+
+/**
+ * An iOS web view that names no host app, recognised by what it lacks: every standalone iOS browser
+ * ends its user agent with a `Safari/` token, a bare WKWebView does not.
+ */
+function isBareIosWebView(userAgent: string): boolean {
+  return (
+    classifyByHostMarkers(userAgent).kind === "browser" &&
+    IOS_DEVICE.test(userAgent) &&
+    userAgent.includes("AppleWebKit") &&
+    !userAgent.includes("Safari/")
+  );
+}
+
+/**
+ * The kind of browser or in-app web view the page runs in. The collector classifies the same way,
+ * so a page reports one kind before and after the collector has loaded (the two are compared in
+ * e2e/webview-kind.spec.mjs).
+ */
+function detectWebViewContext(userAgent: string): WebViewSignals {
+  if (isBareIosWebView(userAgent || "")) {
+    return { kind: "generic-wv", hostAppVersion: null, isStandaloneBrowser: false };
+  }
+  return classifyByHostMarkers(userAgent);
+}
+
+/**
+ * The web view kind that enters the composite hash. It is the classification version 4 of the hash
+ * always used, in which a bare iOS web view is "browser": reporting it as a web view (above) must
+ * not move the hash of any device already known. Do not "fix" this to the reported kind: that
+ * would change every such device's hash once. Raise COMPOSITE_HASH_VERSION on purpose instead.
+ */
+function webViewKindForVersion4Hash(userAgent: string): WebViewKind {
+  return classifyByHostMarkers(userAgent).kind;
+}
+
+export { detectWebViewContext, type WebViewKind, type WebViewSignals, webViewKindForVersion4Hash };

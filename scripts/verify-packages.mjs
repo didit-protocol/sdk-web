@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, posix, resolve } from "node:path";
 
 const root = process.cwd();
 const destination = await mkdtemp(join(tmpdir(), "signals-package-"));
@@ -80,7 +80,8 @@ async function assertCollectorShips() {
     const imported = [...code.matchAll(/import\(\s*["'](\.\/[^"']+)["']\s*\)/g)].map((match) => match[1]);
 
     assert.deepEqual(imported, ["./collector.mjs"], `${file} must load the collector from one relative path`);
-    assert.ok(packed.has(join("dist", imported[0])), `${file} imports ${imported[0]}, which npm pack does not include`);
+    // An archive names its members with "/" on every system; `join` would write "\\" on Windows.
+    assert.ok(packed.has(posix.join("dist", imported[0])), `${file} imports ${imported[0]}, which npm pack does not include`);
     assert.ok(!code.includes("SYNC-STATE"), `${file} reads the sync state at runtime`);
   }
   assert.ok(![...packed].some((path) => path.includes("SYNC-STATE")), "the sync state is published");

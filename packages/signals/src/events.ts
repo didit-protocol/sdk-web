@@ -355,12 +355,15 @@ function emptyResult(): DiditEventFlushResult {
 
 async function drain(): Promise<DiditEventFlushResult> {
   const result = emptyResult();
-  const fingerprint = await getDeviceFingerprintPayload().catch(() => null);
+  // With nothing to send, the device is not collected and the collector is not loaded.
+  if (waiting().length) {
+    const fingerprint = await getDeviceFingerprintPayload().catch(() => null);
 
-  clearTimer();
-  let batch: QueuedEvent[];
-  while ((batch = nextBatch()).length) {
-    if (!(await send(batch, result, fingerprint))) break;
+    clearTimer();
+    let batch: QueuedEvent[];
+    while ((batch = nextBatch()).length) {
+      if (!(await send(batch, result, fingerprint))) break;
+    }
   }
   result.pendingCount = queue.length;
   return result;
