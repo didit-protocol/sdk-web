@@ -1230,6 +1230,10 @@ export class VerificationModal {
     this.confirmOverlay = null;
   }
 
+  skipExitConfirmation(): void {
+    this.config.showExitConfirmation = false;
+  }
+
   isOpen(): boolean {
     return this.state.isOpen;
   }

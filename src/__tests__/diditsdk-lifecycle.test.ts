@@ -36,6 +36,17 @@ function confirmExit(): void {
   container.container?.querySelector<HTMLButtonElement>('[data-action="exit"]')?.click();
 }
 
+function closeButton(): HTMLButtonElement {
+  const modal = (DiditSdk.shared as unknown as DiditSdkInternals)._modal as unknown as ModalInternals;
+  const button = modal.container?.querySelector<HTMLButtonElement>(`.${CSS_CLASSES.closeButton}`);
+  if (!button) throw new Error("No close button is presented");
+  return button;
+}
+
+function exitButton(): HTMLButtonElement | null {
+  return document.querySelector<HTMLButtonElement>('[data-action="exit"]');
+}
+
 function start(url = "https://verify.didit.me/session/token"): Promise<void> {
   return DiditSdk.shared.startVerification({ url });
 }
@@ -85,6 +96,84 @@ describe("DiditSdk verification lifecycle", () => {
     dispatchMessage({ type: "didit:completed", data: { sessionId: "ses_1", status: "Approved" }, timestamp: 1 });
 
     expect(DiditSdk.shared.isPresented).toBe(true);
+  });
+
+  it("closes a completed verification without asking and without a second result", async () => {
+    const states: string[] = [];
+    const onComplete = jest.fn();
+    DiditSdk.shared.onStateChange = (state) => states.push(state);
+    DiditSdk.shared.onComplete = onComplete;
+    await start();
+
+    dispatchMessage({ type: "didit:completed", data: { sessionId: "ses_1", status: "Approved" }, timestamp: 1 });
+    closeButton().click();
+
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith({
+      type: "completed",
+      session: { sessionId: "ses_1", status: "Approved" }
+    });
+    expect(DiditSdk.shared.isPresented).toBe(false);
+    expect(states).toEqual(["loading", "idle"]);
+  });
+
+  it("closes a completed verification when the flow asks, without a second result", async () => {
+    const onComplete = jest.fn();
+    DiditSdk.shared.onComplete = onComplete;
+    await start();
+
+    dispatchMessage({ type: "didit:completed", data: { sessionId: "ses_1", status: "Approved" }, timestamp: 1 });
+    dispatchMessage({ type: "didit:close_request", timestamp: 2 });
+
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(DiditSdk.shared.isPresented).toBe(false);
+  });
+
+  it("does not report a cancel when a completed verification is closed programmatically", async () => {
+    const onComplete = jest.fn();
+    DiditSdk.shared.onComplete = onComplete;
+    await start();
+
+    dispatchMessage({ type: "didit:completed", data: { sessionId: "ses_1", status: "Approved" }, timestamp: 1 });
+    DiditSdk.shared.close();
+
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(DiditSdk.shared.isPresented).toBe(false);
+    expect(DiditSdk.shared.state).toBe("idle");
+  });
+
+  it("does not report a cancel when the user confirmed exit just before the flow completed", async () => {
+    const onComplete = jest.fn();
+    DiditSdk.shared.onComplete = onComplete;
+    await start();
+
+    closeButton().click();
+    dispatchMessage({ type: "didit:completed", data: { sessionId: "ses_1", status: "Approved" }, timestamp: 1 });
+    exitButton()?.click();
+
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith({
+      type: "completed",
+      session: { sessionId: "ses_1", status: "Approved" }
+    });
+    expect(DiditSdk.shared.isPresented).toBe(false);
+  });
+
+  it("still reports a cancel for a new verification started after a completed one", async () => {
+    const onComplete = jest.fn();
+    DiditSdk.shared.onComplete = onComplete;
+    await start();
+    dispatchMessage({ type: "didit:completed", data: { sessionId: "ses_1", status: "Approved" }, timestamp: 1 });
+
+    await start("https://verify.didit.me/session/second");
+    dispatchMessage({ type: "didit:ready", data: { sessionId: "ses_2" }, timestamp: 2 });
+    confirmExit();
+
+    expect(onComplete).toHaveBeenLastCalledWith({
+      type: "cancelled",
+      session: { sessionId: "ses_2", status: "Pending" }
+    });
+    expect(onComplete).toHaveBeenCalledTimes(2);
   });
 
   it("reports cancelled with the session the flow already announced when the user closes the modal", async () => {
@@ -223,5 +312,28 @@ describe("DiditSdk verification lifecycle", () => {
       type: "cancelled",
       session: { sessionId: "ses_3", status: "Pending" }
     });
+  });
+
+  it("closes a completed embedded verification when the flow asks, without a second result", async () => {
+    const host = document.createElement("div");
+    host.id = "embedded-host";
+    document.body.appendChild(host);
+    const onComplete = jest.fn();
+    DiditSdk.shared.onComplete = onComplete;
+    await DiditSdk.shared.startVerification({
+      url: "https://verify.didit.me/session/token",
+      configuration: { embedded: true, embeddedContainerId: "embedded-host" }
+    });
+
+    dispatchMessage({ type: "didit:completed", data: { sessionId: "ses_4", status: "Declined" }, timestamp: 1 });
+    dispatchMessage({ type: "didit:close_request", timestamp: 2 });
+
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith({
+      type: "completed",
+      session: { sessionId: "ses_4", status: "Declined" }
+    });
+    expect(DiditSdk.shared.isPresented).toBe(false);
+    expect(DiditSdk.shared.state).toBe("idle");
   });
 });
